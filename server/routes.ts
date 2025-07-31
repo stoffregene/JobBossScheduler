@@ -214,6 +214,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Machine scheduling and substitution endpoints
+  app.get("/api/machines/compatible/:capability", async (req, res) => {
+    try {
+      const { capability } = req.params;
+      const { category, tier } = req.query;
+      const machines = await storage.getCompatibleMachines(
+        capability,
+        category as string,
+        (tier as "Tier 1" | "Standard" | "Budget") || "Tier 1"
+      );
+      res.json(machines);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to find compatible machines" });
+    }
+  });
+
+  app.post("/api/jobs/:id/optimize-assignment", async (req, res) => {
+    try {
+      const job = await storage.getJob(req.params.id);
+      if (!job) {
+        return res.status(404).json({ message: "Job not found" });
+      }
+      
+      const assignments = await storage.findOptimalMachineAssignment(
+        job.routing,
+        job.priority as "Critical" | "High" | "Normal" | "Low"
+      );
+      res.json(assignments);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to optimize machine assignment" });
+    }
+  });
+
   // Alerts endpoints
   app.get("/api/alerts", async (req, res) => {
     try {

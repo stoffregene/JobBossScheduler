@@ -528,6 +528,91 @@ export class DatabaseStorage implements IStorage {
     return result.rowCount !== null && result.rowCount > 0;
   }
 
+  // Machine substitution and scheduling logic
+  async getCompatibleMachines(
+    requiredCapability: string, 
+    preferredCategory?: string,
+    tierLevel: "Tier 1" | "Standard" | "Budget" = "Tier 1"
+  ): Promise<Machine[]> {
+    const allMachines = await this.getMachines();
+    
+    // First, find machines by capability and tier
+    let compatibleMachines = allMachines.filter(machine => {
+      const hasCapability = machine.capabilities.includes(requiredCapability);
+      const inTier = machine.tier === tierLevel;
+      return hasCapability && inTier;
+    });
+
+    // If a preferred category is specified, prioritize those machines
+    if (preferredCategory) {
+      const categoryMachines = compatibleMachines.filter(m => m.category === preferredCategory);
+      const otherMachines = compatibleMachines.filter(m => m.category !== preferredCategory);
+      
+      // Return category machines first, then others as alternatives
+      compatibleMachines = [...categoryMachines, ...otherMachines];
+    }
+
+    // Sort by efficiency factor (higher is better) and utilization (lower is better)
+    return compatibleMachines.sort((a, b) => {
+      const efficiencyDiff = parseFloat(b.efficiencyFactor) - parseFloat(a.efficiencyFactor);
+      if (Math.abs(efficiencyDiff) > 0.01) return efficiencyDiff;
+      return parseFloat(a.utilization) - parseFloat(b.utilization);
+    });
+  }
+
+  async findOptimalMachineAssignment(
+    jobRouting: RoutingOperation[],
+    jobPriority: "Critical" | "High" | "Normal" | "Low" = "Normal"
+  ): Promise<{ operation: RoutingOperation; assignedMachine: Machine | null; alternatives: Machine[] }[]> {
+    const assignments: { operation: RoutingOperation; assignedMachine: Machine | null; alternatives: Machine[] }[] = [];
+    
+    for (const operation of jobRouting) {
+      // Map operation types to machine capabilities and preferred categories
+      const capabilityMapping: Record<string, { capability: string; preferredCategory?: string }> = {
+        "CNC Milling": { capability: "vertical_milling", preferredCategory: "3-Axis Vertical Milling Centers" },
+        "HMC Milling": { capability: "horizontal_milling", preferredCategory: "Horizontal Milling Centers" },
+        "CNC Turning": { capability: "turning", preferredCategory: "Live Tooling Lathes" },
+        "Bar Turning": { capability: "turning", preferredCategory: "Bar Fed Lathes" },
+        "4th Axis Work": { capability: "vertical_milling", preferredCategory: "3-Axis VMC's with pseudo 4th axis" },
+        "Large Part Milling": { capability: "vertical_milling", preferredCategory: "Large envelope VMC's" },
+        "Waterjet Cutting": { capability: "waterjet_cutting" },
+        "TIG Welding": { capability: "welding" },
+        "Bead Blast": { capability: "finishing" },
+        "Inspection": { capability: "inspection" },
+        "Assembly": { capability: "assembly" }
+      };
+
+      const mapping = capabilityMapping[operation.name] || { capability: operation.machineType.toLowerCase() };
+      
+      // Get all compatible machines for this operation
+      const compatibleMachines = await this.getCompatibleMachines(
+        mapping.capability,
+        mapping.preferredCategory,
+        "Tier 1"
+      );
+
+      // For critical/high priority jobs, prefer machines with higher efficiency
+      let assignedMachine: Machine | null = null;
+      if (compatibleMachines.length > 0) {
+        if (jobPriority === "Critical" || jobPriority === "High") {
+          // Assign to highest efficiency machine with lowest utilization
+          assignedMachine = compatibleMachines[0];
+        } else {
+          // For normal/low priority, find machine with good balance of efficiency and availability
+          assignedMachine = compatibleMachines.find(m => parseFloat(m.utilization) < 80) || compatibleMachines[0];
+        }
+      }
+
+      assignments.push({
+        operation,
+        assignedMachine,
+        alternatives: compatibleMachines.slice(0, 5) // Top 5 alternatives
+      });
+    }
+
+    return assignments;
+  }
+
   // Dashboard stats implementation
   async getDashboardStats(): Promise<DashboardStats> {
     const allJobs = await this.getJobs();
