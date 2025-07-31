@@ -54,6 +54,19 @@ export default function MachineStatus() {
     }
   };
 
+  const getTierColor = (tier: string) => {
+    switch (tier) {
+      case 'Premium':
+        return 'text-blue-600 bg-blue-100';
+      case 'Standard':
+        return 'text-green-600 bg-green-100';
+      case 'Budget':
+        return 'text-orange-600 bg-orange-100';
+      default:
+        return 'text-gray-600 bg-gray-100';
+    }
+  };
+
   const getStatusText = (machine: Machine) => {
     if (machine.status === 'Offline' || machine.status === 'Maintenance') {
       return machine.status.toLowerCase();
@@ -66,11 +79,12 @@ export default function MachineStatus() {
       return machine.status.toLowerCase();
     }
     
-    if (machine.availableShifts.length === 1) {
-      return '1st shift only';
-    }
+    const efficiency = parseFloat(machine.efficiencyFactor);
+    const efficiencyText = efficiency > 1.0 ? `+${((efficiency - 1) * 100).toFixed(0)}% faster` :
+                          efficiency < 1.0 ? `${((1 - efficiency) * 100).toFixed(0)}% slower` :
+                          'baseline speed';
     
-    return 'utilization';
+    return efficiencyText;
   };
 
   return (
@@ -84,9 +98,17 @@ export default function MachineStatus() {
           <div key={machine.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
             <div className="flex items-center space-x-3">
               <div className={`w-3 h-3 ${getStatusColor(machine.status)} rounded-full`}></div>
-              <div>
-                <div className="text-sm font-medium text-gray-900">{machine.machineId}</div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <div className="text-sm font-medium text-gray-900">{machine.machineId}</div>
+                  <span className={`px-2 py-1 text-xs rounded-full font-medium ${getTierColor(machine.tier)}`}>
+                    {machine.tier}
+                  </span>
+                </div>
                 <div className="text-xs text-gray-500">{machine.name}</div>
+                {machine.substitutionGroup && (
+                  <div className="text-xs text-blue-600">Group: {machine.substitutionGroup}</div>
+                )}
               </div>
             </div>
             <div className="text-right">

@@ -29,7 +29,9 @@ Preferred communication style: Simple, everyday language.
 
 ### Data Storage Solutions
 - **Database**: PostgreSQL with Drizzle ORM for type-safe database operations
-- **Schema**: Comprehensive manufacturing schema including jobs, machines, schedule entries, and alerts
+- **Schema**: Comprehensive manufacturing schema including jobs, machines, schedule entries, and alerts with machine tier system
+- **Machine Tiers**: Premium, Standard, and Budget tiers with efficiency factors and substitution groups
+- **Auto-Scheduling**: Intelligent job scheduling based on machine capabilities, efficiency, and availability
 - **Migrations**: Drizzle Kit for database schema migrations
 - **Connection**: Neon Database serverless PostgreSQL integration
 - **Current Implementation**: In-memory storage with full CRUD operations, designed for easy migration to persistent storage

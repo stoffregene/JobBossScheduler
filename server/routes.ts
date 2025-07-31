@@ -274,5 +274,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Auto-scheduling endpoints
+  app.post("/api/jobs/:id/auto-schedule", async (req, res) => {
+    try {
+      const scheduleEntries = await storage.autoScheduleJob(req.params.id);
+      if (!scheduleEntries) {
+        return res.status(400).json({ message: "Unable to auto-schedule job" });
+      }
+      broadcast({ type: 'job_auto_scheduled', data: { jobId: req.params.id, scheduleEntries } });
+      res.json({ scheduleEntries, message: "Job successfully auto-scheduled" });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to auto-schedule job" });
+    }
+  });
+
+  app.get("/api/machines/substitution-groups/:group", async (req, res) => {
+    try {
+      const machines = await storage.getMachinesBySubstitutionGroup(req.params.group);
+      res.json(machines);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch substitution group machines" });
+    }
+  });
+
+  app.post("/api/operations/find-best-machine", async (req, res) => {
+    try {
+      const { operation, targetDate, shift } = req.body;
+      const result = await storage.findBestMachineForOperation(
+        operation, 
+        new Date(targetDate), 
+        shift
+      );
+      if (!result) {
+        return res.status(404).json({ message: "No suitable machine found" });
+      }
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to find best machine" });
+    }
+  });
+
   return httpServer;
 }

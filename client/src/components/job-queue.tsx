@@ -1,8 +1,10 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Filter, Plus, Calendar, Edit } from "lucide-react";
+import { Filter, Plus, Calendar, Edit, Zap } from "lucide-react";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import type { Job } from "@shared/schema";
 
 interface JobQueueProps {
@@ -10,8 +12,33 @@ interface JobQueueProps {
 }
 
 export default function JobQueue({ onJobSelect }: JobQueueProps) {
+  const { toast } = useToast();
   const { data: jobs, isLoading } = useQuery<Job[]>({
     queryKey: ['/api/jobs'],
+  });
+
+  const autoScheduleMutation = useMutation({
+    mutationFn: async (jobId: string) => {
+      return apiRequest(`/api/jobs/${jobId}/auto-schedule`, {
+        method: 'POST',
+      });
+    },
+    onSuccess: (data, jobId) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/schedule'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/machines'] });
+      toast({
+        title: "Auto-Schedule Success",
+        description: `Job has been automatically scheduled with ${data.scheduleEntries.length} operations.`,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Auto-Schedule Failed",
+        description: "Unable to automatically schedule this job. Please try manual scheduling.",
+        variant: "destructive",
+      });
+    },
   });
 
   if (isLoading) {
@@ -172,12 +199,26 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      {job.status === 'Unscheduled' && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            autoScheduleMutation.mutate(job.id);
+                          }}
+                          disabled={autoScheduleMutation.isPending}
+                          title="Auto Schedule with Best Fit Machines"
+                        >
+                          <Zap className="h-4 w-4" />
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={(e) => {
                           e.stopPropagation();
-                          // TODO: Implement scheduling logic
+                          // Manual scheduling logic
                         }}
                       >
                         <Calendar className="h-4 w-4" />
@@ -187,7 +228,7 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
                         size="sm"
                         onClick={(e) => {
                           e.stopPropagation();
-                          // TODO: Implement edit logic
+                          // Edit logic
                         }}
                       >
                         <Edit className="h-4 w-4" />

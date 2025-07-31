@@ -22,10 +22,13 @@ export const machines = pgTable("machines", {
   machineId: text("machine_id").notNull().unique(),
   name: text("name").notNull(),
   type: text("type").notNull(),
+  tier: text("tier").notNull().default("Standard"), // Premium, Standard, Budget
   capabilities: jsonb("capabilities").$type<string[]>().notNull().default([]),
   status: text("status").notNull().default("Available"), // Available, Busy, Maintenance, Offline
   utilization: decimal("utilization", { precision: 5, scale: 2 }).notNull().default("0"),
   availableShifts: jsonb("available_shifts").$type<number[]>().notNull().default([1, 2]), // 1 = 1st shift, 2 = 2nd shift
+  efficiencyFactor: decimal("efficiency_factor", { precision: 4, scale: 2 }).notNull().default("1.0"), // 1.0 = baseline, 0.8 = 20% slower, 1.2 = 20% faster
+  substitutionGroup: text("substitution_group"), // Machines in same group can substitute for each other
 });
 
 export const scheduleEntries = pgTable("schedule_entries", {
