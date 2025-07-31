@@ -15,19 +15,303 @@ export class DatabaseStorage implements IStorage {
       const existingMachines = await db.select().from(machines).limit(1);
       if (existingMachines.length > 0) return;
 
-      // Initialize machines with tiers and efficiency factors
+      // Initialize machines based on user's exact machine hierarchy
       const defaultMachines: InsertMachine[] = [
-        { machineId: "CNC-001", name: "Haas VF-2", type: "CNC Mill", tier: "Standard", capabilities: ["milling", "drilling", "tapping"], status: "Available", utilization: "92", availableShifts: [1, 2], efficiencyFactor: "1.0", substitutionGroup: "mill_group_a" },
-        { machineId: "CNC-002", name: "Mazak VTC-800", type: "CNC Mill", tier: "Premium", capabilities: ["milling", "drilling", "tapping"], status: "Available", utilization: "78", availableShifts: [1, 2], efficiencyFactor: "1.15", substitutionGroup: "mill_group_a" },
-        { machineId: "CNC-003", name: "DMG MORI", type: "CNC Mill", tier: "Premium", capabilities: ["milling", "drilling", "tapping"], status: "Available", utilization: "45", availableShifts: [1, 2], efficiencyFactor: "1.25", substitutionGroup: "mill_group_a" },
-        { machineId: "CNC-004", name: "Haas ST-30", type: "CNC Lathe", tier: "Standard", capabilities: ["turning", "drilling"], status: "Maintenance", utilization: "0", availableShifts: [1, 2], efficiencyFactor: "1.0", substitutionGroup: "lathe_group_a" },
-        { machineId: "CNC-005", name: "Mazak QT-250", type: "CNC Lathe", tier: "Premium", capabilities: ["turning", "drilling"], status: "Available", utilization: "65", availableShifts: [1, 2], efficiencyFactor: "1.2", substitutionGroup: "lathe_group_a" },
-        { machineId: "CNC-006", name: "Haas VF-3", type: "CNC Mill", tier: "Budget", capabilities: ["milling", "drilling"], status: "Available", utilization: "25", availableShifts: [1, 2], efficiencyFactor: "0.85", substitutionGroup: "mill_group_b" },
-        { machineId: "CNC-007", name: "Bridgeport Manual", type: "Manual Mill", tier: "Budget", capabilities: ["milling", "drilling"], status: "Available", utilization: "15", availableShifts: [1], efficiencyFactor: "0.6", substitutionGroup: "mill_group_b" },
-        { machineId: "CNC-008", name: "Okuma LT-200", type: "CNC Lathe", tier: "Standard", capabilities: ["turning", "drilling"], status: "Available", utilization: "55", availableShifts: [1, 2], efficiencyFactor: "0.95", substitutionGroup: "lathe_group_a" },
-        { machineId: "WELD-001", name: "TIG Station", type: "Welding", tier: "Standard", capabilities: ["tig_welding"], status: "Available", utilization: "67", availableShifts: [1], efficiencyFactor: "1.0", substitutionGroup: "welding_group" },
-        { machineId: "BLAST-001", name: "Bead Blast", type: "Finishing", tier: "Standard", capabilities: ["bead_blast"], status: "Available", utilization: "34", availableShifts: [1], efficiencyFactor: "1.0", substitutionGroup: "finishing_group" },
-        { machineId: "INSPECT-001", name: "CMM", type: "Inspection", tier: "Premium", capabilities: ["inspection"], status: "Available", utilization: "45", availableShifts: [1, 2], efficiencyFactor: "1.1", substitutionGroup: "inspection_group" },
+        // MILL - Horizontal Milling Centers
+        { 
+          machineId: "HMC-001", 
+          name: "MAZAK HCN5000 NEO", 
+          type: "MILL", 
+          category: "Horizontal Milling Centers",
+          tier: "Tier 1", 
+          capabilities: ["horizontal_milling", "drilling", "tapping", "boring"], 
+          status: "Available", 
+          utilization: "85", 
+          availableShifts: [1, 2], 
+          efficiencyFactor: "1.2", 
+          substitutionGroup: "hmc_group" 
+        },
+        { 
+          machineId: "HMC-002", 
+          name: "MORI-SEIKI MH-50", 
+          type: "MILL", 
+          category: "Horizontal Milling Centers",
+          tier: "Tier 1", 
+          capabilities: ["horizontal_milling", "drilling", "tapping", "boring"], 
+          status: "Available", 
+          utilization: "72", 
+          availableShifts: [1, 2], 
+          efficiencyFactor: "1.15", 
+          substitutionGroup: "hmc_group" 
+        },
+        
+        // MILL - 3-Axis Vertical Milling Centers
+        { 
+          machineId: "VMC-001", 
+          name: "HAAS VF-4SS", 
+          type: "MILL", 
+          category: "3-Axis Vertical Milling Centers",
+          tier: "Tier 1", 
+          capabilities: ["vertical_milling", "drilling", "tapping"], 
+          status: "Available", 
+          utilization: "78", 
+          availableShifts: [1, 2], 
+          efficiencyFactor: "1.1", 
+          substitutionGroup: "vmc_3axis_group" 
+        },
+        { 
+          machineId: "VMC-002", 
+          name: "FADAL 4020", 
+          type: "MILL", 
+          category: "3-Axis Vertical Milling Centers",
+          tier: "Tier 1", 
+          capabilities: ["vertical_milling", "drilling", "tapping"], 
+          status: "Available", 
+          utilization: "65", 
+          availableShifts: [1, 2], 
+          efficiencyFactor: "1.0", 
+          substitutionGroup: "vmc_3axis_group" 
+        },
+        { 
+          machineId: "VMC-003", 
+          name: "YAMA-SEIKI BM-1200", 
+          type: "MILL", 
+          category: "3-Axis Vertical Milling Centers",
+          tier: "Tier 1", 
+          capabilities: ["vertical_milling", "drilling", "tapping"], 
+          status: "Available", 
+          utilization: "55", 
+          availableShifts: [1, 2], 
+          efficiencyFactor: "1.05", 
+          substitutionGroup: "vmc_3axis_group" 
+        },
+        
+        // MILL - 3-Axis VMC's with pseudo 4th axis
+        { 
+          machineId: "VMC-004", 
+          name: "VESTA 1050B", 
+          type: "MILL", 
+          category: "3-Axis VMC's with pseudo 4th axis",
+          tier: "Tier 1", 
+          capabilities: ["vertical_milling", "drilling", "tapping", "4th_axis"], 
+          status: "Available", 
+          utilization: "82", 
+          availableShifts: [1, 2], 
+          efficiencyFactor: "1.15", 
+          substitutionGroup: "vmc_4axis_group",
+          fourthAxis: true
+        },
+        { 
+          machineId: "VMC-005", 
+          name: "MORI-SEIKI MV-653", 
+          type: "MILL", 
+          category: "3-Axis VMC's with pseudo 4th axis",
+          tier: "Tier 1", 
+          capabilities: ["vertical_milling", "drilling", "tapping", "4th_axis"], 
+          status: "Available", 
+          utilization: "68", 
+          availableShifts: [1, 2], 
+          efficiencyFactor: "1.2", 
+          substitutionGroup: "vmc_4axis_group",
+          fourthAxis: true
+        },
+        
+        // MILL - Large envelope VMC's (Note: MORI-SEIKI MV-653 is listed in both categories as per user specification)
+        { 
+          machineId: "VMC-006", 
+          name: "OKUMA MC-6VA", 
+          type: "MILL", 
+          category: "Large envelope VMC's",
+          tier: "Tier 1", 
+          capabilities: ["large_envelope_milling", "vertical_milling", "drilling", "tapping"], 
+          status: "Available", 
+          utilization: "45", 
+          availableShifts: [1, 2], 
+          efficiencyFactor: "1.25", 
+          substitutionGroup: "large_vmc_group" 
+        },
+        
+        // LATHE - Bar Fed Lathes
+        { 
+          machineId: "LATHE-001", 
+          name: "MORI-SEIKI SL-204", 
+          type: "LATHE", 
+          category: "Bar Fed Lathes",
+          subcategory: "Live Tooling Lathes",
+          tier: "Tier 1", 
+          capabilities: ["turning", "drilling", "live_tooling", "bar_feeding"], 
+          status: "Available", 
+          utilization: "75", 
+          availableShifts: [1, 2], 
+          efficiencyFactor: "1.15", 
+          substitutionGroup: "bar_fed_lathe_group",
+          spindles: "Single",
+          liveTooling: true,
+          barFeeder: true
+        },
+        { 
+          machineId: "LATHE-002", 
+          name: "HAAS DS30Y", 
+          type: "LATHE", 
+          category: "Bar Fed Lathes",
+          subcategory: "Live Tooling Lathes",
+          tier: "Tier 1", 
+          capabilities: ["turning", "drilling", "live_tooling", "bar_feeding", "dual_spindle"], 
+          status: "Available", 
+          utilization: "88", 
+          availableShifts: [1, 2], 
+          efficiencyFactor: "1.3", 
+          substitutionGroup: "dual_spindle_group",
+          spindles: "Dual",
+          liveTooling: true,
+          barFeeder: true
+        },
+        { 
+          machineId: "LATHE-003", 
+          name: "FEMCO HL-25", 
+          type: "LATHE", 
+          category: "Bar Fed Lathes",
+          tier: "Tier 1", 
+          capabilities: ["turning", "drilling", "bar_feeding"], 
+          status: "Available", 
+          utilization: "52", 
+          availableShifts: [1, 2], 
+          efficiencyFactor: "1.0", 
+          substitutionGroup: "bar_fed_lathe_group",
+          spindles: "Single",
+          liveTooling: false,
+          barFeeder: true
+        },
+        
+        // LATHE - Live Tooling Lathes (additional ones not already listed)
+        { 
+          machineId: "LATHE-004", 
+          name: "HAAS ST30Y", 
+          type: "LATHE", 
+          category: "Live Tooling Lathes",
+          tier: "Tier 1", 
+          capabilities: ["turning", "drilling", "live_tooling"], 
+          status: "Available", 
+          utilization: "62", 
+          availableShifts: [1, 2], 
+          efficiencyFactor: "1.1", 
+          substitutionGroup: "live_tooling_group",
+          spindles: "Single",
+          liveTooling: true,
+          barFeeder: false
+        },
+        { 
+          machineId: "LATHE-005", 
+          name: "MAZAK QTN 350IIMY", 
+          type: "LATHE", 
+          category: "Live Tooling Lathes",
+          tier: "Tier 1", 
+          capabilities: ["turning", "drilling", "live_tooling", "y_axis"], 
+          status: "Available", 
+          utilization: "70", 
+          availableShifts: [1, 2], 
+          efficiencyFactor: "1.2", 
+          substitutionGroup: "live_tooling_group",
+          spindles: "Single",
+          liveTooling: true,
+          barFeeder: false
+        },
+        
+        // SAWS
+        { 
+          machineId: "SAW-001", 
+          name: "AMADA HFA", 
+          type: "SAW", 
+          tier: "Tier 1", 
+          capabilities: ["cutting", "sawing"], 
+          status: "Available", 
+          utilization: "35", 
+          availableShifts: [1, 2], 
+          efficiencyFactor: "1.0", 
+          substitutionGroup: "saw_group" 
+        },
+        { 
+          machineId: "SAW-002", 
+          name: "HYD-MECH", 
+          type: "SAW", 
+          tier: "Tier 1", 
+          capabilities: ["cutting", "sawing"], 
+          status: "Available", 
+          utilization: "28", 
+          availableShifts: [1, 2], 
+          efficiencyFactor: "1.0", 
+          substitutionGroup: "saw_group" 
+        },
+        
+        // WATERJET
+        { 
+          machineId: "WJ-001", 
+          name: "FLOW MACH 500", 
+          type: "WATERJET", 
+          tier: "Tier 1", 
+          capabilities: ["waterjet_cutting", "precision_cutting"], 
+          status: "Available", 
+          utilization: "45", 
+          availableShifts: [1, 2], 
+          efficiencyFactor: "1.1", 
+          substitutionGroup: "waterjet_group" 
+        },
+        
+        // WELD
+        { 
+          machineId: "WELD-001", 
+          name: "WELD BAY", 
+          type: "WELD", 
+          tier: "Tier 1", 
+          capabilities: ["welding", "tig", "mig", "fabrication"], 
+          status: "Available", 
+          utilization: "58", 
+          availableShifts: [1], 
+          efficiencyFactor: "1.0", 
+          substitutionGroup: "weld_group" 
+        },
+        
+        // BEAD BLAST
+        { 
+          machineId: "BLAST-001", 
+          name: "BEAD BLAST BAY", 
+          type: "BEAD BLAST", 
+          tier: "Tier 1", 
+          capabilities: ["bead_blasting", "surface_finishing"], 
+          status: "Available", 
+          utilization: "32", 
+          availableShifts: [1], 
+          efficiencyFactor: "1.0", 
+          substitutionGroup: "blast_group" 
+        },
+        
+        // INSPECT
+        { 
+          machineId: "INSPECT-001", 
+          name: "INSPECT BAY", 
+          type: "INSPECT", 
+          tier: "Tier 1", 
+          capabilities: ["inspection", "quality_control", "measurement"], 
+          status: "Available", 
+          utilization: "42", 
+          availableShifts: [1, 2], 
+          efficiencyFactor: "1.0", 
+          substitutionGroup: "inspect_group" 
+        },
+        
+        // ASSEMBLE
+        { 
+          machineId: "ASSEMBLE-001", 
+          name: "ASSEMBLE BAY", 
+          type: "ASSEMBLE", 
+          tier: "Tier 1", 
+          capabilities: ["assembly", "fitting", "final_assembly"], 
+          status: "Available", 
+          utilization: "38", 
+          availableShifts: [1], 
+          efficiencyFactor: "1.0", 
+          substitutionGroup: "assemble_group" 
+        }
       ];
 
       await db.insert(machines).values(defaultMachines);
@@ -43,8 +327,8 @@ export class DatabaseStorage implements IStorage {
           priority: "High",
           status: "Unscheduled",
           routing: [
-            { sequence: 1, operation: "CNC Milling", estimatedHours: 2.5, compatibleMachines: ["CNC-001", "CNC-002", "CNC-003"] },
-            { sequence: 2, operation: "Inspection", estimatedHours: 0.5, compatibleMachines: ["INSPECT-001"] }
+            { sequence: 1, name: "CNC Milling", machineType: "MILL", estimatedHours: 2.5, compatibleMachines: ["VMC-001", "VMC-002", "VMC-003"] },
+            { sequence: 2, name: "Inspection", machineType: "INSPECT", estimatedHours: 0.5, compatibleMachines: ["INSPECT-001"] }
           ],
           estimatedHours: "3.0"
         },
@@ -57,8 +341,8 @@ export class DatabaseStorage implements IStorage {
           priority: "Critical",
           status: "Unscheduled",
           routing: [
-            { sequence: 1, operation: "CNC Turning", estimatedHours: 1.5, compatibleMachines: ["CNC-004", "CNC-005", "CNC-008"] },
-            { sequence: 2, operation: "Inspection", estimatedHours: 0.25, compatibleMachines: ["INSPECT-001"] }
+            { sequence: 1, name: "CNC Turning", machineType: "LATHE", estimatedHours: 1.5, compatibleMachines: ["LATHE-001", "LATHE-002", "LATHE-004"] },
+            { sequence: 2, name: "Inspection", machineType: "INSPECT", estimatedHours: 0.25, compatibleMachines: ["INSPECT-001"] }
           ],
           estimatedHours: "1.75"
         },
@@ -71,10 +355,10 @@ export class DatabaseStorage implements IStorage {
           priority: "Normal",
           status: "Unscheduled",
           routing: [
-            { sequence: 1, operation: "CNC Milling", estimatedHours: 3.0, compatibleMachines: ["CNC-001", "CNC-002", "CNC-003"] },
-            { sequence: 2, operation: "TIG Welding", estimatedHours: 2.0, compatibleMachines: ["WELD-001"] },
-            { sequence: 3, operation: "Bead Blast", estimatedHours: 0.5, compatibleMachines: ["BLAST-001"] },
-            { sequence: 4, operation: "Inspection", estimatedHours: 0.75, compatibleMachines: ["INSPECT-001"] }
+            { sequence: 1, name: "CNC Milling", machineType: "MILL", estimatedHours: 3.0, compatibleMachines: ["VMC-001", "VMC-002", "VMC-003"] },
+            { sequence: 2, name: "TIG Welding", machineType: "WELD", estimatedHours: 2.0, compatibleMachines: ["WELD-001"] },
+            { sequence: 3, name: "Bead Blast", machineType: "BEAD BLAST", estimatedHours: 0.5, compatibleMachines: ["BLAST-001"] },
+            { sequence: 4, name: "Inspection", machineType: "INSPECT", estimatedHours: 0.75, compatibleMachines: ["INSPECT-001"] }
           ],
           estimatedHours: "6.25"
         }
@@ -120,7 +404,6 @@ export class DatabaseStorage implements IStorage {
       .insert(jobs)
       .values({
         ...insertJob,
-        createdDate: new Date(),
         priority: insertJob.priority || "Normal",
         status: insertJob.status || "Unscheduled",
         routing: insertJob.routing || [],
@@ -218,7 +501,7 @@ export class DatabaseStorage implements IStorage {
 
   // Alerts implementation
   async getAlerts(): Promise<Alert[]> {
-    return await db.select().from(alerts).orderBy(desc(alerts.createdDate));
+    return await db.select().from(alerts).orderBy(desc(alerts.createdAt));
   }
 
   async createAlert(alert: InsertAlert): Promise<Alert> {
@@ -226,7 +509,6 @@ export class DatabaseStorage implements IStorage {
       .insert(alerts)
       .values({
         ...alert,
-        createdDate: new Date(),
         isRead: false,
       })
       .returning();
@@ -266,6 +548,7 @@ export class DatabaseStorage implements IStorage {
       activeJobs,
       utilization: averageUtilization,
       lateJobs,
+      atRiskJobs: Math.max(0, lateJobs - 1), // At risk jobs are those approaching late status
       customerLateJobs,
       companyLateJobs,
       totalCapacity,

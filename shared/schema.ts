@@ -21,14 +21,20 @@ export const machines = pgTable("machines", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   machineId: text("machine_id").notNull().unique(),
   name: text("name").notNull(),
-  type: text("type").notNull(),
-  tier: text("tier").notNull().default("Standard"), // Premium, Standard, Budget
+  type: text("type").notNull(), // MILL, LATHE, WATERJET, BEAD BLAST, SAW, WELD, INSPECT, ASSEMBLE
+  category: text("category"), // For MILL: Horizontal Milling Centers, 3-Axis Vertical Milling Centers, etc.
+  subcategory: text("subcategory"), // For detailed groupings like Bar Fed Lathes, Live Tooling Lathes
+  tier: text("tier").notNull().default("Tier 1"), // Tier 1 for all main machine types
   capabilities: jsonb("capabilities").$type<string[]>().notNull().default([]),
   status: text("status").notNull().default("Available"), // Available, Busy, Maintenance, Offline
   utilization: decimal("utilization", { precision: 5, scale: 2 }).notNull().default("0"),
   availableShifts: jsonb("available_shifts").$type<number[]>().notNull().default([1, 2]), // 1 = 1st shift, 2 = 2nd shift
   efficiencyFactor: decimal("efficiency_factor", { precision: 4, scale: 2 }).notNull().default("1.0"), // 1.0 = baseline, 0.8 = 20% slower, 1.2 = 20% faster
   substitutionGroup: text("substitution_group"), // Machines in same group can substitute for each other
+  spindles: text("spindles"), // For lathes: Single or Dual
+  liveTooling: boolean("live_tooling").default(false), // For lathes with live tooling capability
+  barFeeder: boolean("bar_feeder").default(false), // For bar fed lathes
+  fourthAxis: boolean("fourth_axis").default(false), // For VMCs with 4th axis capability
 });
 
 export const scheduleEntries = pgTable("schedule_entries", {
