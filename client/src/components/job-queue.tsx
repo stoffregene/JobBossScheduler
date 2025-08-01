@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Filter, Plus, Calendar, Edit, Zap } from "lucide-react";
+import { Filter, Plus, Calendar, Edit, Zap, Trash2, Settings, Upload } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Job } from "@shared/schema";
@@ -20,6 +20,9 @@ interface JobQueueProps {
 export default function JobQueue({ onJobSelect }: JobQueueProps) {
   const { toast } = useToast();
   const [isAddJobOpen, setIsAddJobOpen] = useState(false);
+  const [isEditJobOpen, setIsEditJobOpen] = useState(false);
+  const [editingJob, setEditingJob] = useState<Job | null>(null);
+  const [isImportOpen, setIsImportOpen] = useState(false);
   const [newJob, setNewJob] = useState({
     jobNumber: '',
     partNumber: '',
@@ -70,7 +73,7 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
         partNumber: jobData.partNumber,
         description: jobData.description,
         customer: jobData.customer,
-        dueDate: new Date(jobData.dueDate),
+        dueDate: jobData.dueDate, // Keep as string, backend will convert
         estimatedHours: estimatedHours.toString(),
         quantity: 1,
         status: 'Unscheduled' as const,
@@ -128,6 +131,49 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
     },
   });
 
+  const deleteJobMutation = useMutation({
+    mutationFn: async (jobId: string) => {
+      return apiRequest(`/api/jobs/${jobId}`, 'DELETE');
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/schedule'] });
+      toast({
+        title: "Job Deleted",
+        description: "Job has been removed from the queue.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Delete Failed",
+        description: "Unable to delete the job. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateJobMutation = useMutation({
+    mutationFn: async ({ jobId, updates }: { jobId: string; updates: Partial<Job> }) => {
+      return apiRequest(`/api/jobs/${jobId}`, 'PUT', updates);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      setIsEditJobOpen(false);
+      setEditingJob(null);
+      toast({
+        title: "Job Updated",
+        description: "Job details have been updated successfully.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Update Failed",
+        description: "Unable to update the job. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleCreateJob = () => {
     if (!newJob.jobNumber || !newJob.partNumber || !newJob.dueDate) {
       toast({
@@ -138,6 +184,72 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
       return;
     }
     createJobMutation.mutate(newJob);
+  };
+
+  const handleEditJob = (job: Job) => {
+    setEditingJob(job);
+    setIsEditJobOpen(true);
+  };
+
+  const handleUpdateJob = () => {
+    if (!editingJob) return;
+    
+    updateJobMutation.mutate({
+      jobId: editingJob.id,
+      updates: editingJob
+    });
+  };
+
+  const handleDeleteJob = (jobId: string) => {
+    if (confirm('Are you sure you want to delete this job? This action cannot be undone.')) {
+      deleteJobMutation.mutate(jobId);
+    }
+  };
+
+  const handleCSVImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const csv = e.target?.result as string;
+      const lines = csv.split('\n');
+      const headers = lines[0].split(',').map(h => h.trim());
+      
+      // Expected CSV format: jobNumber,partNumber,description,customer,dueDate,priority,estimatedHours
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        
+        const values = line.split(',').map(v => v.trim());
+        if (values.length >= 5) {
+          const jobData = {
+            jobNumber: values[0],
+            partNumber: values[1],
+            description: values[2] || '',
+            customer: values[3] || '',
+            dueDate: values[4],
+            priority: (values[5] || 'Normal') as 'Normal' | 'High' | 'Critical',
+            estimatedHours: values[6] || '2',
+            operations: [] as string[]
+          };
+          
+          // Create job with some delay to avoid overwhelming the API
+          setTimeout(() => {
+            createJobMutation.mutate(jobData);
+          }, i * 100);
+        }
+      }
+      
+      setIsImportOpen(false);
+      toast({
+        title: "CSV Import Started",
+        description: `Processing ${lines.length - 1} jobs from CSV file.`,
+      });
+    };
+    
+    reader.readAsText(file);
+    event.target.value = ''; // Reset file input
   };
 
   if (isLoading) {
@@ -168,6 +280,40 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
                 <Filter className="h-4 w-4 mr-1" />
                 Filter
               </Button>
+              <Dialog open={isImportOpen} onOpenChange={setIsImportOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Upload className="h-4 w-4 mr-1" />
+                    Import CSV
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Import Jobs from CSV</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="text-sm text-gray-600">
+                      Upload a CSV file with the following columns:
+                      <br />
+                      <code className="text-xs bg-gray-100 px-1 rounded">
+                        jobNumber,partNumber,description,customer,dueDate,priority,estimatedHours
+                      </code>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="csvFile">CSV File</Label>
+                      <Input
+                        id="csvFile"
+                        type="file"
+                        accept=".csv"
+                        onChange={handleCSVImport}
+                      />
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      Example: J001,PN-123,Bracket,Acme Corp,2025-08-15,High,4.5
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
               <Dialog open={isAddJobOpen} onOpenChange={setIsAddJobOpen}>
                 <DialogTrigger asChild>
                   <Button size="sm">
@@ -330,6 +476,40 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
               <Filter className="h-4 w-4 mr-1" />
               Filter
             </Button>
+            <Dialog open={isImportOpen} onOpenChange={setIsImportOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Upload className="h-4 w-4 mr-1" />
+                  Import CSV
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Import Jobs from CSV</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="text-sm text-gray-600">
+                    Upload a CSV file with the following columns:
+                    <br />
+                    <code className="text-xs bg-gray-100 px-1 rounded">
+                      jobNumber,partNumber,description,customer,dueDate,priority,estimatedHours
+                    </code>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="csvFileMain2">CSV File</Label>
+                    <Input
+                      id="csvFileMain2"
+                      type="file"
+                      accept=".csv"
+                      onChange={handleCSVImport}
+                    />
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    Example: J001,PN-123,Bracket,Acme Corp,2025-08-15,High,4.5
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
             <Dialog open={isAddJobOpen} onOpenChange={setIsAddJobOpen}>
               <DialogTrigger asChild>
                 <Button size="sm">
@@ -484,40 +664,56 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      {job.status === 'Unscheduled' && (
+                      <div className="flex items-center space-x-1">
+                        {job.status === 'Unscheduled' && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              autoScheduleMutation.mutate(job.id);
+                            }}
+                            disabled={autoScheduleMutation.isPending}
+                            title="Auto Schedule with Best Fit Machines"
+                          >
+                            <Zap className="h-4 w-4" />
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={(e) => {
                             e.stopPropagation();
-                            autoScheduleMutation.mutate(job.id);
+                            // Manual scheduling logic
                           }}
-                          disabled={autoScheduleMutation.isPending}
-                          title="Auto Schedule with Best Fit Machines"
+                          title="Manual Schedule"
                         >
-                          <Zap className="h-4 w-4" />
+                          <Calendar className="h-4 w-4" />
                         </Button>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          // Manual scheduling logic
-                        }}
-                      >
-                        <Calendar className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          // Edit logic
-                        }}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditJob(job);
+                          }}
+                          title="Edit Job"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteJob(job.id);
+                          }}
+                          title="Delete Job"
+                          disabled={deleteJobMutation.isPending}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -526,6 +722,104 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
           </table>
         </div>
       </CardContent>
+
+      {/* Edit Job Dialog */}
+      <Dialog open={isEditJobOpen} onOpenChange={setIsEditJobOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Job</DialogTitle>
+          </DialogHeader>
+          {editingJob && (
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="editJobNumber">Job Number *</Label>
+                <Input
+                  id="editJobNumber"
+                  value={editingJob.jobNumber}
+                  onChange={(e) => setEditingJob(prev => prev ? { ...prev, jobNumber: e.target.value } : null)}
+                  placeholder="J0001"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editPartNumber">Part Number *</Label>
+                <Input
+                  id="editPartNumber"
+                  value={editingJob.partNumber}
+                  onChange={(e) => setEditingJob(prev => prev ? { ...prev, partNumber: e.target.value } : null)}
+                  placeholder="PN-12345"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editDescription">Description</Label>
+                <Textarea
+                  id="editDescription"
+                  value={editingJob.description || ''}
+                  onChange={(e) => setEditingJob(prev => prev ? { ...prev, description: e.target.value } : null)}
+                  placeholder="Brief description of the part"
+                  rows={2}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="editDueDate">Due Date *</Label>
+                  <Input
+                    id="editDueDate"
+                    type="date"
+                    value={new Date(editingJob.dueDate).toISOString().split('T')[0]}
+                    onChange={(e) => setEditingJob(prev => prev ? { ...prev, dueDate: new Date(e.target.value) } : null)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="editPriority">Priority</Label>
+                  <Select 
+                    value={editingJob.priority} 
+                    onValueChange={(value) => setEditingJob(prev => prev ? { ...prev, priority: value as any } : null)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Normal">Normal</SelectItem>
+                      <SelectItem value="High">High</SelectItem>
+                      <SelectItem value="Critical">Critical</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="editEstimatedHours">Est. Hours</Label>
+                  <Input
+                    id="editEstimatedHours"
+                    type="number"
+                    value={editingJob.estimatedHours}
+                    onChange={(e) => setEditingJob(prev => prev ? { ...prev, estimatedHours: e.target.value } : null)}
+                    placeholder="8.5"
+                    step="0.5"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="editCustomer">Customer</Label>
+                  <Input
+                    id="editCustomer"
+                    value={editingJob.customer || ''}
+                    onChange={(e) => setEditingJob(prev => prev ? { ...prev, customer: e.target.value } : null)}
+                    placeholder="Customer name"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end space-x-2 pt-4">
+                <Button variant="outline" onClick={() => setIsEditJobOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleUpdateJob} disabled={updateJobMutation.isPending}>
+                  {updateJobMutation.isPending ? 'Updating...' : 'Update Job'}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
