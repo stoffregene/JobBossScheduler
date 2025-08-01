@@ -1046,20 +1046,13 @@ export class DatabaseStorage implements IStorage {
     return Array.from(jobMap.values()).filter(job => job.materialOrders.length > 0);
   }
 
-  // Check if job is ready for scheduling based on materials
-  async isJobReadyForScheduling(jobId: string): Promise<{ ready: boolean; reason?: string; pendingMaterials?: MaterialOrder[] }> {
+  // Check if job has material concerns but don't block scheduling
+  async isJobReadyForScheduling(jobId: string): Promise<{ ready: boolean; reason?: string; pendingMaterials?: MaterialOrder[]; needsReview?: boolean }> {
+    // Jobs are always ready for scheduling (day 0 scheduling policy)
     const materialOrders = await this.getMaterialOrdersForJob(jobId);
     const pendingMaterials = materialOrders.filter(order => order.status === "Open");
     
-    if (pendingMaterials.length > 0) {
-      return {
-        ready: false,
-        reason: `Awaiting ${pendingMaterials.length} material order(s)`,
-        pendingMaterials
-      };
-    }
-
-    // Check for outsourced operations
+    // Check for outsourced operations (these still block scheduling)
     const outsourcedOps = await this.getOutsourcedOperationsForJob(jobId);
     const pendingOutsourced = outsourcedOps.filter(op => op.status !== "Completed");
     
@@ -1070,7 +1063,11 @@ export class DatabaseStorage implements IStorage {
       };
     }
 
-    return { ready: true };
+    return { 
+      ready: true,
+      pendingMaterials: pendingMaterials.length > 0 ? pendingMaterials : undefined,
+      needsReview: pendingMaterials.length > 0
+    };
   }
 
   // Outsourced Operations Management
@@ -1102,24 +1099,135 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
-  // Enhanced scheduling that considers material readiness
-  async autoScheduleJobWithMaterialCheck(jobId: string): Promise<{ success: boolean; scheduleEntries?: ScheduleEntry[]; reason?: string; pendingItems?: any[] }> {
+  // Enhanced scheduling with day 0 start and material flagging
+  async autoScheduleJobWithMaterialCheck(jobId: string): Promise<{ success: boolean; scheduleEntries?: ScheduleEntry[]; reason?: string; pendingItems?: any[]; needsReview?: boolean }> {
     const readinessCheck = await this.isJobReadyForScheduling(jobId);
     
+    // Only block for outsourced operations, not materials
     if (!readinessCheck.ready) {
       return {
         success: false,
-        reason: readinessCheck.reason,
-        pendingItems: readinessCheck.pendingMaterials
+        reason: readinessCheck.reason
       };
     }
 
-    const scheduleEntries = await this.autoScheduleJob(jobId);
+    // Schedule at day 0 regardless of material status
+    const scheduleEntries = await this.autoScheduleJobWithOptimalStart(jobId);
     
     if (scheduleEntries) {
-      return { success: true, scheduleEntries };
+      // Create alert if materials need review
+      if (readinessCheck.needsReview && readinessCheck.pendingMaterials) {
+        await this.createAlert({
+          type: "warning",
+          title: "Material Review Required",
+          message: `Job ${jobId} scheduled but has ${readinessCheck.pendingMaterials.length} pending material order(s) - review needed before optimal start date`,
+          jobId
+        });
+      }
+      
+      return { 
+        success: true, 
+        scheduleEntries,
+        needsReview: readinessCheck.needsReview,
+        pendingItems: readinessCheck.pendingMaterials
+      };
     } else {
       return { success: false, reason: "Unable to schedule job within manufacturing window" };
     }
+  }
+
+  // New scheduling method with optimal start date logic
+  async autoScheduleJobWithOptimalStart(jobId: string): Promise<ScheduleEntry[] | null> {
+    const job = await this.getJob(jobId);
+    if (!job) return null;
+
+    const scheduleEntries: ScheduleEntry[] = [];
+    
+    // Start at day 0 (immediate scheduling)
+    let currentDate = new Date();
+    currentDate.setHours(0, 0, 0, 0); // Start of today
+    
+    // Calculate optimal start (day 7 for material buffer)
+    const optimalStartDate = new Date(currentDate);
+    optimalStartDate.setDate(optimalStartDate.getDate() + 7);
+    
+    // Use optimal start date as actual start date
+    currentDate = new Date(optimalStartDate);
+    
+    const dayInMs = 24 * 60 * 60 * 1000;
+    const maxDaysOut = 30; // Manufacturing window
+
+    for (const operation of job.routing) {
+      let scheduled = false;
+      let attemptDays = 0;
+      
+      while (!scheduled && attemptDays < maxDaysOut) {
+        const machineResults = await this.findOptimalMachineAssignment([operation], job.priority as "Critical" | "High" | "Normal" | "Low");
+        
+        if (machineResults.length === 0) {
+          currentDate = new Date(currentDate.getTime() + dayInMs);
+          attemptDays++;
+          continue;
+        }
+        
+        for (const result of machineResults) {
+          for (const shift of result.machine.availableShifts) {
+            const shiftStart = shift === 1 ? 3 : 15; // 3 AM or 3 PM
+            const startTime = new Date(currentDate);
+            startTime.setHours(shiftStart, 0, 0, 0);
+            
+            const endTime = new Date(startTime.getTime() + (result.adjustedHours * 60 * 60 * 1000));
+            
+            // Check for conflicts with existing schedule
+            const conflicts = await this.checkScheduleConflicts(result.machine.id, startTime, endTime);
+            
+            if (!conflicts) {
+              const scheduleEntry = await this.createScheduleEntry({
+                jobId: job.id,
+                machineId: result.machine.id,
+                operationSequence: operation.sequence,
+                startTime,
+                endTime,
+                shift,
+                status: "Scheduled"
+              });
+              
+              scheduleEntries.push(scheduleEntry);
+              
+              // Update machine utilization
+              const currentUtil = parseFloat(result.machine.utilization);
+              const newUtil = Math.min(100, currentUtil + (result.adjustedHours / 8) * 100);
+              await this.updateMachine(result.machine.id, { utilization: newUtil.toString() });
+              
+              // Move to next day for next operation
+              currentDate = new Date(endTime.getTime() + dayInMs);
+              scheduled = true;
+              break;
+            }
+          }
+          if (scheduled) break;
+        }
+        
+        if (!scheduled) {
+          currentDate = new Date(currentDate.getTime() + dayInMs);
+          attemptDays++;
+        }
+      }
+      
+      if (!scheduled) {
+        await this.createAlert({
+          type: "warning",
+          title: "Scheduling Conflict",
+          message: `Unable to schedule operation ${operation.sequence} for job ${job.jobNumber} within manufacturing window`,
+          jobId: job.id
+        });
+        return null;
+      }
+    }
+    
+    // Update job status to scheduled
+    await this.updateJob(jobId, { status: "Scheduled" });
+    
+    return scheduleEntries;
   }
 }
