@@ -1,7 +1,13 @@
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { Filter, Plus, Calendar, Edit, Zap } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -13,15 +19,63 @@ interface JobQueueProps {
 
 export default function JobQueue({ onJobSelect }: JobQueueProps) {
   const { toast } = useToast();
+  const [isAddJobOpen, setIsAddJobOpen] = useState(false);
+  const [newJob, setNewJob] = useState({
+    jobNumber: '',
+    partNumber: '',
+    description: '',
+    dueDate: '',
+    priority: 'Normal' as const,
+    estimatedHours: '',
+    customer: '',
+    operations: [] as string[]
+  });
+
   const { data: jobs, isLoading } = useQuery<Job[]>({
     queryKey: ['/api/jobs'],
   });
 
+  const createJobMutation = useMutation({
+    mutationFn: async (jobData: typeof newJob) => {
+      const payload = {
+        ...jobData,
+        dueDate: new Date(jobData.dueDate),
+        estimatedHours: parseFloat(jobData.estimatedHours) || 0,
+        createdDate: new Date(),
+        status: 'Unscheduled' as const
+      };
+      return apiRequest('/api/jobs', 'POST', payload);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      setIsAddJobOpen(false);
+      setNewJob({
+        jobNumber: '',
+        partNumber: '',
+        description: '',
+        dueDate: '',
+        priority: 'Normal',
+        estimatedHours: '',
+        customer: '',
+        operations: []
+      });
+      toast({
+        title: "Job Created",
+        description: "New job has been added to the queue successfully.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Creation Failed",
+        description: "Unable to create the job. Please check all fields and try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const autoScheduleMutation = useMutation({
     mutationFn: async (jobId: string) => {
-      return apiRequest(`/api/jobs/${jobId}/auto-schedule`, {
-        method: 'POST',
-      });
+      return apiRequest(`/api/jobs/${jobId}/auto-schedule`, 'POST');
     },
     onSuccess: (data, jobId) => {
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
@@ -29,7 +83,7 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
       queryClient.invalidateQueries({ queryKey: ['/api/machines'] });
       toast({
         title: "Auto-Schedule Success",
-        description: `Job has been automatically scheduled with ${data.scheduleEntries.length} operations.`,
+        description: `Job has been automatically scheduled successfully.`,
       });
     },
     onError: () => {
@@ -40,6 +94,18 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
       });
     },
   });
+
+  const handleCreateJob = () => {
+    if (!newJob.jobNumber || !newJob.partNumber || !newJob.dueDate) {
+      toast({
+        title: "Missing Information",
+        description: "Please fill in all required fields (Job Number, Part Number, Due Date).",
+        variant: "destructive",
+      });
+      return;
+    }
+    createJobMutation.mutate(newJob);
+  };
 
   if (isLoading) {
     return (
@@ -69,10 +135,103 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
                 <Filter className="h-4 w-4 mr-1" />
                 Filter
               </Button>
-              <Button size="sm">
-                <Plus className="h-4 w-4 mr-1" />
-                Add Job
-              </Button>
+              <Dialog open={isAddJobOpen} onOpenChange={setIsAddJobOpen}>
+                <DialogTrigger asChild>
+                  <Button size="sm">
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add Job
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Add New Job</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="jobNumber">Job Number *</Label>
+                      <Input
+                        id="jobNumber"
+                        value={newJob.jobNumber}
+                        onChange={(e) => setNewJob(prev => ({ ...prev, jobNumber: e.target.value }))}
+                        placeholder="J0001"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="partNumber">Part Number *</Label>
+                      <Input
+                        id="partNumber"
+                        value={newJob.partNumber}
+                        onChange={(e) => setNewJob(prev => ({ ...prev, partNumber: e.target.value }))}
+                        placeholder="PN-12345"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="description">Description</Label>
+                      <Textarea
+                        id="description"
+                        value={newJob.description}
+                        onChange={(e) => setNewJob(prev => ({ ...prev, description: e.target.value }))}
+                        placeholder="Brief description of the part"
+                        rows={2}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="dueDate">Due Date *</Label>
+                        <Input
+                          id="dueDate"
+                          type="date"
+                          value={newJob.dueDate}
+                          onChange={(e) => setNewJob(prev => ({ ...prev, dueDate: e.target.value }))}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="priority">Priority</Label>
+                        <Select value={newJob.priority} onValueChange={(value) => setNewJob(prev => ({ ...prev, priority: value as any }))}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Normal">Normal</SelectItem>
+                            <SelectItem value="High">High</SelectItem>
+                            <SelectItem value="Critical">Critical</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="estimatedHours">Est. Hours</Label>
+                        <Input
+                          id="estimatedHours"
+                          type="number"
+                          value={newJob.estimatedHours}
+                          onChange={(e) => setNewJob(prev => ({ ...prev, estimatedHours: e.target.value }))}
+                          placeholder="8.5"
+                          step="0.5"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="customer">Customer</Label>
+                        <Input
+                          id="customer"
+                          value={newJob.customer}
+                          onChange={(e) => setNewJob(prev => ({ ...prev, customer: e.target.value }))}
+                          placeholder="Customer name"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-end space-x-2 pt-4">
+                      <Button variant="outline" onClick={() => setIsAddJobOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button onClick={handleCreateJob} disabled={createJobMutation.isPending}>
+                        {createJobMutation.isPending ? 'Creating...' : 'Create Job'}
+                      </Button>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
             </div>
           </div>
         </CardHeader>
@@ -138,10 +297,103 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
               <Filter className="h-4 w-4 mr-1" />
               Filter
             </Button>
-            <Button size="sm">
-              <Plus className="h-4 w-4 mr-1" />
-              Add Job
-            </Button>
+            <Dialog open={isAddJobOpen} onOpenChange={setIsAddJobOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm">
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add Job
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Add New Job</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="jobNumber">Job Number *</Label>
+                    <Input
+                      id="jobNumber"
+                      value={newJob.jobNumber}
+                      onChange={(e) => setNewJob(prev => ({ ...prev, jobNumber: e.target.value }))}
+                      placeholder="J0001"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="partNumber">Part Number *</Label>
+                    <Input
+                      id="partNumber"
+                      value={newJob.partNumber}
+                      onChange={(e) => setNewJob(prev => ({ ...prev, partNumber: e.target.value }))}
+                      placeholder="PN-12345"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="description">Description</Label>
+                    <Textarea
+                      id="description"
+                      value={newJob.description}
+                      onChange={(e) => setNewJob(prev => ({ ...prev, description: e.target.value }))}
+                      placeholder="Brief description of the part"
+                      rows={2}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="dueDate">Due Date *</Label>
+                      <Input
+                        id="dueDate"
+                        type="date"
+                        value={newJob.dueDate}
+                        onChange={(e) => setNewJob(prev => ({ ...prev, dueDate: e.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="priority">Priority</Label>
+                      <Select value={newJob.priority} onValueChange={(value) => setNewJob(prev => ({ ...prev, priority: value as any }))}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Normal">Normal</SelectItem>
+                          <SelectItem value="High">High</SelectItem>
+                          <SelectItem value="Critical">Critical</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="estimatedHours">Est. Hours</Label>
+                      <Input
+                        id="estimatedHours"
+                        type="number"
+                        value={newJob.estimatedHours}
+                        onChange={(e) => setNewJob(prev => ({ ...prev, estimatedHours: e.target.value }))}
+                        placeholder="8.5"
+                        step="0.5"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="customer">Customer</Label>
+                      <Input
+                        id="customer"
+                        value={newJob.customer}
+                        onChange={(e) => setNewJob(prev => ({ ...prev, customer: e.target.value }))}
+                        placeholder="Customer name"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-end space-x-2 pt-4">
+                    <Button variant="outline" onClick={() => setIsAddJobOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button onClick={handleCreateJob} disabled={createJobMutation.isPending}>
+                      {createJobMutation.isPending ? 'Creating...' : 'Create Job'}
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
       </CardHeader>
