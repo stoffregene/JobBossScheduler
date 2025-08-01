@@ -35,32 +35,8 @@ export default function ScheduleView() {
 
   const weekDays = getWeekDays();
   
-  // Group machines by type and show a representative set including lathes
-  const groupMachinesByType = (machines: Machine[]) => {
-    const grouped = machines.reduce((acc, machine) => {
-      if (!acc[machine.type]) acc[machine.type] = [];
-      acc[machine.type].push(machine);
-      return acc;
-    }, {} as Record<string, Machine[]>);
-    
-    // Take some from each type to ensure lathes are visible
-    const displayMachines: Machine[] = [];
-    Object.entries(grouped).forEach(([type, typeMachines]) => {
-      if (type === 'LATHE') {
-        // Show all lathes since you specifically want to see them
-        displayMachines.push(...typeMachines.slice(0, 3));
-      } else if (type === 'MILL') {
-        // Show some mills
-        displayMachines.push(...typeMachines.slice(0, 4));
-      } else {
-        // Show one of each other type
-        displayMachines.push(...typeMachines.slice(0, 1));
-      }
-    });
-    return displayMachines;
-  };
-  
-  const displayMachines = machines ? groupMachinesByType(machines) : [];
+  // Show ALL 20 machines - user specifically wants to see everything
+  const displayMachines = machines || [];
 
   const getMachineJobs = (machineId: string) => {
     if (!scheduleEntries || !jobs) return [];
