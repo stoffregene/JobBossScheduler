@@ -8,6 +8,7 @@ import type { Job, Machine, ScheduleEntry } from "@shared/schema";
 
 export default function ScheduleView() {
   const [machineTypeFilter, setMachineTypeFilter] = useState<string>("ALL");
+  const [timeView, setTimeView] = useState<string>("this-week");
 
   const { data: jobs } = useQuery<Job[]>({
     queryKey: ['/api/jobs'],
@@ -24,10 +25,23 @@ export default function ScheduleView() {
   const getWeekDays = () => {
     const today = new Date();
     const currentWeek = [];
-    const startOfWeek = new Date(today);
-    startOfWeek.setDate(today.getDate() - today.getDay() + 1); // Monday
+    let startOfWeek = new Date(today);
+    
+    if (timeView === "next-week") {
+      // Next week starts 7 days from now
+      startOfWeek.setDate(today.getDate() + 7 - today.getDay());
+    } else if (timeView === "this-month") {
+      // Show current month - first Monday of the month or around today
+      startOfWeek.setDate(1);
+      startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay() + 1);
+    } else {
+      // This week (default)
+      startOfWeek.setDate(today.getDate() - today.getDay() + 1); // Monday
+    }
 
-    for (let i = 0; i < 7; i++) {
+    const daysToShow = timeView === "this-month" ? 30 : 7;
+    
+    for (let i = 0; i < daysToShow; i++) {
       const day = new Date(startOfWeek);
       day.setDate(startOfWeek.getDate() + i);
       currentWeek.push(day);
@@ -39,7 +53,7 @@ export default function ScheduleView() {
   const weekDays = getWeekDays();
   
   // Get unique machine types for filter dropdown
-  const machineTypes = [...new Set(machines?.map(m => m.type) || [])].sort();
+  const machineTypes = Array.from(new Set(machines?.map(m => m.type) || [])).sort();
   
   // Filter and sort machines by type and alphanumerically
   const filteredMachines = machines ? 
@@ -95,7 +109,7 @@ export default function ScheduleView() {
                 ))}
               </SelectContent>
             </Select>
-            <Select defaultValue="this-week">
+            <Select value={timeView} onValueChange={setTimeView}>
               <SelectTrigger className="w-40">
                 <SelectValue />
               </SelectTrigger>
@@ -116,11 +130,14 @@ export default function ScheduleView() {
       <CardContent>
         <div className="space-y-4">
           {/* Day Headers */}
-          <div className="grid gap-2 text-sm font-medium text-gray-500" style={{ gridTemplateColumns: "200px repeat(7, 1fr)" }}>
+          <div className="grid gap-2 text-sm font-medium text-gray-500" style={{ gridTemplateColumns: timeView === "this-month" ? "200px repeat(30, 1fr)" : "200px repeat(7, 1fr)" }}>
             <div className="text-right pr-4">Machine</div>
             {weekDays.map((day, index) => (
               <div key={index} className="text-center">
-                {day.toLocaleDateString('en-US', { weekday: 'short' })} {day.getMonth() + 1}/{day.getDate()}
+                {timeView === "this-month" ? 
+                  `${day.getMonth() + 1}/${day.getDate()}` :
+                  `${day.toLocaleDateString('en-US', { weekday: 'short' })} ${day.getMonth() + 1}/${day.getDate()}`
+                }
               </div>
             ))}
           </div>
@@ -132,7 +149,7 @@ export default function ScheduleView() {
               const isWeekendOnly = machine.availableShifts.length === 1 && machine.availableShifts[0] === 1;
               
               return (
-                <div key={machine.id} className="grid gap-2 items-center" style={{ gridTemplateColumns: "200px repeat(7, 1fr)" }}>
+                <div key={machine.id} className="grid gap-2 items-center" style={{ gridTemplateColumns: timeView === "this-month" ? "200px repeat(30, 1fr)" : "200px repeat(7, 1fr)" }}>
                   <div className="text-sm font-medium text-gray-900 text-right pr-4 min-w-0">
                     <div className="flex items-center justify-end gap-1 mb-1">
                       <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium flex-shrink-0 ${
