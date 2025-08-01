@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Settings, Cpu } from "lucide-react";
+import CollapsibleCard from "@/components/collapsible-card";
 import type { Machine } from "@shared/schema";
 
 export default function MachineStatus() {
@@ -13,33 +14,29 @@ export default function MachineStatus() {
 
   if (isLoading) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Work Center Status</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="animate-pulse space-y-4">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="h-16 bg-gray-200 rounded"></div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      <CollapsibleCard
+        title="Work Center Status"
+        icon={<Settings className="h-4 w-4 text-muted-foreground" />}
+      >
+        <div className="animate-pulse space-y-4">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="h-16 bg-gray-200 rounded"></div>
+          ))}
+        </div>
+      </CollapsibleCard>
     );
   }
 
   if (!machines || machines.length === 0) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Work Center Status</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center text-gray-500 py-8">
-            No work centers configured
-          </div>
-        </CardContent>
-      </Card>
+      <CollapsibleCard
+        title="Work Center Status"
+        icon={<Settings className="h-4 w-4 text-muted-foreground" />}
+      >
+        <div className="text-center text-gray-500 py-8">
+          No work centers configured
+        </div>
+      </CollapsibleCard>
     );
   }
 
@@ -98,12 +95,11 @@ export default function MachineStatus() {
     }, {} as Record<string, Machine[]>);
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Work Center Status</CardTitle>
-      </CardHeader>
-      
-      <CardContent className="space-y-6">
+    <CollapsibleCard
+      title="Work Center Status"
+      icon={<Cpu className="h-4 w-4 text-blue-500" />}
+    >
+      <div className="space-y-6">
         {Object.entries(sortedGroupedMachines).map(([type, typeMachines]) => (
           <div key={type} className="space-y-3">
             <h3 className="text-sm font-semibold text-gray-800 border-b border-gray-200 pb-1">
@@ -141,7 +137,7 @@ export default function MachineStatus() {
             </div>
           </div>
         ))}
-      </CardContent>
-    </Card>
+      </div>
+    </CollapsibleCard>
   );
 }
