@@ -1,6 +1,6 @@
 import { type Job, type InsertJob, type Machine, type InsertMachine, type ScheduleEntry, type InsertScheduleEntry, type Alert, type InsertAlert, type DashboardStats, type RoutingOperation, type MaterialOrder, type InsertMaterialOrder, type OutsourcedOperation, type InsertOutsourcedOperation } from "@shared/schema";
 import { db } from "./db";
-import { jobs, machines, scheduleEntries, alerts, materialOrders, outsourcedOperations } from "@shared/schema";
+import { jobs, machines, scheduleEntries, alerts, materialOrders, outsourcedOperations, routingOperations } from "@shared/schema";
 import { eq, and, gte, lte, desc, isNull } from "drizzle-orm";
 import type { IStorage } from "./storage-interface";
 import { barFeederService } from "./bar-feeder-service";
@@ -468,10 +468,23 @@ export class DatabaseStorage implements IStorage {
         return false;
       }
       
-      // Delete related schedule entries first (cascade delete)
+      // Delete all related data in correct order to avoid foreign key constraints
+      // 1. Delete alerts that reference this job
+      await db.delete(alerts).where(eq(alerts.jobId, id));
+      
+      // 2. Delete schedule entries
       await db.delete(scheduleEntries).where(eq(scheduleEntries.jobId, id));
       
-      // Delete the job
+      // 3. Delete routing operations
+      await db.delete(routingOperations).where(eq(routingOperations.jobId, id));
+      
+      // 4. Delete material orders
+      await db.delete(materialOrders).where(eq(materialOrders.jobId, id));
+      
+      // 5. Delete outsourced operations
+      await db.delete(outsourcedOperations).where(eq(outsourcedOperations.jobId, id));
+      
+      // Finally, delete the job itself
       await db.delete(jobs).where(eq(jobs.id, id));
       return true;
     } catch (error) {
