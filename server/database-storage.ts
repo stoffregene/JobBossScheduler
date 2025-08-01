@@ -1,7 +1,7 @@
-import { type Job, type InsertJob, type Machine, type InsertMachine, type ScheduleEntry, type InsertScheduleEntry, type Alert, type InsertAlert, type DashboardStats, type RoutingOperation } from "@shared/schema";
+import { type Job, type InsertJob, type Machine, type InsertMachine, type ScheduleEntry, type InsertScheduleEntry, type Alert, type InsertAlert, type DashboardStats, type RoutingOperation, type MaterialOrder, type InsertMaterialOrder, type OutsourcedOperation, type InsertOutsourcedOperation } from "@shared/schema";
 import { db } from "./db";
-import { jobs, machines, scheduleEntries, alerts } from "@shared/schema";
-import { eq, and, gte, lte, desc } from "drizzle-orm";
+import { jobs, machines, scheduleEntries, alerts, materialOrders, outsourcedOperations } from "@shared/schema";
+import { eq, and, gte, lte, desc, isNull } from "drizzle-orm";
 import type { IStorage } from "./storage-interface";
 import { barFeederService } from "./bar-feeder-service";
 
@@ -990,5 +990,136 @@ export class DatabaseStorage implements IStorage {
       // Check for overlap
       return (startTime < entryEnd && endTime > entryStart);
     });
+  }
+
+  // Material Order Management
+  async getMaterialOrders(): Promise<MaterialOrder[]> {
+    return await db.select().from(materialOrders).orderBy(desc(materialOrders.dueDate));
+  }
+
+  async getMaterialOrdersForJob(jobId: string): Promise<MaterialOrder[]> {
+    return await db.select().from(materialOrders).where(eq(materialOrders.jobId, jobId));
+  }
+
+  async createMaterialOrder(orderData: InsertMaterialOrder): Promise<MaterialOrder> {
+    const [order] = await db.insert(materialOrders).values(orderData).returning();
+    return order;
+  }
+
+  async updateMaterialOrder(orderId: string, updates: Partial<MaterialOrder>): Promise<MaterialOrder | null> {
+    const [order] = await db.update(materialOrders)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(materialOrders.id, orderId))
+      .returning();
+    return order || null;
+  }
+
+  async markMaterialReceived(orderId: string): Promise<MaterialOrder | null> {
+    return await this.updateMaterialOrder(orderId, { 
+      status: "Closed", 
+      receivedDate: new Date() 
+    });
+  }
+
+  // Get jobs awaiting material - key method for material tracking
+  async getJobsAwaitingMaterial(): Promise<Array<Job & { materialOrders: MaterialOrder[] }>> {
+    const jobsWithMaterial = await db.select({
+      job: jobs,
+      materialOrder: materialOrders
+    })
+    .from(jobs)
+    .leftJoin(materialOrders, eq(jobs.id, materialOrders.jobId))
+    .where(eq(materialOrders.status, "Open"));
+
+    // Group by job and collect material orders
+    const jobMap = new Map<string, Job & { materialOrders: MaterialOrder[] }>();
+    
+    for (const row of jobsWithMaterial) {
+      if (!jobMap.has(row.job.id)) {
+        jobMap.set(row.job.id, { ...row.job, materialOrders: [] });
+      }
+      if (row.materialOrder) {
+        jobMap.get(row.job.id)!.materialOrders.push(row.materialOrder);
+      }
+    }
+
+    return Array.from(jobMap.values()).filter(job => job.materialOrders.length > 0);
+  }
+
+  // Check if job is ready for scheduling based on materials
+  async isJobReadyForScheduling(jobId: string): Promise<{ ready: boolean; reason?: string; pendingMaterials?: MaterialOrder[] }> {
+    const materialOrders = await this.getMaterialOrdersForJob(jobId);
+    const pendingMaterials = materialOrders.filter(order => order.status === "Open");
+    
+    if (pendingMaterials.length > 0) {
+      return {
+        ready: false,
+        reason: `Awaiting ${pendingMaterials.length} material order(s)`,
+        pendingMaterials
+      };
+    }
+
+    // Check for outsourced operations
+    const outsourcedOps = await this.getOutsourcedOperationsForJob(jobId);
+    const pendingOutsourced = outsourcedOps.filter(op => op.status !== "Completed");
+    
+    if (pendingOutsourced.length > 0) {
+      return {
+        ready: false,
+        reason: `Awaiting ${pendingOutsourced.length} outsourced operation(s)`,
+      };
+    }
+
+    return { ready: true };
+  }
+
+  // Outsourced Operations Management
+  async getOutsourcedOperations(): Promise<OutsourcedOperation[]> {
+    return await db.select().from(outsourcedOperations).orderBy(desc(outsourcedOperations.dueDate));
+  }
+
+  async getOutsourcedOperationsForJob(jobId: string): Promise<OutsourcedOperation[]> {
+    return await db.select().from(outsourcedOperations).where(eq(outsourcedOperations.jobId, jobId));
+  }
+
+  async createOutsourcedOperation(opData: InsertOutsourcedOperation): Promise<OutsourcedOperation> {
+    const [operation] = await db.insert(outsourcedOperations).values(opData).returning();
+    return operation;
+  }
+
+  async updateOutsourcedOperation(opId: string, updates: Partial<OutsourcedOperation>): Promise<OutsourcedOperation | null> {
+    const [operation] = await db.update(outsourcedOperations)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(outsourcedOperations.id, opId))
+      .returning();
+    return operation || null;
+  }
+
+  async markOutsourcedOperationComplete(opId: string): Promise<OutsourcedOperation | null> {
+    return await this.updateOutsourcedOperation(opId, { 
+      status: "Completed", 
+      completedDate: new Date() 
+    });
+  }
+
+  // Enhanced scheduling that considers material readiness
+  async autoScheduleJobWithMaterialCheck(jobId: string): Promise<{ success: boolean; scheduleEntries?: ScheduleEntry[]; reason?: string; pendingItems?: any[] }> {
+    const readinessCheck = await this.isJobReadyForScheduling(jobId);
+    
+    if (!readinessCheck.ready) {
+      return {
+        success: false,
+        reason: readinessCheck.reason,
+        pendingItems: readinessCheck.pendingMaterials
+      };
+    }
+
+    const scheduleEntries = await this.autoScheduleJob(jobId);
+    
+    if (scheduleEntries) {
+      return { success: true, scheduleEntries };
+    } else {
+      return { success: false, reason: "Unable to schedule job within manufacturing window" };
+    }
   }
 }

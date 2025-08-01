@@ -109,6 +109,42 @@ export const routingOperations = pgTable("routing_operations", {
   notes: text("notes"),
 });
 
+// Material Orders table - tracks material requirements for jobs
+export const materialOrders = pgTable("material_orders", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  jobId: varchar("job_id").notNull().references(() => jobs.id),
+  orderNumber: text("order_number").notNull(), // Material order number from JobBoss
+  materialDescription: text("material_description").notNull(),
+  quantity: decimal("quantity", { precision: 10, scale: 3 }).notNull(),
+  unit: text("unit").notNull(), // 'EA', 'LB', 'FT', etc.
+  supplier: text("supplier"),
+  orderDate: timestamp("order_date").notNull(),
+  dueDate: timestamp("due_date").notNull(),
+  receivedDate: timestamp("received_date"), // null until received
+  status: text("status").notNull().default("Open"), // 'Open', 'Closed', 'Cancelled'
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
+// Outsourced Operations table - tracks operations sent to external vendors
+export const outsourcedOperations = pgTable("outsourced_operations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  jobId: varchar("job_id").notNull().references(() => jobs.id),
+  operationSequence: integer("operation_sequence").notNull(),
+  operationDescription: text("operation_description").notNull(),
+  vendor: text("vendor").notNull(),
+  poNumber: text("po_number"), // Purchase order number
+  orderDate: timestamp("order_date").notNull(),
+  dueDate: timestamp("due_date").notNull(),
+  completedDate: timestamp("completed_date"), // null until completed
+  status: text("status").notNull().default("Open"), // 'Open', 'In Progress', 'Completed', 'Cancelled'
+  cost: decimal("cost", { precision: 10, scale: 2 }),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
 export type RoutingOperation = {
   sequence: number;
   name: string;
@@ -152,6 +188,18 @@ export const insertRoutingOperationSchema = createInsertSchema(routingOperations
   id: true,
 });
 
+export const insertMaterialOrderSchema = createInsertSchema(materialOrders).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertOutsourcedOperationSchema = createInsertSchema(outsourcedOperations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export type Job = typeof jobs.$inferSelect;
 export type InsertJob = z.infer<typeof insertJobSchema>;
 export type Machine = typeof machines.$inferSelect;
@@ -166,6 +214,10 @@ export type ResourceUnavailability = typeof resourceUnavailability.$inferSelect;
 export type InsertResourceUnavailability = z.infer<typeof insertResourceUnavailabilitySchema>;
 export type RoutingOperation = typeof routingOperations.$inferSelect;
 export type InsertRoutingOperation = z.infer<typeof insertRoutingOperationSchema>;
+export type MaterialOrder = typeof materialOrders.$inferSelect;
+export type InsertMaterialOrder = z.infer<typeof insertMaterialOrderSchema>;
+export type OutsourcedOperation = typeof outsourcedOperations.$inferSelect;
+export type InsertOutsourcedOperation = z.infer<typeof insertOutsourcedOperationSchema>;
 
 export type DashboardStats = {
   activeJobs: number;

@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import { barFeederService } from "./bar-feeder-service";
-import { insertJobSchema, insertMachineSchema, insertScheduleEntrySchema, insertAlertSchema } from "@shared/schema";
+import { insertJobSchema, insertMachineSchema, insertScheduleEntrySchema, insertAlertSchema, insertMaterialOrderSchema, insertOutsourcedOperationSchema } from "@shared/schema";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -571,6 +571,96 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(info);
     } catch (error) {
       res.status(500).json({ message: "Failed to get machine bar feeder info" });
+    }
+  });
+
+  // Material tracking endpoints
+  app.get("/api/materials", async (req, res) => {
+    try {
+      const materials = await storage.getMaterialOrders();
+      res.json(materials);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch material orders" });
+    }
+  });
+
+  app.get("/api/materials/job/:jobId", async (req, res) => {
+    try {
+      const materials = await storage.getMaterialOrdersForJob(req.params.jobId);
+      res.json(materials);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch material orders for job" });
+    }
+  });
+
+  app.post("/api/materials", async (req, res) => {
+    try {
+      const materialData = insertMaterialOrderSchema.parse(req.body);
+      const material = await storage.createMaterialOrder(materialData);
+      broadcast({ type: 'material_order_created', data: material });
+      res.status(201).json(material);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid material order data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create material order" });
+    }
+  });
+
+  app.put("/api/materials/:id", async (req, res) => {
+    try {
+      const updates = req.body;
+      const material = await storage.updateMaterialOrder(req.params.id, updates);
+      if (!material) {
+        return res.status(404).json({ message: "Material order not found" });
+      }
+      broadcast({ type: 'material_order_updated', data: material });
+      res.json(material);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update material order" });
+    }
+  });
+
+  app.post("/api/materials/:id/receive", async (req, res) => {
+    try {
+      const material = await storage.markMaterialReceived(req.params.id);
+      if (!material) {
+        return res.status(404).json({ message: "Material order not found" });
+      }
+      broadcast({ type: 'material_received', data: material });
+      res.json(material);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to mark material as received" });
+    }
+  });
+
+  app.get("/api/jobs/awaiting-material", async (req, res) => {
+    try {
+      const jobsAwaitingMaterial = await storage.getJobsAwaitingMaterial();
+      res.json(jobsAwaitingMaterial);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch jobs awaiting material" });
+    }
+  });
+
+  app.get("/api/jobs/:id/readiness", async (req, res) => {
+    try {
+      const readiness = await storage.isJobReadyForScheduling(req.params.id);
+      res.json(readiness);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to check job readiness" });
+    }
+  });
+
+  app.post("/api/jobs/:id/schedule-with-material-check", async (req, res) => {
+    try {
+      const result = await storage.autoScheduleJobWithMaterialCheck(req.params.id);
+      if (result.success && result.scheduleEntries) {
+        broadcast({ type: 'job_scheduled', data: { jobId: req.params.id, scheduleEntries: result.scheduleEntries } });
+      }
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to schedule job with material check" });
     }
   });
 

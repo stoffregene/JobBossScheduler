@@ -6,7 +6,9 @@ import {
   type DashboardStats, type RoutingOperation,
   type Resource, type InsertResource,
   type ResourceUnavailability, type InsertResourceUnavailability,
-  type InsertRoutingOperation
+  type InsertRoutingOperation,
+  type MaterialOrder, type InsertMaterialOrder,
+  type OutsourcedOperation, type InsertOutsourcedOperation
 } from "@shared/schema";
 
 export interface IStorage {
@@ -69,4 +71,21 @@ export interface IStorage {
   findBestMachineForOperation(operation: RoutingOperation, targetDate: Date, shift: number): Promise<{ machine: Machine; adjustedHours: number; score: number } | null>;
   autoScheduleJob(jobId: string): Promise<ScheduleEntry[] | null>;
   getMachinesBySubstitutionGroup(substitutionGroup: string): Promise<Machine[]>;
+
+  // Material Orders
+  getMaterialOrders(): Promise<MaterialOrder[]>;
+  getMaterialOrdersForJob(jobId: string): Promise<MaterialOrder[]>;
+  createMaterialOrder(orderData: InsertMaterialOrder): Promise<MaterialOrder>;
+  updateMaterialOrder(orderId: string, updates: Partial<MaterialOrder>): Promise<MaterialOrder | null>;
+  markMaterialReceived(orderId: string): Promise<MaterialOrder | null>;
+  getJobsAwaitingMaterial(): Promise<Array<Job & { materialOrders: MaterialOrder[] }>>;
+  isJobReadyForScheduling(jobId: string): Promise<{ ready: boolean; reason?: string; pendingMaterials?: MaterialOrder[] }>;
+  autoScheduleJobWithMaterialCheck(jobId: string): Promise<{ success: boolean; scheduleEntries?: ScheduleEntry[]; reason?: string; pendingItems?: any[] }>;
+
+  // Outsourced Operations
+  getOutsourcedOperations(): Promise<OutsourcedOperation[]>;
+  getOutsourcedOperationsForJob(jobId: string): Promise<OutsourcedOperation[]>;
+  createOutsourcedOperation(opData: InsertOutsourcedOperation): Promise<OutsourcedOperation>;
+  updateOutsourcedOperation(opId: string, updates: Partial<OutsourcedOperation>): Promise<OutsourcedOperation | null>;
+  markOutsourcedOperationComplete(opId: string): Promise<OutsourcedOperation | null>;
 }

@@ -8,7 +8,7 @@ import MachineStatus from "../components/machine-status";
 import AlertPanel from "../components/alert-panel";
 import ResourceAllocation from "../components/resource-allocation";
 import JobDetailsModal from "../components/job-details-modal";
-import { Building2, Clock, Users } from "lucide-react";
+import { Building2, Clock, Users, Package } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -80,6 +80,12 @@ export default function Dashboard() {
                   <Button variant="outline" size="sm" className="flex items-center gap-2">
                     <Users className="w-4 h-4" />
                     Resource Management
+                  </Button>
+                </Link>
+                <Link href="/materials">
+                  <Button variant="outline" size="sm" className="flex items-center gap-2">
+                    <Package className="w-4 h-4" />
+                    Material Tracking
                   </Button>
                 </Link>
               </nav>
