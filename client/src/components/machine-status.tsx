@@ -91,7 +91,7 @@ export default function MachineStatus() {
     return efficiencyText;
   };
 
-  // Group machines by type for better organization
+  // Group machines by type and sort both groups and machines alphanumerically
   const groupedMachines = machines?.reduce((groups, machine) => {
     const key = machine.type;
     if (!groups[key]) {
@@ -101,6 +101,14 @@ export default function MachineStatus() {
     return groups;
   }, {} as Record<string, Machine[]>) || {};
 
+  // Sort machine types alphabetically and machines within each type by machineId
+  const sortedGroupedMachines = Object.keys(groupedMachines)
+    .sort()
+    .reduce((sorted, type) => {
+      sorted[type] = groupedMachines[type].sort((a, b) => a.machineId.localeCompare(b.machineId));
+      return sorted;
+    }, {} as Record<string, Machine[]>);
+
   return (
     <Card>
       <CardHeader>
@@ -108,7 +116,7 @@ export default function MachineStatus() {
       </CardHeader>
       
       <CardContent className="space-y-6">
-        {Object.entries(groupedMachines).map(([type, typeMachines]) => (
+        {Object.entries(sortedGroupedMachines).map(([type, typeMachines]) => (
           <div key={type} className="space-y-3">
             <h3 className="text-sm font-semibold text-gray-800 border-b border-gray-200 pb-1">
               {type} ({typeMachines.length})

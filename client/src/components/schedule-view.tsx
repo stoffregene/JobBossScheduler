@@ -2,10 +2,13 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Download } from "lucide-react";
+import { Download, Filter } from "lucide-react";
+import { useState } from "react";
 import type { Job, Machine, ScheduleEntry } from "@shared/schema";
 
 export default function ScheduleView() {
+  const [machineTypeFilter, setMachineTypeFilter] = useState<string>("ALL");
+
   const { data: jobs } = useQuery<Job[]>({
     queryKey: ['/api/jobs'],
   });
@@ -35,8 +38,21 @@ export default function ScheduleView() {
 
   const weekDays = getWeekDays();
   
-  // Show ALL 20 machines - user specifically wants to see everything
-  const displayMachines = machines || [];
+  // Get unique machine types for filter dropdown
+  const machineTypes = [...new Set(machines?.map(m => m.type) || [])].sort();
+  
+  // Filter and sort machines by type and alphanumerically
+  const filteredMachines = machines ? 
+    machines.filter(machine => machineTypeFilter === "ALL" || machine.type === machineTypeFilter)
+      .sort((a, b) => {
+        // First sort by type, then by machineId
+        if (a.type !== b.type) {
+          return a.type.localeCompare(b.type);
+        }
+        return a.machineId.localeCompare(b.machineId);
+      }) : [];
+  
+  const displayMachines = filteredMachines;
 
   const getMachineJobs = (machineId: string) => {
     if (!scheduleEntries || !jobs) return [];
@@ -65,8 +81,20 @@ export default function ScheduleView() {
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle>Production Schedule</CardTitle>
+          <CardTitle>Production Schedule ({displayMachines.length} machines)</CardTitle>
           <div className="flex items-center space-x-2">
+            <Select value={machineTypeFilter} onValueChange={setMachineTypeFilter}>
+              <SelectTrigger className="w-32">
+                <Filter className="w-4 h-4 mr-2" />
+                <SelectValue placeholder="Filter" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All Types</SelectItem>
+                {machineTypes.map(type => (
+                  <SelectItem key={type} value={type}>{type}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Select defaultValue="this-week">
               <SelectTrigger className="w-40">
                 <SelectValue />
@@ -106,7 +134,16 @@ export default function ScheduleView() {
               return (
                 <div key={machine.id} className="grid grid-cols-8 gap-2 items-center">
                   <div className="text-sm font-medium text-gray-900 text-right pr-4">
-                    <div>{machine.machineId}</div>
+                    <div className="flex items-center justify-end gap-2">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                        machine.type === 'LATHE' 
+                          ? 'bg-blue-100 text-blue-800' 
+                          : 'bg-green-100 text-green-800'
+                      }`}>
+                        {machine.type}
+                      </span>
+                      <span>{machine.machineId}</span>
+                    </div>
                     <div className="text-xs text-gray-500">{machine.name}</div>
                   </div>
                   
