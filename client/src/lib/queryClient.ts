@@ -8,10 +8,10 @@ async function throwIfResNotOk(res: Response) {
 }
 
 export async function apiRequest(
-  method: string,
   url: string,
+  method: string,
   data?: unknown | undefined,
-): Promise<Response> {
+): Promise<any> {
   const res = await fetch(url, {
     method,
     headers: data ? { "Content-Type": "application/json" } : {},
@@ -20,7 +20,15 @@ export async function apiRequest(
   });
 
   await throwIfResNotOk(res);
-  return res;
+  
+  // Handle DELETE requests that return 204 No Content
+  if (res.status === 204) {
+    return null;
+  }
+  
+  // Try to parse JSON, but return null if there's no content
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";

@@ -461,8 +461,23 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteJob(id: string): Promise<boolean> {
-    const result = await db.delete(jobs).where(eq(jobs.id, id));
-    return result.rowCount !== null && result.rowCount > 0;
+    try {
+      // Check if job exists first
+      const existingJob = await db.select().from(jobs).where(eq(jobs.id, id)).limit(1);
+      if (existingJob.length === 0) {
+        return false;
+      }
+      
+      // Delete related schedule entries first (cascade delete)
+      await db.delete(scheduleEntries).where(eq(scheduleEntries.jobId, id));
+      
+      // Delete the job
+      await db.delete(jobs).where(eq(jobs.id, id));
+      return true;
+    } catch (error) {
+      console.error('Error deleting job:', error);
+      return false;
+    }
   }
 
   // Machines implementation
@@ -533,8 +548,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteScheduleEntry(id: string): Promise<boolean> {
-    const result = await db.delete(scheduleEntries).where(eq(scheduleEntries.id, id));
-    return result.rowCount !== null && result.rowCount > 0;
+    try {
+      await db.delete(scheduleEntries).where(eq(scheduleEntries.id, id));
+      return true;
+    } catch (error) {
+      console.error('Error deleting schedule entry:', error);
+      return false;
+    }
   }
 
   // Alerts implementation
@@ -554,16 +574,26 @@ export class DatabaseStorage implements IStorage {
   }
 
   async markAlertAsRead(id: string): Promise<boolean> {
-    const result = await db
-      .update(alerts)
-      .set({ isRead: true })
-      .where(eq(alerts.id, id));
-    return result.rowCount !== null && result.rowCount > 0;
+    try {
+      await db
+        .update(alerts)
+        .set({ isRead: true })
+        .where(eq(alerts.id, id));
+      return true;
+    } catch (error) {
+      console.error('Error marking alert as read:', error);
+      return false;
+    }
   }
 
   async deleteAlert(id: string): Promise<boolean> {
-    const result = await db.delete(alerts).where(eq(alerts.id, id));
-    return result.rowCount !== null && result.rowCount > 0;
+    try {
+      await db.delete(alerts).where(eq(alerts.id, id));
+      return true;
+    } catch (error) {
+      console.error('Error deleting alert:', error);
+      return false;
+    }
   }
 
   // Machine substitution and scheduling logic with tier-based capability flows

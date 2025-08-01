@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import { barFeederService } from "./bar-feeder-service";
+import { ReschedulingService } from "./rescheduling-service";
 import { insertJobSchema, insertMachineSchema, insertScheduleEntrySchema, insertAlertSchema, insertMaterialOrderSchema, insertOutsourcedOperationSchema } from "@shared/schema";
 import { z } from "zod";
 
@@ -43,6 +44,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get jobs awaiting material - must be before /:id route
+  app.get("/api/jobs/awaiting-material", async (req, res) => {
+    try {
+      const jobsAwaitingMaterial = await storage.getJobsAwaitingMaterial();
+      res.json(jobsAwaitingMaterial);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch jobs awaiting material" });
+    }
+  });
+
   app.get("/api/jobs/:id", async (req, res) => {
     try {
       const job = await storage.getJob(req.params.id);
@@ -71,7 +82,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid job data", errors: error.errors });
       }
-      res.status(500).json({ message: "Failed to create job", error: error.message });
+      res.status(500).json({ message: "Failed to create job", error: (error as Error).message });
     }
   });
 
@@ -371,7 +382,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const request = rescheduleRequestSchema.parse(req.body);
       
       // Create rescheduling service instance
-      const reschedulingService = new ReschedulingService(storage as any);
+      const reschedulingService = new ReschedulingService(storage);
       
       // Execute rescheduling
       const result = await reschedulingService.rescheduleForUnavailability(request);
@@ -426,7 +437,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         forceReschedule: true
       };
 
-      const reschedulingService = new ReschedulingService(storage as any);
+      const reschedulingService = new ReschedulingService(storage);
       const rescheduleResult = await reschedulingService.rescheduleForUnavailability(rescheduleRequest);
 
       broadcast({ 
@@ -483,7 +494,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         forceReschedule: true
       };
 
-      const reschedulingService = new ReschedulingService(storage as any);
+      const reschedulingService = new ReschedulingService(storage);
       const rescheduleResult = await reschedulingService.rescheduleForUnavailability(rescheduleRequest);
 
       broadcast({ 
@@ -647,15 +658,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(material);
     } catch (error) {
       res.status(500).json({ message: "Failed to mark material as received" });
-    }
-  });
-
-  app.get("/api/jobs/awaiting-material", async (req, res) => {
-    try {
-      const jobsAwaitingMaterial = await storage.getJobsAwaitingMaterial();
-      res.json(jobsAwaitingMaterial);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch jobs awaiting material" });
     }
   });
 
