@@ -347,5 +347,156 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Resource unavailability and rescheduling endpoints
+  const rescheduleRequestSchema = z.object({
+    reason: z.string(),
+    affectedResourceIds: z.array(z.string()).optional(),
+    affectedMachineIds: z.array(z.string()).optional(),
+    unavailabilityStart: z.string().transform(str => new Date(str)),
+    unavailabilityEnd: z.string().transform(str => new Date(str)),
+    shifts: z.array(z.number()),
+    forceReschedule: z.boolean(),
+    prioritizeJobs: z.array(z.string()).optional(),
+  });
+
+  app.post("/api/reschedule/unavailability", async (req, res) => {
+    try {
+      const request = rescheduleRequestSchema.parse(req.body);
+      
+      // Create rescheduling service instance
+      const reschedulingService = new ReschedulingService(storage as any);
+      
+      // Execute rescheduling
+      const result = await reschedulingService.rescheduleForUnavailability(request);
+      
+      // Broadcast rescheduling results to all connected clients
+      broadcast({ 
+        type: 'reschedule_completed', 
+        data: { 
+          result,
+          reason: request.reason,
+          affectedPeriod: {
+            start: request.unavailabilityStart,
+            end: request.unavailabilityEnd
+          }
+        } 
+      });
+      
+      res.json(result);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid reschedule request", errors: error.errors });
+      }
+      console.error('Rescheduling error:', error);
+      res.status(500).json({ message: "Failed to process rescheduling request" });
+    }
+  });
+
+  app.post("/api/resources/:id/mark-unavailable", async (req, res) => {
+    try {
+      const { startDate, endDate, reason, shifts, notes } = req.body;
+      
+      const unavailabilityData = {
+        resourceId: req.params.id,
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
+        reason,
+        shifts: shifts || [1, 2],
+        notes,
+        createdBy: "system" // In a real app, this would be the current user
+      };
+
+      // Create the unavailability record
+      const unavailability = await storage.createResourceUnavailability(unavailabilityData);
+      
+      // Trigger automatic rescheduling
+      const rescheduleRequest = {
+        reason: `Resource unavailable: ${reason}`,
+        affectedResourceIds: [req.params.id],
+        unavailabilityStart: new Date(startDate),
+        unavailabilityEnd: new Date(endDate),
+        shifts: shifts || [1, 2],
+        forceReschedule: true
+      };
+
+      const reschedulingService = new ReschedulingService(storage as any);
+      const rescheduleResult = await reschedulingService.rescheduleForUnavailability(rescheduleRequest);
+
+      broadcast({ 
+        type: 'resource_marked_unavailable', 
+        data: { 
+          unavailability, 
+          rescheduleResult 
+        } 
+      });
+
+      res.json({ 
+        unavailability, 
+        rescheduleResult,
+        message: "Resource marked unavailable and rescheduling completed" 
+      });
+    } catch (error) {
+      console.error('Mark unavailable error:', error);
+      res.status(500).json({ message: "Failed to mark resource unavailable" });
+    }
+  });
+
+  // Quick action for vacation/absence scenarios
+  app.post("/api/resources/bulk-unavailable", async (req, res) => {
+    try {
+      const { resourceIds, startDate, endDate, reason, shifts, notes } = req.body;
+      
+      const results = [];
+      const allAffectedResourceIds = [];
+
+      // Create unavailability records for all resources
+      for (const resourceId of resourceIds) {
+        const unavailabilityData = {
+          resourceId,
+          startDate: new Date(startDate),
+          endDate: new Date(endDate),
+          reason,
+          shifts: shifts || [1, 2],
+          notes,
+          createdBy: "system"
+        };
+
+        const unavailability = await storage.createResourceUnavailability(unavailabilityData);
+        results.push(unavailability);
+        allAffectedResourceIds.push(resourceId);
+      }
+
+      // Trigger single comprehensive rescheduling for all affected resources
+      const rescheduleRequest = {
+        reason: `Multiple resources unavailable: ${reason}`,
+        affectedResourceIds: allAffectedResourceIds,
+        unavailabilityStart: new Date(startDate),
+        unavailabilityEnd: new Date(endDate),
+        shifts: shifts || [1, 2],
+        forceReschedule: true
+      };
+
+      const reschedulingService = new ReschedulingService(storage as any);
+      const rescheduleResult = await reschedulingService.rescheduleForUnavailability(rescheduleRequest);
+
+      broadcast({ 
+        type: 'bulk_resources_unavailable', 
+        data: { 
+          unavailabilities: results, 
+          rescheduleResult 
+        } 
+      });
+
+      res.json({ 
+        unavailabilities: results, 
+        rescheduleResult,
+        message: `${resourceIds.length} resources marked unavailable and rescheduling completed` 
+      });
+    } catch (error) {
+      console.error('Bulk unavailable error:', error);
+      res.status(500).json({ message: "Failed to mark resources unavailable" });
+    }
+  });
+
   return httpServer;
 }

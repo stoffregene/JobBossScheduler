@@ -59,6 +59,55 @@ export const alerts = pgTable("alerts", {
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 
+// Resource availability tracking for operators/technicians
+export const resources = pgTable("resources", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  employeeId: text("employee_id").notNull().unique(),
+  name: text("name").notNull(),
+  email: text("email"),
+  role: text("role").notNull(), // Operator, Technician, Inspector, etc.
+  workCenters: jsonb("work_centers").$type<string[]>().notNull().default([]), // Machine IDs they can operate
+  skills: jsonb("skills").$type<string[]>().notNull().default([]), // Skill sets
+  shiftSchedule: jsonb("shift_schedule").$type<number[]>().notNull().default([1]), // Normal shifts
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+// Resource unavailability periods (vacation, sick, training, etc.)
+export const resourceUnavailability = pgTable("resource_unavailability", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  resourceId: varchar("resource_id").notNull().references(() => resources.id),
+  startDate: timestamp("start_date").notNull(),
+  endDate: timestamp("end_date").notNull(),
+  reason: text("reason").notNull(), // Vacation, Sick, Training, Meeting, etc.
+  shifts: jsonb("shifts").$type<number[]>().notNull().default([1, 2]), // Which shifts affected
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  createdBy: text("created_by").notNull(), // Who marked them unavailable
+});
+
+// Enhanced routing operations with dependencies and constraints
+export const routingOperations = pgTable("routing_operations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  jobId: varchar("job_id").notNull().references(() => jobs.id),
+  sequence: integer("sequence").notNull(),
+  operationName: text("operation_name").notNull(),
+  machineType: text("machine_type").notNull(),
+  compatibleMachines: jsonb("compatible_machines").$type<string[]>().notNull().default([]),
+  requiredSkills: jsonb("required_skills").$type<string[]>().notNull().default([]),
+  estimatedHours: decimal("estimated_hours", { precision: 10, scale: 2 }).notNull(),
+  setupHours: decimal("setup_hours", { precision: 10, scale: 2 }).notNull().default("0"),
+  dependencies: jsonb("dependencies").$type<number[]>().notNull().default([]), // Previous operation sequences that must complete first
+  earliestStartDate: timestamp("earliest_start_date"), // Constraint from customer or engineering
+  latestFinishDate: timestamp("latest_finish_date"), // Due date constraint for this operation
+  status: text("status").notNull().default("Unscheduled"), // Unscheduled, Scheduled, In Progress, Complete
+  scheduledStartTime: timestamp("scheduled_start_time"),
+  scheduledEndTime: timestamp("scheduled_end_time"),
+  assignedMachineId: varchar("assigned_machine_id").references(() => machines.id),
+  assignedResourceId: varchar("assigned_resource_id").references(() => resources.id),
+  notes: text("notes"),
+});
+
 export type RoutingOperation = {
   sequence: number;
   name: string;
@@ -86,6 +135,20 @@ export const insertAlertSchema = createInsertSchema(alerts).omit({
   createdAt: true,
 });
 
+export const insertResourceSchema = createInsertSchema(resources).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertResourceUnavailabilitySchema = createInsertSchema(resourceUnavailability).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertRoutingOperationSchema = createInsertSchema(routingOperations).omit({
+  id: true,
+});
+
 export type Job = typeof jobs.$inferSelect;
 export type InsertJob = z.infer<typeof insertJobSchema>;
 export type Machine = typeof machines.$inferSelect;
@@ -94,6 +157,12 @@ export type ScheduleEntry = typeof scheduleEntries.$inferSelect;
 export type InsertScheduleEntry = z.infer<typeof insertScheduleEntrySchema>;
 export type Alert = typeof alerts.$inferSelect;
 export type InsertAlert = z.infer<typeof insertAlertSchema>;
+export type Resource = typeof resources.$inferSelect;
+export type InsertResource = z.infer<typeof insertResourceSchema>;
+export type ResourceUnavailability = typeof resourceUnavailability.$inferSelect;
+export type InsertResourceUnavailability = z.infer<typeof insertResourceUnavailabilitySchema>;
+export type RoutingOperation = typeof routingOperations.$inferSelect;
+export type InsertRoutingOperation = z.infer<typeof insertRoutingOperationSchema>;
 
 export type DashboardStats = {
   activeJobs: number;
@@ -106,4 +175,40 @@ export type DashboardStats = {
   usedCapacity: number;
   shift1Resources: number;
   shift2Resources: number;
+};
+
+// Rescheduling and conflict detection
+export type ScheduleConflict = {
+  id: string;
+  type: 'resource_unavailable' | 'machine_conflict' | 'dependency_violation' | 'due_date_risk';
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  jobId: string;
+  operationId?: string;
+  resourceId?: string;
+  machineId?: string;
+  conflictStart: Date;
+  conflictEnd: Date;
+  impact: string;
+  suggestedActions: string[];
+};
+
+export type RescheduleRequest = {
+  reason: string;
+  affectedResourceIds?: string[];
+  affectedMachineIds?: string[];
+  unavailabilityStart: Date;
+  unavailabilityEnd: Date;
+  shifts: number[];
+  forceReschedule: boolean;
+  prioritizeJobs?: string[]; // Job IDs to prioritize during rescheduling
+};
+
+export type RescheduleResult = {
+  success: boolean;
+  conflictsResolved: number;
+  jobsRescheduled: number;
+  operationsRescheduled: number;
+  unresolvableConflicts: ScheduleConflict[];
+  warnings: string[];
+  summary: string;
 };

@@ -8,8 +8,10 @@ import MachineStatus from "../components/machine-status";
 import AlertPanel from "../components/alert-panel";
 import ResourceAllocation from "../components/resource-allocation";
 import JobDetailsModal from "../components/job-details-modal";
-import { Building2, Clock } from "lucide-react";
+import { Building2, Clock, Users } from "lucide-react";
 import { useState, useEffect } from "react";
+import { Link } from "wouter";
+import { Button } from "@/components/ui/button";
 import type { Job } from "@shared/schema";
 
 export default function Dashboard() {
@@ -73,6 +75,14 @@ export default function Dashboard() {
                 <Building2 className="text-primary-500 text-xl" />
                 <span className="text-xl font-bold text-gray-900">JobBoss Scheduler</span>
               </div>
+              <nav className="flex items-center space-x-4">
+                <Link href="/resources">
+                  <Button variant="outline" size="sm" className="flex items-center gap-2">
+                    <Users className="w-4 h-4" />
+                    Resource Management
+                  </Button>
+                </Link>
+              </nav>
               <div className="hidden md:flex items-center text-sm text-gray-500">
                 <Clock className="mr-1 h-4 w-4" />
                 <span>{formatCurrentTime(currentTime)}</span>
