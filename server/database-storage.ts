@@ -3,6 +3,7 @@ import { db } from "./db";
 import { jobs, machines, scheduleEntries, alerts } from "@shared/schema";
 import { eq, and, gte, lte, desc } from "drizzle-orm";
 import type { IStorage } from "./storage-interface";
+import { barFeederService } from "./bar-feeder-service";
 
 export class DatabaseStorage implements IStorage {
   constructor() {
@@ -147,7 +148,8 @@ export class DatabaseStorage implements IStorage {
           substitutionGroup: "bar_fed_lathe_group",
           spindles: "Single",
           liveTooling: true,
-          barFeeder: true
+          barFeeder: true,
+          barLength: 12
         },
         { 
           machineId: "LATHE-002", 
@@ -164,7 +166,8 @@ export class DatabaseStorage implements IStorage {
           substitutionGroup: "dual_spindle_group",
           spindles: "Dual",
           liveTooling: true,
-          barFeeder: true
+          barFeeder: true,
+          barLength: 6
         },
         { 
           machineId: "LATHE-003", 
@@ -180,7 +183,8 @@ export class DatabaseStorage implements IStorage {
           substitutionGroup: "bar_fed_lathe_group",
           spindles: "Single",
           liveTooling: false,
-          barFeeder: true
+          barFeeder: true,
+          barLength: 6
         },
         
         // LATHE - Single Spindle Lathes (new SL-25 machines)
@@ -694,6 +698,7 @@ export class DatabaseStorage implements IStorage {
     jobPriority: "Critical" | "High" | "Normal" | "Low" = "Normal"
   ): Promise<{ operation: RoutingOperation; assignedMachine: Machine | null; alternatives: Machine[] }[]> {
     const assignments: { operation: RoutingOperation; assignedMachine: Machine | null; alternatives: Machine[] }[] = [];
+    const allMachines = await this.getMachines();
     
     for (const operation of jobRouting) {
       // Map operation types to machine capabilities and preferred categories
@@ -714,11 +719,31 @@ export class DatabaseStorage implements IStorage {
       const mapping = capabilityMapping[operation.name] || { capability: operation.machineType.toLowerCase() };
       
       // Get all compatible machines for this operation
-      const compatibleMachines = await this.getCompatibleMachines(
+      let compatibleMachines = await this.getCompatibleMachines(
         mapping.capability,
         mapping.preferredCategory,
         "Tier 1"
       );
+
+      // Apply bar feeder constraints for lathe operations
+      if (operation.machineType === "LATHE" || mapping.capability === "turning") {
+        // Filter machines based on bar feeder constraints
+        const validBarFedMachines = barFeederService.getValidBarFedMachines(jobRouting, allMachines);
+        
+        // If job has saw operations, remove all bar fed machines
+        const hasSawOps = jobRouting.some(op => 
+          op.name.toLowerCase().includes('saw') || 
+          op.operationType?.toLowerCase() === 'saw'
+        );
+        if (hasSawOps) {
+          compatibleMachines = compatibleMachines.filter(m => !m.barFeeder);
+        } else if (operation.name.toLowerCase().includes('bar') || mapping.preferredCategory === "Bar Fed Lathes") {
+          // For bar operations, only use valid bar fed machines
+          compatibleMachines = compatibleMachines.filter(m => 
+            validBarFedMachines.some(valid => valid.id === m.id)
+          );
+        }
+      }
 
       // For critical/high priority jobs, prefer machines with higher efficiency
       let assignedMachine: Machine | null = null;
@@ -834,10 +859,35 @@ export class DatabaseStorage implements IStorage {
     const compatibleMachineIds = operation.compatibleMachines;
     const allMachines = await this.getMachines();
     
-    return allMachines.some(compatMachine => 
+    const basicSubstitutionValid = allMachines.some(compatMachine => 
       compatibleMachineIds.includes(compatMachine.machineId) &&
       compatMachine.substitutionGroup === machine.substitutionGroup
     );
+
+    if (!basicSubstitutionValid) return false;
+
+    // Additional validation for bar fed lathes
+    if (machine.type === "LATHE") {
+      // Find the original compatible machine
+      const originalMachine = allMachines.find(m => 
+        compatibleMachineIds.includes(m.machineId) && 
+        m.substitutionGroup === machine.substitutionGroup
+      );
+
+      if (originalMachine) {
+        // Get all routing operations for this job to check bar feeder constraints
+        const jobRouting = [operation]; // We only have this operation, but ideally we'd get full job routing
+        const validation = barFeederService.validateBarFedSubstitution(
+          originalMachine,
+          machine,
+          jobRouting
+        );
+        
+        return validation.isValid;
+      }
+    }
+    
+    return true;
   }
 
   async autoScheduleJob(jobId: string): Promise<ScheduleEntry[] | null> {

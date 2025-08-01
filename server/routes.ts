@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
+import { barFeederService } from "./bar-feeder-service";
 import { insertJobSchema, insertMachineSchema, insertScheduleEntrySchema, insertAlertSchema } from "@shared/schema";
 import { z } from "zod";
 
@@ -495,6 +496,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Bulk unavailable error:', error);
       res.status(500).json({ message: "Failed to mark resources unavailable" });
+    }
+  });
+
+  // Bar feeder constraint endpoints
+  app.post("/api/bar-feeder/analyze-job", async (req, res) => {
+    try {
+      const { jobRouting, targetMachineId } = req.body;
+      const machines = await storage.getMachines();
+      const targetMachine = machines.find(m => m.id === targetMachineId);
+      
+      if (!targetMachine) {
+        return res.status(404).json({ message: "Target machine not found" });
+      }
+
+      const constraints = barFeederService.analyzeJobRoutingForBarFeeder(
+        jobRouting,
+        targetMachine,
+        machines
+      );
+
+      res.json(constraints);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to analyze bar feeder constraints" });
+    }
+  });
+
+  app.post("/api/bar-feeder/valid-machines", async (req, res) => {
+    try {
+      const { jobRouting } = req.body;
+      const machines = await storage.getMachines();
+      
+      const validMachines = barFeederService.getValidBarFedMachines(jobRouting, machines);
+      res.json(validMachines);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to get valid bar fed machines" });
+    }
+  });
+
+  app.post("/api/bar-feeder/validate-substitution", async (req, res) => {
+    try {
+      const { originalMachineId, substituteMachineId, jobRouting } = req.body;
+      const machines = await storage.getMachines();
+      
+      const originalMachine = machines.find(m => m.id === originalMachineId);
+      const substituteMachine = machines.find(m => m.id === substituteMachineId);
+      
+      if (!originalMachine || !substituteMachine) {
+        return res.status(404).json({ message: "Machine not found" });
+      }
+
+      const validation = barFeederService.validateBarFedSubstitution(
+        originalMachine,
+        substituteMachine,
+        jobRouting
+      );
+
+      res.json(validation);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to validate bar feeder substitution" });
+    }
+  });
+
+  app.get("/api/bar-feeder/machine-info/:machineId", async (req, res) => {
+    try {
+      const machines = await storage.getMachines();
+      const machine = machines.find(m => m.id === req.params.machineId);
+      
+      if (!machine) {
+        return res.status(404).json({ message: "Machine not found" });
+      }
+
+      const info = barFeederService.getMachineBarFeederInfo(machine);
+      res.json(info);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to get machine bar feeder info" });
     }
   });
 

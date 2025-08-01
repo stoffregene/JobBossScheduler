@@ -34,6 +34,7 @@ export const machines = pgTable("machines", {
   spindles: text("spindles"), // For lathes: Single or Dual
   liveTooling: boolean("live_tooling").default(false), // For lathes with live tooling capability
   barFeeder: boolean("bar_feeder").default(false), // For bar fed lathes
+  barLength: integer("bar_length"), // Bar feeder length in feet (12 for SL-204, 6 for others)
   fourthAxis: boolean("fourth_axis").default(false), // For VMCs with 4th axis capability
 });
 
@@ -115,6 +116,8 @@ export type RoutingOperation = {
   compatibleMachines: string[];
   estimatedHours: number;
   notes?: string;
+  operationType?: string; // SAW, TURN, MILL, etc.
+  barLength?: number; // Required bar length in feet for bar fed operations
 };
 
 export const insertJobSchema = createInsertSchema(jobs).omit({
