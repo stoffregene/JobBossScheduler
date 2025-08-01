@@ -584,6 +584,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/material-orders", async (req, res) => {
+    try {
+      const orders = await storage.getMaterialOrders();
+      res.json(orders);
+    } catch (error) {
+      console.error('Error fetching material orders:', error);
+      res.status(500).json({ error: 'Failed to fetch material orders' });
+    }
+  });
+
   app.get("/api/materials/job/:jobId", async (req, res) => {
     try {
       const materials = await storage.getMaterialOrdersForJob(req.params.jobId);

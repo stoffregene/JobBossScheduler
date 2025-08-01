@@ -8,6 +8,8 @@ import MachineStatus from "../components/machine-status";
 import AlertPanel from "../components/alert-panel";
 import ResourceAllocation from "../components/resource-allocation";
 import JobDetailsModal from "../components/job-details-modal";
+import MaterialOrdersWidget from "../components/material-orders-widget";
+import JobsAwaitingMaterialWidget from "../components/jobs-awaiting-material-widget";
 import { Building2, Clock, Users, Package } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
@@ -131,6 +133,8 @@ export default function Dashboard() {
           {/* Right Column: Machine Status & Alerts */}
           <div className="space-y-6">
             <MachineStatus />
+            <MaterialOrdersWidget />
+            <JobsAwaitingMaterialWidget />
             <AlertPanel />
             <ResourceAllocation />
           </div>
