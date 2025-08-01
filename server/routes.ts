@@ -611,6 +611,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/material-orders", async (req, res) => {
+    try {
+      // Pre-process dates for validation
+      const materialData = {
+        ...req.body,
+        orderDate: new Date(req.body.orderDate),
+        dueDate: new Date(req.body.dueDate),
+      };
+
+      const validatedData = insertMaterialOrderSchema.parse(materialData);
+      const material = await storage.createMaterialOrder(validatedData);
+      broadcast({ type: 'material_order_created', data: material });
+      res.status(201).json(material);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid material order data", errors: error.errors });
+      }
+      console.error('Error creating material order:', error);
+      res.status(500).json({ message: "Failed to create material order" });
+    }
+  });
+
   app.get("/api/materials/job/:jobId", async (req, res) => {
     try {
       const materials = await storage.getMaterialOrdersForJob(req.params.jobId);

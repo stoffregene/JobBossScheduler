@@ -192,6 +192,9 @@ export const insertMaterialOrderSchema = createInsertSchema(materialOrders).omit
   id: true,
   createdAt: true,
   updatedAt: true,
+}).extend({
+  orderDate: z.string().or(z.date()).transform(str => typeof str === 'string' ? new Date(str) : str),
+  dueDate: z.string().or(z.date()).transform(str => typeof str === 'string' ? new Date(str) : str),
 });
 
 export const insertOutsourcedOperationSchema = createInsertSchema(outsourcedOperations).omit({
