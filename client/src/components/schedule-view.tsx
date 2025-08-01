@@ -116,7 +116,7 @@ export default function ScheduleView() {
       <CardContent>
         <div className="space-y-4">
           {/* Day Headers */}
-          <div className="grid grid-cols-8 gap-2 text-sm font-medium text-gray-500">
+          <div className="grid gap-2 text-sm font-medium text-gray-500" style={{ gridTemplateColumns: "200px repeat(7, 1fr)" }}>
             <div className="text-right pr-4">Machine</div>
             {weekDays.map((day, index) => (
               <div key={index} className="text-center">
@@ -132,19 +132,21 @@ export default function ScheduleView() {
               const isWeekendOnly = machine.availableShifts.length === 1 && machine.availableShifts[0] === 1;
               
               return (
-                <div key={machine.id} className="grid grid-cols-8 gap-2 items-center">
-                  <div className="text-sm font-medium text-gray-900 text-right pr-4">
-                    <div className="flex items-center justify-end gap-2">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                <div key={machine.id} className="grid gap-2 items-center" style={{ gridTemplateColumns: "200px repeat(7, 1fr)" }}>
+                  <div className="text-sm font-medium text-gray-900 text-right pr-4 min-w-0">
+                    <div className="flex items-center justify-end gap-1 mb-1">
+                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium flex-shrink-0 ${
                         machine.type === 'LATHE' 
                           ? 'bg-blue-100 text-blue-800' 
-                          : 'bg-green-100 text-green-800'
+                          : machine.type === 'MILL'
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-gray-100 text-gray-800'
                       }`}>
                         {machine.type}
                       </span>
-                      <span>{machine.machineId}</span>
+                      <span className="truncate">{machine.machineId}</span>
                     </div>
-                    <div className="text-xs text-gray-500">{machine.name}</div>
+                    <div className="text-xs text-gray-500 truncate">{machine.name}</div>
                   </div>
                   
                   {weekDays.map((day, dayIndex) => {
