@@ -94,7 +94,7 @@ export default function ResourceAllocation() {
             </div>
             <div>
               <div className="text-gray-600">Available:</div>
-              <div className="font-medium text-success-600">{stats.totalCapacity - stats.usedCapacity} hours</div>
+              <div className="font-medium text-success-600">{(stats.totalCapacity - stats.usedCapacity).toFixed(2)} hours</div>
             </div>
             <div>
               <div className="text-gray-600">Utilization:</div>
