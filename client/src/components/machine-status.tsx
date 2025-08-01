@@ -15,7 +15,7 @@ export default function MachineStatus() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Machine Status</CardTitle>
+          <CardTitle>Work Center Status</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="animate-pulse space-y-4">
@@ -32,11 +32,11 @@ export default function MachineStatus() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Machine Status</CardTitle>
+          <CardTitle>Work Center Status</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="text-center text-gray-500 py-8">
-            No machines configured
+            No work centers configured
           </div>
         </CardContent>
       </Card>
@@ -72,23 +72,11 @@ export default function MachineStatus() {
   };
 
   const getStatusText = (machine: Machine) => {
-    if (machine.status === 'Offline' || machine.status === 'Maintenance') {
-      return machine.status.toLowerCase();
-    }
-    return `${parseFloat(machine.utilization).toFixed(0)}%`;
+    return machine.status;
   };
 
   const getStatusSubtext = (machine: Machine) => {
-    if (machine.status === 'Offline' || machine.status === 'Maintenance') {
-      return machine.status.toLowerCase();
-    }
-    
-    const efficiency = parseFloat(machine.efficiencyFactor);
-    const efficiencyText = efficiency > 1.0 ? `+${((efficiency - 1) * 100).toFixed(0)}% faster` :
-                          efficiency < 1.0 ? `${((1 - efficiency) * 100).toFixed(0)}% slower` :
-                          'baseline speed';
-    
-    return efficiencyText;
+    return machine.category || '';
   };
 
   // Group machines by type and sort both groups and machines alphanumerically
@@ -112,14 +100,14 @@ export default function MachineStatus() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Machine Status ({machines?.length || 0} machines)</CardTitle>
+        <CardTitle>Work Center Status</CardTitle>
       </CardHeader>
       
       <CardContent className="space-y-6">
         {Object.entries(sortedGroupedMachines).map(([type, typeMachines]) => (
           <div key={type} className="space-y-3">
             <h3 className="text-sm font-semibold text-gray-800 border-b border-gray-200 pb-1">
-              {type} ({typeMachines.length})
+              {type}
             </h3>
             <div className="space-y-2">
               {typeMachines.map((machine) => (
