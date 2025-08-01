@@ -183,6 +183,40 @@ export class DatabaseStorage implements IStorage {
           barFeeder: true
         },
         
+        // LATHE - Single Spindle Lathes (new SL-25 machines)
+        { 
+          machineId: "LATHE-006", 
+          name: "MORI-SEIKI SL-25 (Gray)", 
+          type: "LATHE", 
+          category: "Single Spindle Lathes",
+          tier: "Tier 1", 
+          capabilities: ["turning", "drilling"], 
+          status: "Available", 
+          utilization: "35", 
+          availableShifts: [1, 2], 
+          efficiencyFactor: "0.9", 
+          substitutionGroup: "single_spindle_lathe_group",
+          spindles: "Single",
+          liveTooling: false,
+          barFeeder: false
+        },
+        { 
+          machineId: "LATHE-007", 
+          name: "MORI-SEIKI SL-25 (Blue)", 
+          type: "LATHE", 
+          category: "Single Spindle Lathes",
+          tier: "Tier 1", 
+          capabilities: ["turning", "drilling"], 
+          status: "Available", 
+          utilization: "28", 
+          availableShifts: [1, 2], 
+          efficiencyFactor: "0.9", 
+          substitutionGroup: "single_spindle_lathe_group",
+          spindles: "Single",
+          liveTooling: false,
+          barFeeder: false
+        },
+        
         // LATHE - Live Tooling Lathes (additional ones not already listed)
         { 
           machineId: "LATHE-004", 
@@ -528,36 +562,131 @@ export class DatabaseStorage implements IStorage {
     return result.rowCount !== null && result.rowCount > 0;
   }
 
-  // Machine substitution and scheduling logic
+  // Machine substitution and scheduling logic with tier-based capability flows
   async getCompatibleMachines(
-    requiredCapability: string, 
+    jobType: string, 
     preferredCategory?: string,
     tierLevel: "Tier 1" | "Standard" | "Budget" = "Tier 1"
   ): Promise<Machine[]> {
     const allMachines = await this.getMachines();
     
-    // First, find machines by capability and tier
-    let compatibleMachines = allMachines.filter(machine => {
-      const hasCapability = machine.capabilities.includes(requiredCapability);
-      const inTier = machine.tier === tierLevel;
-      return hasCapability && inTier;
-    });
+    // Define tier-based capability flows
+    const compatibleMachines = this.getCapabilityFlowMachines(allMachines, jobType, tierLevel);
 
     // If a preferred category is specified, prioritize those machines
+    let orderedMachines = compatibleMachines;
     if (preferredCategory) {
       const categoryMachines = compatibleMachines.filter(m => m.category === preferredCategory);
       const otherMachines = compatibleMachines.filter(m => m.category !== preferredCategory);
       
       // Return category machines first, then others as alternatives
-      compatibleMachines = [...categoryMachines, ...otherMachines];
+      orderedMachines = [...categoryMachines, ...otherMachines];
     }
 
     // Sort by efficiency factor (higher is better) and utilization (lower is better)
-    return compatibleMachines.sort((a, b) => {
+    return orderedMachines.sort((a, b) => {
       const efficiencyDiff = parseFloat(b.efficiencyFactor) - parseFloat(a.efficiencyFactor);
       if (Math.abs(efficiencyDiff) > 0.01) return efficiencyDiff;
       return parseFloat(a.utilization) - parseFloat(b.utilization);
     });
+  }
+
+  private getCapabilityFlowMachines(allMachines: Machine[], jobType: string, tierLevel: string): Machine[] {
+    const tierMachines = allMachines.filter(m => m.tier === tierLevel);
+    
+    switch (jobType) {
+      // LATHE TIER FLOWS
+      case "single_spindle_turning":
+        // Single Spindle jobs can upgrade to any lathe type
+        return tierMachines.filter(m => 
+          m.type === "LATHE" && (
+            m.category === "Single Spindle Lathes" ||
+            m.category === "Live Tooling Lathes" ||
+            m.category === "Bar Fed Lathes" ||
+            m.subcategory === "Live Tooling Lathes" // Dual spindle with live tooling
+          )
+        );
+        
+      case "live_tooling_turning":
+        // Live Tooling jobs can ONLY run on Live Tooling or Dual Spindle machines
+        return tierMachines.filter(m => 
+          m.type === "LATHE" && (
+            m.category === "Live Tooling Lathes" ||
+            (m.category === "Bar Fed Lathes" && m.subcategory === "Live Tooling Lathes") // Dual spindle
+          )
+        );
+        
+      case "bar_fed_turning":
+        // Bar Fed jobs can ONLY run on Bar Fed or Dual Spindle machines
+        return tierMachines.filter(m => 
+          m.type === "LATHE" && (
+            m.category === "Bar Fed Lathes"
+          )
+        );
+        
+      case "dual_spindle_turning":
+        // Dual Spindle jobs can ONLY run on Dual Spindle machines
+        return tierMachines.filter(m => 
+          m.type === "LATHE" && 
+          m.category === "Bar Fed Lathes" && 
+          m.subcategory === "Live Tooling Lathes"
+        );
+
+      // MILL TIER FLOWS  
+      case "vmc_milling":
+        // VMC jobs can upgrade to pseudo 4th axis, HMC, or 5-axis
+        return tierMachines.filter(m => 
+          m.type === "MILL" && (
+            m.category === "3-Axis Vertical Milling Centers" ||
+            m.category === "3-Axis VMC's with pseudo 4th axis" ||
+            m.category === "Large envelope VMC's" ||
+            m.category === "Horizontal Milling Centers" ||
+            m.category === "5-Axis Milling Centers"
+          )
+        );
+        
+      case "pseudo_4th_axis_milling":
+        // Pseudo 4th axis jobs can run on pseudo 4th, HMC, or 5-axis (but NOT basic VMC)
+        return tierMachines.filter(m => 
+          m.type === "MILL" && (
+            m.category === "3-Axis VMC's with pseudo 4th axis" ||
+            m.category === "Horizontal Milling Centers" ||
+            m.category === "5-Axis Milling Centers"
+          )
+        );
+        
+      case "true_4th_axis_milling":
+        // True 4th axis jobs can ONLY run on HMC or 5-axis (cannot use pseudo)
+        return tierMachines.filter(m => 
+          m.type === "MILL" && (
+            m.category === "Horizontal Milling Centers" ||
+            m.category === "5-Axis Milling Centers"
+          )
+        );
+        
+      case "5_axis_milling":
+        // 5-axis jobs can ONLY run on 5-axis machines
+        return tierMachines.filter(m => 
+          m.type === "MILL" && 
+          m.category === "5-Axis Milling Centers"
+        );
+
+      // LEGACY COMPATIBILITY - map old capability names to new job types
+      case "turning":
+        return this.getCapabilityFlowMachines(allMachines, "single_spindle_turning", tierLevel);
+      case "live_tooling":
+        return this.getCapabilityFlowMachines(allMachines, "live_tooling_turning", tierLevel);
+      case "bar_feeding":
+        return this.getCapabilityFlowMachines(allMachines, "bar_fed_turning", tierLevel);
+      case "vertical_milling":
+        return this.getCapabilityFlowMachines(allMachines, "vmc_milling", tierLevel);
+      case "horizontal_milling":
+        return this.getCapabilityFlowMachines(allMachines, "true_4th_axis_milling", tierLevel);
+
+      // OTHER MACHINE TYPES (no tier flow complexity)
+      default:
+        return tierMachines.filter(m => m.capabilities.includes(jobType));
+    }
   }
 
   async findOptimalMachineAssignment(
