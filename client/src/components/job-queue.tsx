@@ -37,12 +37,42 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
 
   const createJobMutation = useMutation({
     mutationFn: async (jobData: typeof newJob) => {
+      const estimatedHours = parseFloat(jobData.estimatedHours) || 2; // Default to 2 hours if not specified
+      
+      // Create basic routing operations for scheduling
+      const routing = [
+        {
+          sequence: 1,
+          operationName: "Machining",
+          machineType: "MILL",
+          compatibleMachines: ["HMC-001", "HMC-002", "VMC-001", "VMC-002"],
+          requiredSkills: ["CNC Programming", "Setup"],
+          estimatedHours: estimatedHours * 0.8, // 80% machining
+          setupHours: 0.5,
+          dependencies: [],
+          notes: "Primary machining operation"
+        },
+        {
+          sequence: 2,
+          operationName: "Inspection",
+          machineType: "INSPECT",
+          compatibleMachines: ["CMM-001"],
+          requiredSkills: ["Quality Control"],
+          estimatedHours: estimatedHours * 0.2, // 20% inspection
+          setupHours: 0.25,
+          dependencies: [1],
+          notes: "Final inspection"
+        }
+      ];
+
       const payload = {
         ...jobData,
         dueDate: new Date(jobData.dueDate),
-        estimatedHours: parseFloat(jobData.estimatedHours) || 0,
+        estimatedHours,
+        quantity: 1,
         createdDate: new Date(),
-        status: 'Unscheduled' as const
+        status: 'Unscheduled' as const,
+        routing
       };
       return apiRequest('/api/jobs', 'POST', payload);
     },
