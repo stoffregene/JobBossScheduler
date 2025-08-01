@@ -229,7 +229,7 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
             description: values[2] || '',
             customer: values[3] || '',
             dueDate: values[4],
-            priority: (values[5] || 'Normal') as 'Normal' | 'High' | 'Critical',
+            priority: (values[5] || 'Normal') as any,
             estimatedHours: values[6] || '2',
             operations: [] as string[]
           };
@@ -802,8 +802,8 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
                   <Label htmlFor="editCustomer">Customer</Label>
                   <Input
                     id="editCustomer"
-                    value={editingJob.customer || ''}
-                    onChange={(e) => setEditingJob(prev => prev ? { ...prev, customer: e.target.value } : null)}
+                    value={(editingJob as any).customer || ''}
+                    onChange={(e) => setEditingJob(prev => prev ? { ...prev, customer: e.target.value } as any : null)}
                     placeholder="Customer name"
                   />
                 </div>
