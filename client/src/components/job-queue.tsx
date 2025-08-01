@@ -66,12 +66,15 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
       ];
 
       const payload = {
-        ...jobData,
+        jobNumber: jobData.jobNumber,
+        partNumber: jobData.partNumber,
+        description: jobData.description,
+        customer: jobData.customer,
         dueDate: new Date(jobData.dueDate),
-        estimatedHours,
+        estimatedHours: estimatedHours.toString(),
         quantity: 1,
-        createdDate: new Date(),
         status: 'Unscheduled' as const,
+        priority: jobData.priority,
         routing
       };
       return apiRequest('/api/jobs', 'POST', payload);

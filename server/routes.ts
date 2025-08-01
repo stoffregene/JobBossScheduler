@@ -57,7 +57,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/jobs", async (req, res) => {
     try {
-      const jobData = insertJobSchema.parse(req.body);
+      // Pre-process dates for validation
+      const jobData = {
+        ...req.body,
+        dueDate: new Date(req.body.dueDate),
+        createdDate: new Date()
+      };
+      
       const job = await storage.createJob(jobData);
       broadcast({ type: 'job_created', data: job });
       res.status(201).json(job);
@@ -65,7 +71,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid job data", errors: error.errors });
       }
-      res.status(500).json({ message: "Failed to create job" });
+      res.status(500).json({ message: "Failed to create job", error: error.message });
     }
   });
 
