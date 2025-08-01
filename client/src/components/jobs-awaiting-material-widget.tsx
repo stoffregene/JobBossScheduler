@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Clock, AlertTriangle, Package2 } from "lucide-react";
 import { Link } from "wouter";
+import CollapsibleCard from "@/components/collapsible-card";
 import type { Job, MaterialOrder } from "@shared/schema";
 
 interface JobWithMaterials extends Job {
@@ -17,19 +17,16 @@ export default function JobsAwaitingMaterialWidget() {
 
   if (isLoading) {
     return (
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Jobs Awaiting Material</CardTitle>
-          <Clock className="h-4 w-4 text-muted-foreground" />
-        </CardHeader>
-        <CardContent>
-          <div className="animate-pulse space-y-2">
-            <div className="h-4 bg-gray-200 rounded"></div>
-            <div className="h-4 bg-gray-200 rounded"></div>
-            <div className="h-4 bg-gray-200 rounded"></div>
-          </div>
-        </CardContent>
-      </Card>
+      <CollapsibleCard
+        title="Jobs Awaiting Material"
+        icon={<Clock className="h-4 w-4 text-muted-foreground" />}
+      >
+        <div className="animate-pulse space-y-2">
+          <div className="h-4 bg-gray-200 rounded"></div>
+          <div className="h-4 bg-gray-200 rounded"></div>
+          <div className="h-4 bg-gray-200 rounded"></div>
+        </div>
+      </CollapsibleCard>
     );
   }
 
@@ -58,19 +55,17 @@ export default function JobsAwaitingMaterialWidget() {
   };
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">Jobs Awaiting Material</CardTitle>
-        <div className="flex items-center space-x-2">
-          <Package2 className="h-4 w-4 text-muted-foreground" />
-          <Link href="/materials">
-            <Button variant="ghost" size="sm" className="text-xs">
-              Manage
-            </Button>
-          </Link>
-        </div>
-      </CardHeader>
-      <CardContent>
+    <CollapsibleCard
+      title="Jobs Awaiting Material"
+      icon={<Package2 className="h-4 w-4 text-muted-foreground" />}
+      headerActions={
+        <Link href="/materials">
+          <Button variant="ghost" size="sm" className="text-xs">
+            Manage
+          </Button>
+        </Link>
+      }
+    >
         <div className="space-y-3">
           {/* Summary Stats */}
           <div className="flex justify-between items-center">
@@ -136,7 +131,6 @@ export default function JobsAwaitingMaterialWidget() {
             )}
           </div>
         </div>
-      </CardContent>
-    </Card>
+    </CollapsibleCard>
   );
 }

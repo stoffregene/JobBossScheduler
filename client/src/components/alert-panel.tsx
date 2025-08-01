@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, Clock, Info, CheckCircle, X } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
+import CollapsibleCard from "@/components/collapsible-card";
 import type { Alert } from "@shared/schema";
 
 export default function AlertPanel() {
@@ -31,34 +31,30 @@ export default function AlertPanel() {
 
   if (isLoading) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Alerts & Notifications</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="animate-pulse space-y-4">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="h-20 bg-gray-200 rounded"></div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      <CollapsibleCard
+        title="Alerts & Notifications"
+        icon={<AlertCircle className="h-4 w-4 text-muted-foreground" />}
+      >
+        <div className="animate-pulse space-y-4">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="h-20 bg-gray-200 rounded"></div>
+          ))}
+        </div>
+      </CollapsibleCard>
     );
   }
 
   if (!alerts || alerts.length === 0) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Alerts & Notifications</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <CollapsibleCard
+        title="Alerts & Notifications"
+        icon={<CheckCircle className="h-4 w-4 text-green-500" />}
+      >
           <div className="text-center text-gray-500 py-8">
             <CheckCircle className="h-12 w-12 mx-auto mb-2 text-success-500" />
             <p>No active alerts</p>
           </div>
-        </CardContent>
-      </Card>
+      </CollapsibleCard>
     );
   }
 
@@ -153,13 +149,14 @@ export default function AlertPanel() {
     }
   };
 
+  const unreadCount = alerts.filter(alert => !alert.isRead).length;
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Alerts & Notifications</CardTitle>
-      </CardHeader>
-      
-      <CardContent className="space-y-4">
+    <CollapsibleCard
+      title={`Alerts & Notifications (${unreadCount} unread)`}
+      icon={<AlertCircle className="h-4 w-4 text-orange-500" />}
+    >
+      <div className="space-y-4">
         {alerts.map((alert) => (
           <div 
             key={alert.id} 
@@ -199,7 +196,7 @@ export default function AlertPanel() {
             </div>
           </div>
         ))}
-      </CardContent>
-    </Card>
+      </div>
+    </CollapsibleCard>
   );
 }

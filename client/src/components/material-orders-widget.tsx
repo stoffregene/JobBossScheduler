@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Package, Clock, AlertTriangle, Plus } from "lucide-react";
 import { Link } from "wouter";
+import CollapsibleCard from "@/components/collapsible-card";
 import type { MaterialOrder } from "@shared/schema";
 
 export default function MaterialOrdersWidget() {
@@ -13,19 +13,16 @@ export default function MaterialOrdersWidget() {
 
   if (isLoading) {
     return (
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Material Orders</CardTitle>
-          <Package className="h-4 w-4 text-muted-foreground" />
-        </CardHeader>
-        <CardContent>
-          <div className="animate-pulse space-y-2">
-            <div className="h-4 bg-gray-200 rounded"></div>
-            <div className="h-4 bg-gray-200 rounded"></div>
-            <div className="h-4 bg-gray-200 rounded"></div>
-          </div>
-        </CardContent>
-      </Card>
+      <CollapsibleCard
+        title="Material Orders"
+        icon={<Package className="h-4 w-4 text-muted-foreground" />}
+      >
+        <div className="animate-pulse space-y-2">
+          <div className="h-4 bg-gray-200 rounded"></div>
+          <div className="h-4 bg-gray-200 rounded"></div>
+          <div className="h-4 bg-gray-200 rounded"></div>
+        </div>
+      </CollapsibleCard>
     );
   }
 
@@ -52,19 +49,17 @@ export default function MaterialOrdersWidget() {
   };
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">Material Orders</CardTitle>
-        <div className="flex items-center space-x-2">
-          <Package className="h-4 w-4 text-muted-foreground" />
-          <Link href="/materials">
-            <Button variant="ghost" size="sm">
-              <Plus className="h-3 w-3" />
-            </Button>
-          </Link>
-        </div>
-      </CardHeader>
-      <CardContent>
+    <CollapsibleCard
+      title="Material Orders"
+      icon={<Package className="h-4 w-4 text-muted-foreground" />}
+      headerActions={
+        <Link href="/materials">
+          <Button variant="ghost" size="sm">
+            <Plus className="h-3 w-3" />
+          </Button>
+        </Link>
+      }
+    >
         <div className="space-y-3">
           {/* Summary Stats */}
           <div className="flex justify-between items-center">
@@ -128,7 +123,6 @@ export default function MaterialOrdersWidget() {
             )}
           </div>
         </div>
-      </CardContent>
-    </Card>
+    </CollapsibleCard>
   );
 }

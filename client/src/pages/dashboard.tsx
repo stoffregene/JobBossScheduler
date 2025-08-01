@@ -116,27 +116,31 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Dashboard Overview */}
         <div className="mb-8">
           <DashboardOverview />
         </div>
 
         {/* Main Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Left Column: Job Queue & Schedule */}
-          <div className="lg:col-span-2 space-y-6">
+        <div className="grid grid-cols-1 xl:grid-cols-4 lg:grid-cols-3 gap-6">
+          {/* Left Column: Job Queue & Schedule - Wider */}
+          <div className="xl:col-span-2 lg:col-span-2 space-y-6">
             <JobQueue onJobSelect={setSelectedJobId} />
             <ScheduleView />
           </div>
 
-          {/* Right Column: Machine Status & Alerts */}
-          <div className="space-y-6">
+          {/* Middle Column: Machine Status & Resource Allocation */}
+          <div className="xl:col-span-1 lg:col-span-1 space-y-6">
             <MachineStatus />
+            <ResourceAllocation />
+          </div>
+
+          {/* Right Column: Material & Alerts Sidebar */}
+          <div className="xl:col-span-1 lg:col-span-1 space-y-6">
             <MaterialOrdersWidget />
             <JobsAwaitingMaterialWidget />
             <AlertPanel />
-            <ResourceAllocation />
           </div>
         </div>
       </div>
