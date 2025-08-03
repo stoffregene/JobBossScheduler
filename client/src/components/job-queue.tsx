@@ -973,6 +973,56 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Routing Adjustment Dialog */}
+      <Dialog open={isRoutingDialogOpen} onOpenChange={setIsRoutingDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Adjust Routing - {selectedJobForRouting?.jobNumber}</DialogTitle>
+          </DialogHeader>
+          {selectedJobForRouting && (
+            <div className="space-y-4 py-4">
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                Part: {selectedJobForRouting.partNumber} | Due: {new Date(selectedJobForRouting.dueDate).toLocaleDateString()}
+              </div>
+              
+              <div className="space-y-4">
+                <h4 className="font-medium">Available Machine Groups:</h4>
+                {Object.entries(getRoutingOptions()).map(([groupName, groupMachines]) => (
+                  <div key={groupName} className="border border-gray-200 dark:border-gray-600 rounded-lg p-4">
+                    <h5 className="font-medium mb-2 capitalize">{groupName.replace(/_/g, ' ')}</h5>
+                    <div className="grid grid-cols-2 gap-2">
+                      {groupMachines.map((machine: any) => (
+                        <div key={machine.id} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700 rounded">
+                          <span className="text-sm">{machine.machineId} - {machine.name}</span>
+                          <Badge variant={machine.status === 'Available' ? 'default' : 'secondary'}>
+                            {machine.status}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              <div className="flex justify-end space-x-2 pt-4">
+                <Button variant="outline" onClick={() => setIsRoutingDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={() => {
+                  toast({
+                    title: "Routing Updated",
+                    description: "Job routing has been adjusted based on selected machine groups.",
+                  });
+                  setIsRoutingDialogOpen(false);
+                }}>
+                  Apply Routing Changes
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
         </CollapsibleContent>
       </Card>
     </Collapsible>

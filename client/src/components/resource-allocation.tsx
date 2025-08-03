@@ -73,15 +73,16 @@ export default function ResourceAllocation({ scheduleView }: ResourceAllocationP
       workCenterFilter === "ALL" || machine.type === workCenterFilter
     );
 
-    // Calculate OPERATOR capacity for filtered machines (people, not machines)
+    // Calculate OPERATOR capacity for the period (people, not machines)
+    // Simple calculation: operators × hours per day × days in period
     const shift1Operators = filteredMachines.filter(m => m.availableShifts.includes(1)).length;
     const shift2Operators = filteredMachines.filter(m => m.availableShifts.includes(2)).length;
     
-    const hoursPerDay = 8; // Standard working day
-    const weeksInPeriod = daysInPeriod / 7;
+    const hoursPerShift = 8; // 8 hours per shift
     
-    const shift1OperatorCapacity = shift1Operators * hoursPerDay * daysInPeriod;
-    const shift2OperatorCapacity = shift2Operators * hoursPerDay * daysInPeriod;
+    // For the selected time period, calculate total operator hours available
+    const shift1OperatorCapacity = shift1Operators * hoursPerShift * daysInPeriod;
+    const shift2OperatorCapacity = shift2Operators * hoursPerShift * daysInPeriod;
     const totalOperatorCapacity = shift1OperatorCapacity + shift2OperatorCapacity;
 
     // Calculate actual usage from schedule entries
@@ -201,6 +202,9 @@ export default function ResourceAllocation({ scheduleView }: ResourceAllocationP
             <span className="text-lg font-bold text-blue-600 dark:text-blue-400">
               {Math.round(totalOperatorCapacity)}h
             </span>
+            <div className="text-xs text-gray-500 mt-1">
+              Debug: {shift1Operators} shift1 + {shift2Operators} shift2 ops × {hoursPerShift}h × {daysInPeriod} days
+            </div>
           </div>
           <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-3">
             <div 
