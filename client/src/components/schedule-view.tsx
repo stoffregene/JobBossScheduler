@@ -220,14 +220,14 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
                     <div className="flex items-center justify-end gap-1 mb-1">
                       <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium flex-shrink-0 ${
                         machine.type === 'LATHE' 
-                          ? 'bg-blue-100 text-blue-800' 
+                          ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200' 
                           : machine.type === 'MILL'
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-gray-100 text-gray-800'
+                          ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
                       }`}>
                         {machine.type}
                       </span>
-                      <span className="truncate">{machine.machineId}</span>
+                      <span className="truncate text-gray-900 dark:text-white">{machine.machineId}</span>
                     </div>
                     <div className="text-xs text-gray-500 dark:text-gray-400 truncate">{machine.name}</div>
                   </div>
@@ -246,7 +246,7 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
                       <div 
                         key={dayIndex} 
                         className={`h-12 rounded relative flex items-center justify-center ${
-                          isUnavailable ? 'bg-gray-100 opacity-50' : 'bg-gray-100'
+                          isUnavailable ? 'bg-gray-100 dark:bg-gray-700 opacity-50' : 'bg-gray-100 dark:bg-gray-700'
                         }`}
                       >
                         {dayJobs.length > 0 && (
@@ -267,7 +267,7 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
           </div>
 
           {/* Legend */}
-          <div className="mt-6 flex flex-wrap items-center gap-4 text-sm">
+          <div className="mt-6 flex flex-wrap items-center gap-4 text-sm text-gray-700 dark:text-gray-300">
             <div className="flex items-center">
               <div className="w-4 h-4 bg-primary-500 rounded mr-2"></div>
               <span>Machining</span>
@@ -289,7 +289,7 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
               <span>Critical</span>
             </div>
             <div className="flex items-center">
-              <div className="w-4 h-4 bg-gray-300 rounded mr-2 opacity-50"></div>
+              <div className="w-4 h-4 bg-gray-300 dark:bg-gray-600 rounded mr-2 opacity-50"></div>
               <span>2nd Shift Unavailable</span>
             </div>
           </div>

@@ -746,7 +746,7 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
                 return (
                   <tr 
                     key={job.id} 
-                    className="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer"
+                    className="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer border-l-4 border-transparent"
                     onClick={() => onJobSelect(job.id)}
                   >
                     <td className="px-6 py-4 whitespace-nowrap">
