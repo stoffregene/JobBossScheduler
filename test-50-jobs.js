@@ -10,7 +10,8 @@ const jobs = [
     customer: `Customer ${Math.floor(i / 5) + 1}`,
     dueDate: new Date(Date.now() + (7 + Math.floor(Math.random() * 30)) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     priority: ['Normal', 'High', 'Critical'][Math.floor(Math.random() * 3)],
-    estimatedHours: (2 + Math.random() * 8).toFixed(1)
+    estimatedHours: (2 + Math.random() * 8).toFixed(1),
+    quantity: Math.floor(1 + Math.random() * 100)
   })),
   
   // Lathes - 15 jobs
@@ -21,7 +22,8 @@ const jobs = [
     customer: `Customer ${Math.floor(i / 4) + 1}`,
     dueDate: new Date(Date.now() + (7 + Math.floor(Math.random() * 30)) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     priority: ['Normal', 'High', 'Critical'][Math.floor(Math.random() * 3)],
-    estimatedHours: (1.5 + Math.random() * 6).toFixed(1)
+    estimatedHours: (1.5 + Math.random() * 6).toFixed(1),
+    quantity: Math.floor(1 + Math.random() * 50)
   })),
   
   // Multi-operation jobs - 10 jobs
@@ -32,7 +34,8 @@ const jobs = [
     customer: `Customer ${Math.floor(i / 3) + 1}`,
     dueDate: new Date(Date.now() + (10 + Math.floor(Math.random() * 30)) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     priority: ['High', 'Critical'][Math.floor(Math.random() * 2)],
-    estimatedHours: (5 + Math.random() * 15).toFixed(1)
+    estimatedHours: (5 + Math.random() * 15).toFixed(1),
+    quantity: Math.floor(1 + Math.random() * 25)
   })),
   
   // Inspection only - 5 jobs
@@ -43,7 +46,8 @@ const jobs = [
     customer: `Customer ${Math.floor(i / 2) + 1}`,
     dueDate: new Date(Date.now() + (3 + Math.floor(Math.random() * 14)) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     priority: 'Normal',
-    estimatedHours: (0.5 + Math.random() * 2).toFixed(1)
+    estimatedHours: (0.5 + Math.random() * 2).toFixed(1),
+    quantity: Math.floor(1 + Math.random() * 10)
   }))
 ];
 
@@ -83,9 +87,5 @@ async function createJobs() {
   console.log('You can now test the "Schedule All" button to see the intelligent scheduling in action.');
 }
 
-// Run if called directly
-if (require.main === module) {
-  createJobs().catch(console.error);
-}
-
-module.exports = { jobs, createJobs };
+// Run the function
+createJobs().catch(console.error);
