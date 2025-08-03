@@ -115,47 +115,54 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
   const getJobColor = (priority: string) => {
     switch (priority) {
       case 'Critical':
-        return 'bg-error-500';
+        return 'bg-red-600';
       case 'High':
-        return 'bg-warning-500';
+        return 'bg-orange-500';
       default:
-        return 'bg-primary-500';
+        return 'bg-blue-600';
     }
   };
 
   return (
-    <Card className={`dark:bg-gray-800 dark:border-gray-700 ${isFullscreen ? 'fixed inset-4 z-50' : ''}`}>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <CardTitle className="dark:text-white">Production Schedule ({displayMachines.length} machines)</CardTitle>
+    <Card className={`bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 ${isFullscreen ? 'fixed inset-4 z-50' : ''}`}>
+      <CardHeader className="pb-4">
+        <div className="flex flex-col space-y-3">
+          {/* Title and Navigation Row */}
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-gray-900 dark:text-white">
+              Production Schedule ({displayMachines.length} machines)
+            </CardTitle>
             <div className="flex items-center space-x-2">
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => navigateWeek('prev')}
+                className="hover:bg-gray-100 dark:hover:bg-gray-800"
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <span className="text-sm font-medium dark:text-white min-w-[140px] text-center">
+              <span className="text-sm font-medium text-gray-900 dark:text-white min-w-[140px] text-center">
                 {getDateRangeTitle()}
               </span>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => navigateWeek('next')}
+                className="hover:bg-gray-100 dark:hover:bg-gray-800"
               >
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
           </div>
-          <div className="flex items-center space-x-2">
+          
+          {/* Controls Row */}
+          <div className="flex items-center justify-end space-x-2">
             <Select value={machineTypeFilter} onValueChange={setMachineTypeFilter}>
-              <SelectTrigger className="w-32">
+              <SelectTrigger className="w-32 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600">
                 <Filter className="w-4 h-4 mr-2" />
                 <SelectValue placeholder="Filter" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600">
                 <SelectItem value="ALL">All Types</SelectItem>
                 {machineTypes.map(type => (
                   <SelectItem key={type} value={type}>{type}</SelectItem>
@@ -169,23 +176,28 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
                 date: scheduleView.date
               })}
             >
-              <SelectTrigger className="w-32">
+              <SelectTrigger className="w-28 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="week">Week View</SelectItem>
-                <SelectItem value="month">Month View</SelectItem>
+              <SelectContent className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600">
+                <SelectItem value="week">Week</SelectItem>
+                <SelectItem value="month">Month</SelectItem>
               </SelectContent>
             </Select>
             <Button 
               variant="outline" 
               size="sm"
               onClick={() => setIsFullscreen(!isFullscreen)}
+              className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
             >
               <Maximize2 className="h-4 w-4 mr-1" />
-              {isFullscreen ? 'Exit' : 'Fullscreen'}
+              {isFullscreen ? 'Exit' : 'Full'}
             </Button>
-            <Button variant="outline" size="sm">
+            <Button 
+              variant="outline" 
+              size="sm"
+              className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
+            >
               <Download className="h-4 w-4 mr-1" />
               Export
             </Button>
@@ -193,10 +205,10 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
         </div>
       </CardHeader>
       
-      <CardContent>
+      <CardContent className="bg-white dark:bg-gray-900">
         <div className="space-y-4">
           {/* Day Headers */}
-          <div className="grid gap-2 text-sm font-medium text-gray-500 dark:text-gray-400" style={{ gridTemplateColumns: scheduleView.type === "month" ? "200px repeat(30, 1fr)" : "200px repeat(7, 1fr)" }}>
+          <div className="grid gap-2 text-sm font-medium text-gray-600 dark:text-gray-300" style={{ gridTemplateColumns: scheduleView.type === "month" ? "200px repeat(30, 1fr)" : "200px repeat(7, 1fr)" }}>
             <div className="text-right pr-4">Machine</div>
             {weekDays.map((day, index) => (
               <div key={index} className="text-center">
@@ -220,10 +232,10 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
                     <div className="flex items-center justify-end gap-1 mb-1">
                       <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium flex-shrink-0 ${
                         machine.type === 'LATHE' 
-                          ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200' 
+                          ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-200' 
                           : machine.type === 'MILL'
-                          ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
-                          : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
+                          ? 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-200'
+                          : 'bg-gray-100 dark:bg-gray-700/50 text-gray-800 dark:text-gray-200'
                       }`}>
                         {machine.type}
                       </span>
@@ -246,16 +258,20 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
                       <div 
                         key={dayIndex} 
                         className={`h-12 rounded relative flex items-center justify-center ${
-                          isUnavailable ? 'bg-gray-100 dark:bg-gray-700 opacity-50' : 'bg-gray-100 dark:bg-gray-700'
+                          isUnavailable 
+                            ? 'bg-gray-50 dark:bg-gray-800/50 opacity-50' 
+                            : 'bg-gray-50 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-700'
                         }`}
                       >
                         {dayJobs.length > 0 && (
                           <div 
-                            className={`absolute inset-1 rounded text-white text-xs px-2 flex items-center justify-center ${
+                            className={`absolute inset-1 rounded text-white text-xs px-2 flex items-center justify-center font-medium ${
                               getJobColor(dayJobs[0].job?.priority || 'Normal')
                             }`}
                           >
-                            {dayJobs[0].job?.jobNumber} ({Math.round(parseFloat(dayJobs[0].job?.estimatedHours || '0'))}h)
+                            <span className="truncate">
+                              {dayJobs[0].job?.jobNumber} ({Math.round(parseFloat(dayJobs[0].job?.estimatedHours || '0'))}h)
+                            </span>
                           </div>
                         )}
                       </div>
@@ -267,30 +283,22 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
           </div>
 
           {/* Legend */}
-          <div className="mt-6 flex flex-wrap items-center gap-4 text-sm text-gray-700 dark:text-gray-300">
+          <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 flex flex-wrap items-center gap-4 text-sm text-gray-700 dark:text-gray-300">
             <div className="flex items-center">
-              <div className="w-4 h-4 bg-primary-500 rounded mr-2"></div>
-              <span>Machining</span>
+              <div className="w-4 h-4 bg-blue-600 rounded mr-2"></div>
+              <span>Normal Priority</span>
             </div>
             <div className="flex items-center">
-              <div className="w-4 h-4 bg-purple-500 rounded mr-2"></div>
-              <span>Welding</span>
+              <div className="w-4 h-4 bg-orange-500 rounded mr-2"></div>
+              <span>High Priority</span>
             </div>
             <div className="flex items-center">
-              <div className="w-4 h-4 bg-indigo-500 rounded mr-2"></div>
-              <span>Finishing</span>
-            </div>
-            <div className="flex items-center">
-              <div className="w-4 h-4 bg-warning-500 rounded mr-2"></div>
-              <span>Late Risk</span>
-            </div>
-            <div className="flex items-center">
-              <div className="w-4 h-4 bg-error-500 rounded mr-2"></div>
+              <div className="w-4 h-4 bg-red-600 rounded mr-2"></div>
               <span>Critical</span>
             </div>
             <div className="flex items-center">
               <div className="w-4 h-4 bg-gray-300 dark:bg-gray-600 rounded mr-2 opacity-50"></div>
-              <span>2nd Shift Unavailable</span>
+              <span>Unavailable</span>
             </div>
           </div>
         </div>
