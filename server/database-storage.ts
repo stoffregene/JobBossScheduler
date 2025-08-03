@@ -1,7 +1,7 @@
 import { type Job, type InsertJob, type Machine, type InsertMachine, type ScheduleEntry, type InsertScheduleEntry, type Alert, type InsertAlert, type DashboardStats, type RoutingOperation, type MaterialOrder, type InsertMaterialOrder, type OutsourcedOperation, type InsertOutsourcedOperation } from "@shared/schema";
 import { db } from "./db";
 import { jobs, machines, scheduleEntries, alerts, materialOrders, outsourcedOperations, routingOperations } from "@shared/schema";
-import { eq, and, gte, lte, desc, isNull } from "drizzle-orm";
+import { eq, and, gte, lte, desc, isNull, sql } from "drizzle-orm";
 import type { IStorage } from "./storage-interface";
 import { barFeederService } from "./bar-feeder-service";
 
