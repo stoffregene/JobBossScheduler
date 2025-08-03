@@ -895,7 +895,7 @@ export class DatabaseStorage implements IStorage {
     const totalUtilization = allMachines.reduce((sum, machine) => sum + parseFloat(machine.utilization), 0);
     const averageUtilization = allMachines.length > 0 ? Math.round(totalUtilization / allMachines.length) : 0;
     
-    const totalCapacity = (11 * 7.5) + (5 * 6.5); // 1st shift: 11 operators × 7.5hrs, 2nd shift: 5 operators × 6.5hrs
+    const totalCapacity = ((11 * 7.5) + (5 * 6.5)) * 4; // 1st shift: 11 operators × 7.5hrs, 2nd shift: 5 operators × 6.5hrs, × 4 days per week
     const usedCapacity = totalCapacity * (averageUtilization / 100);
     
     return {
