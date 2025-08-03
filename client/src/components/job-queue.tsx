@@ -25,6 +25,8 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
   const [editingJob, setEditingJob] = useState<Job | null>(null);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isRoutingDialogOpen, setIsRoutingDialogOpen] = useState(false);
+  const [selectedJobForRouting, setSelectedJobForRouting] = useState<Job | null>(null);
   const [newJob, setNewJob] = useState({
     jobNumber: '',
     partNumber: '',
@@ -38,6 +40,10 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
 
   const { data: jobs, isLoading } = useQuery<Job[]>({
     queryKey: ['/api/jobs'],
+  });
+
+  const { data: machines } = useQuery<any[]>({
+    queryKey: ['/api/machines'],
   });
 
   const createJobMutation = useMutation({
@@ -265,6 +271,27 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
     if (confirm(`Are you sure you want to delete ALL ${jobCount} jobs? This action cannot be undone and will remove all associated scheduling and material orders.`)) {
       deleteAllJobsMutation.mutate();
     }
+  };
+
+  const handleOpenRoutingDialog = (job: Job) => {
+    setSelectedJobForRouting(job);
+    setIsRoutingDialogOpen(true);
+  };
+
+  // Get machine substitution groups for routing options
+  const getRoutingOptions = () => {
+    if (!machines) return {};
+    
+    const substitutionGroups: Record<string, any[]> = {};
+    machines.forEach(machine => {
+      const group = machine.substitutionGroup;
+      if (!substitutionGroups[group]) {
+        substitutionGroups[group] = [];
+      }
+      substitutionGroups[group].push(machine);
+    });
+    
+    return substitutionGroups;
   };
 
   const handleScheduleAllJobs = () => {
@@ -815,6 +842,17 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
                           title="Edit Job"
                         >
                           <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenRoutingDialog(job);
+                          }}
+                          title="Adjust Routing"
+                        >
+                          <Settings className="h-4 w-4" />
                         </Button>
                         <Button
                           variant="ghost"

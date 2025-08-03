@@ -886,29 +886,63 @@ export class DatabaseStorage implements IStorage {
   async getDashboardStats(): Promise<DashboardStats> {
     const allJobs = await this.getJobs();
     const allMachines = await this.getMachines();
+    const allScheduleEntries = await this.getScheduleEntries();
     
     const activeJobs = allJobs.filter(job => job.status !== "Completed" && job.status !== "Cancelled").length;
     const lateJobs = allJobs.filter(job => job.status === "Customer Late" || job.status === "Company Late").length;
     const customerLateJobs = allJobs.filter(job => job.status === "Customer Late").length;
     const companyLateJobs = allJobs.filter(job => job.status === "Company Late").length;
     
-    const totalUtilization = allMachines.reduce((sum, machine) => sum + parseFloat(machine.utilization), 0);
-    const averageUtilization = allMachines.length > 0 ? Math.round(totalUtilization / allMachines.length) : 0;
+    // Calculate real machine utilization based on scheduled hours
+    const currentDate = new Date();
+    const weekStart = new Date(currentDate);
+    weekStart.setDate(currentDate.getDate() - currentDate.getDay()); // Start of current week
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6); // End of current week
     
-    const totalCapacity = ((11 * 7.5) + (5 * 6.5)) * 4; // 1st shift: 11 operators × 7.5hrs, 2nd shift: 5 operators × 6.5hrs, × 4 days per week
-    const usedCapacity = totalCapacity * (averageUtilization / 100);
+    // Calculate total machine capacity for the week (per machine: 8 hours/shift * shifts * 7 days)
+    let totalMachineCapacity = 0;
+    let shift1Machines = 0;
+    let shift2Machines = 0;
+    
+    allMachines.forEach(machine => {
+      const shifts = machine.availableShifts || [1, 2];
+      if (shifts.includes(1)) {
+        shift1Machines++;
+        totalMachineCapacity += 8 * 7; // 8 hours per day * 7 days
+      }
+      if (shifts.includes(2)) {
+        shift2Machines++;
+        totalMachineCapacity += 8 * 7; // 8 hours per day * 7 days
+      }
+    });
+    
+    // Calculate actual used capacity from schedule entries this week
+    let usedMachineCapacity = 0;
+    
+    allScheduleEntries.forEach(entry => {
+      const entryDate = new Date(entry.startTime);
+      if (entryDate >= weekStart && entryDate <= weekEnd) {
+        const job = allJobs.find(j => j.id === entry.jobId);
+        if (job) {
+          usedMachineCapacity += parseFloat(job.estimatedHours || '0');
+        }
+      }
+    });
+    
+    const realUtilization = totalMachineCapacity > 0 ? Math.round((usedMachineCapacity / totalMachineCapacity) * 100) : 0;
     
     return {
       activeJobs,
-      utilization: averageUtilization,
+      utilization: realUtilization,
       lateJobs,
       atRiskJobs: Math.max(0, lateJobs - 1), // At risk jobs are those approaching late status
       customerLateJobs,
       companyLateJobs,
-      totalCapacity,
-      usedCapacity,
-      shift1Resources: 11,
-      shift2Resources: 5,
+      totalCapacity: totalMachineCapacity,
+      usedCapacity: usedMachineCapacity,
+      shift1Resources: shift1Machines,
+      shift2Resources: shift2Machines,
     };
   }
 

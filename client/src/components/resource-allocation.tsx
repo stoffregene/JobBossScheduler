@@ -50,18 +50,18 @@ export default function ResourceAllocation({ scheduleView }: ResourceAllocationP
     return { start, end };
   };
 
-  // Calculate real resource allocation based on schedule entries
+  // Calculate resource allocation based on operator/people capacity, not machines
   const calculations = useMemo(() => {
     if (!machines || !scheduleEntries || !jobs) {
       return {
         filteredMachines: [],
-        totalCapacity: 0,
-        usedCapacity: 0,
+        totalOperatorCapacity: 0,
+        usedOperatorCapacity: 0,
         utilizationPercent: 0,
-        shift1Capacity: 0,
-        shift2Capacity: 0,
-        shift1Used: 0,
-        shift2Used: 0
+        shift1OperatorCapacity: 0,
+        shift2OperatorCapacity: 0,
+        shift1OperatorUsed: 0,
+        shift2OperatorUsed: 0
       };
     }
 
@@ -73,17 +73,16 @@ export default function ResourceAllocation({ scheduleView }: ResourceAllocationP
       workCenterFilter === "ALL" || machine.type === workCenterFilter
     );
 
-    // Calculate capacity for filtered machines
-    const shift1Resources = filteredMachines.filter(m => m.availableShifts.includes(1)).length;
-    const shift2Resources = filteredMachines.filter(m => m.availableShifts.includes(2)).length;
+    // Calculate OPERATOR capacity for filtered machines (people, not machines)
+    const shift1Operators = filteredMachines.filter(m => m.availableShifts.includes(1)).length;
+    const shift2Operators = filteredMachines.filter(m => m.availableShifts.includes(2)).length;
     
     const hoursPerDay = 8; // Standard working day
-    const daysPerWeek = 4; // As per the original calculation
     const weeksInPeriod = daysInPeriod / 7;
     
-    const shift1Capacity = shift1Resources * hoursPerDay * daysPerWeek * weeksInPeriod;
-    const shift2Capacity = shift2Resources * hoursPerDay * daysPerWeek * weeksInPeriod;
-    const totalCapacity = shift1Capacity + shift2Capacity;
+    const shift1OperatorCapacity = shift1Operators * hoursPerDay * daysInPeriod;
+    const shift2OperatorCapacity = shift2Operators * hoursPerDay * daysInPeriod;
+    const totalOperatorCapacity = shift1OperatorCapacity + shift2OperatorCapacity;
 
     // Calculate actual usage from schedule entries
     const relevantScheduleEntries = scheduleEntries.filter(entry => {
@@ -91,8 +90,8 @@ export default function ResourceAllocation({ scheduleView }: ResourceAllocationP
       return entryDate >= start && entryDate <= end;
     });
 
-    let shift1Used = 0;
-    let shift2Used = 0;
+    let shift1OperatorUsed = 0;
+    let shift2OperatorUsed = 0;
 
     relevantScheduleEntries.forEach(entry => {
       const machine = machines.find(m => m.id === entry.machineId);
@@ -101,41 +100,41 @@ export default function ResourceAllocation({ scheduleView }: ResourceAllocationP
       if (machine && job && (workCenterFilter === "ALL" || machine.type === workCenterFilter)) {
         const hours = parseFloat(job.estimatedHours || "0");
         
-        // Determine which shift based on time (simplified)
+        // Determine which shift based on time (simplified) - hours represent operator time
         const startHour = new Date(entry.startTime).getHours();
-        if (startHour >= 3 && startHour < 15) {
-          shift1Used += hours;
+        if (startHour >= 6 && startHour < 14) {
+          shift1OperatorUsed += hours;
         } else {
-          shift2Used += hours;
+          shift2OperatorUsed += hours;
         }
       }
     });
 
-    const usedCapacity = shift1Used + shift2Used;
-    const utilizationPercent = totalCapacity > 0 ? Math.round((usedCapacity / totalCapacity) * 100) : 0;
+    const usedOperatorCapacity = shift1OperatorUsed + shift2OperatorUsed;
+    const utilizationPercent = totalOperatorCapacity > 0 ? Math.round((usedOperatorCapacity / totalOperatorCapacity) * 100) : 0;
 
     return {
       filteredMachines,
-      totalCapacity,
-      usedCapacity,
+      totalOperatorCapacity,
+      usedOperatorCapacity,
       utilizationPercent,
-      shift1Capacity,
-      shift2Capacity,
-      shift1Used,
-      shift2Used
+      shift1OperatorCapacity,
+      shift2OperatorCapacity,
+      shift1OperatorUsed,
+      shift2OperatorUsed
     };
   }, [machines, scheduleEntries, jobs, workCenterFilter, scheduleView]);
 
   const periodLabel = scheduleView.type === "month" ? "Month" : "Week";
   const {
     filteredMachines,
-    totalCapacity,
-    usedCapacity,
+    totalOperatorCapacity,
+    usedOperatorCapacity,
     utilizationPercent,
-    shift1Capacity,
-    shift2Capacity,
-    shift1Used,
-    shift2Used
+    shift1OperatorCapacity,
+    shift2OperatorCapacity,
+    shift1OperatorUsed,
+    shift2OperatorUsed
   } = calculations;
 
   if (isLoading) {
@@ -200,7 +199,7 @@ export default function ResourceAllocation({ scheduleView }: ResourceAllocationP
               Total {periodLabel} Capacity ({filteredMachines.length} machines)
             </span>
             <span className="text-lg font-bold text-blue-600 dark:text-blue-400">
-              {Math.round(totalCapacity)}h
+              {Math.round(totalOperatorCapacity)}h
             </span>
           </div>
           <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-3">
@@ -215,7 +214,7 @@ export default function ResourceAllocation({ scheduleView }: ResourceAllocationP
           </div>
           <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
             <span>{utilizationPercent}% utilized</span>
-            <span>{Math.round(usedCapacity)}h scheduled</span>
+            <span>{Math.round(usedOperatorCapacity)}h scheduled</span>
           </div>
         </div>
 
@@ -232,11 +231,11 @@ export default function ResourceAllocation({ scheduleView }: ResourceAllocationP
             <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
               <div 
                 className="bg-green-500 h-2 rounded-full transition-all duration-300" 
-                style={{ width: `${shift1Capacity > 0 ? (shift1Used / shift1Capacity) * 100 : 0}%` }}
+                style={{ width: `${shift1OperatorCapacity > 0 ? (shift1OperatorUsed / shift1OperatorCapacity) * 100 : 0}%` }}
               ></div>
             </div>
             <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              {Math.round(shift1Used)}h / {Math.round(shift1Capacity)}h capacity
+              {Math.round(shift1OperatorUsed)}h / {Math.round(shift1OperatorCapacity)}h capacity
             </div>
           </div>
 
@@ -251,11 +250,11 @@ export default function ResourceAllocation({ scheduleView }: ResourceAllocationP
             <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
               <div 
                 className="bg-yellow-500 h-2 rounded-full transition-all duration-300" 
-                style={{ width: `${shift2Capacity > 0 ? (shift2Used / shift2Capacity) * 100 : 0}%` }}
+                style={{ width: `${shift2OperatorCapacity > 0 ? (shift2OperatorUsed / shift2OperatorCapacity) * 100 : 0}%` }}
               ></div>
             </div>
             <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              {Math.round(shift2Used)}h / {Math.round(shift2Capacity)}h capacity
+              {Math.round(shift2OperatorUsed)}h / {Math.round(shift2OperatorCapacity)}h capacity
             </div>
           </div>
         </div>
@@ -288,7 +287,7 @@ export default function ResourceAllocation({ scheduleView }: ResourceAllocationP
             <div>
               <div className="text-gray-600 dark:text-gray-400">Available:</div>
               <div className="font-medium text-green-600 dark:text-green-400">
-                {Math.round(totalCapacity - usedCapacity)}h
+                {Math.round(totalOperatorCapacity - usedOperatorCapacity)}h
               </div>
             </div>
             <div>
