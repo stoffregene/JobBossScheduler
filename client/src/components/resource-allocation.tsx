@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Filter } from "lucide-react";
 import { useState, useMemo } from "react";
-import type { Machine, ScheduleEntry, Job, ResourceUnavailability } from "@shared/schema";
+import type { Machine, ScheduleEntry, Job, ResourceUnavailability, Resource } from "@shared/schema";
 
 interface ResourceAllocationProps {
   scheduleView: {
@@ -19,6 +19,10 @@ export default function ResourceAllocation({ scheduleView }: ResourceAllocationP
     queryKey: ['/api/machines'],
   });
 
+  const { data: resources, isLoading: resourcesLoading } = useQuery<Resource[]>({
+    queryKey: ['/api/resources'],
+  });
+
   const { data: scheduleEntries, isLoading: scheduleLoading } = useQuery<ScheduleEntry[]>({
     queryKey: ['/api/schedule'],
   });
@@ -31,7 +35,7 @@ export default function ResourceAllocation({ scheduleView }: ResourceAllocationP
     queryKey: ['/api/resource-unavailability'],
   });
 
-  const isLoading = machinesLoading || scheduleLoading || jobsLoading || unavailabilityLoading;
+  const isLoading = machinesLoading || resourcesLoading || scheduleLoading || jobsLoading || unavailabilityLoading;
 
   // Get work center types for filtering
   const workCenterTypes = Array.from(new Set(machines?.map(m => m.type) || [])).sort();
@@ -54,9 +58,9 @@ export default function ResourceAllocation({ scheduleView }: ResourceAllocationP
     return { start, end };
   };
 
-  // Calculate resource allocation based on operator/people capacity, accounting for unavailability
+  // Calculate resource allocation based on actual people/operators capacity, accounting for unavailability
   const calculations = useMemo(() => {
-    if (!machines || !scheduleEntries || !jobs) {
+    if (!machines || !resources || !scheduleEntries || !jobs) {
       return {
         filteredMachines: [],
         totalOperatorCapacity: 0,
@@ -72,14 +76,26 @@ export default function ResourceAllocation({ scheduleView }: ResourceAllocationP
     const { start, end } = getDateRange();
     const daysInPeriod = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
-    // Filter machines by work center type
+    // Filter machines by work center type for display purposes
     const filteredMachines = machines.filter(machine => 
       workCenterFilter === "ALL" || machine.type === workCenterFilter
     );
 
-    // Calculate base operator capacity (1 operator per machine per shift)
-    const shift1Machines = filteredMachines.filter(m => m.availableShifts.includes(1));
-    const shift2Machines = filteredMachines.filter(m => m.availableShifts.includes(2));
+    // Filter resources to those who can work the filtered machine types
+    const activeResources = resources.filter(resource => resource.isActive);
+    
+    let filteredResources = activeResources;
+    if (workCenterFilter !== "ALL") {
+      // Filter resources to those who can operate machines of the selected type
+      const filteredMachineIds = filteredMachines.map(m => m.id);
+      filteredResources = activeResources.filter(resource => 
+        resource.workCenters.some(workCenter => filteredMachineIds.includes(workCenter))
+      );
+    }
+
+    // Calculate resource capacity based on actual operators
+    const shift1Resources = filteredResources.filter(r => r.shiftSchedule.includes(1));
+    const shift2Resources = filteredResources.filter(r => r.shiftSchedule.includes(2));
     
     const hoursPerShift = 8; // 8 hours per shift
     
@@ -111,9 +127,9 @@ export default function ResourceAllocation({ scheduleView }: ResourceAllocationP
       });
     }
     
-    // Calculate available capacity after accounting for unavailability
-    const shift1BaseCapacity = shift1Machines.length * hoursPerShift * daysInPeriod;
-    const shift2BaseCapacity = shift2Machines.length * hoursPerShift * daysInPeriod;
+    // Calculate available capacity based on RESOURCES (people), not machines
+    const shift1BaseCapacity = shift1Resources.length * hoursPerShift * daysInPeriod;
+    const shift2BaseCapacity = shift2Resources.length * hoursPerShift * daysInPeriod;
     
     const shift1OperatorCapacity = Math.max(0, shift1BaseCapacity - shift1UnavailableHours);
     const shift2OperatorCapacity = Math.max(0, shift2BaseCapacity - shift2UnavailableHours);
@@ -158,7 +174,7 @@ export default function ResourceAllocation({ scheduleView }: ResourceAllocationP
       shift1OperatorUsed,
       shift2OperatorUsed
     };
-  }, [machines, scheduleEntries, jobs, unavailabilityData, workCenterFilter, scheduleView]);
+  }, [machines, resources, scheduleEntries, jobs, unavailabilityData, workCenterFilter, scheduleView]);
 
   const periodLabel = scheduleView.type === "month" ? "Month" : "Week";
   const {
@@ -189,7 +205,7 @@ export default function ResourceAllocation({ scheduleView }: ResourceAllocationP
     );
   }
 
-  if (!machines || !scheduleEntries || !jobs) {
+  if (!machines || !resources || !scheduleEntries || !jobs) {
     return (
       <Card>
         <CardHeader>
@@ -231,7 +247,7 @@ export default function ResourceAllocation({ scheduleView }: ResourceAllocationP
         <div className="bg-muted p-3 rounded-lg border">
           <div className="flex justify-between items-center mb-2">
             <span className="text-sm font-medium">
-              Total {periodLabel} Capacity ({filteredMachines.length} machines)
+              Total {periodLabel} Capacity ({resources?.filter(r => r.isActive).length || 0} operators)
             </span>
             <span className="text-lg font-bold text-blue-600">
               {Math.round(totalOperatorCapacity)}h
@@ -260,7 +276,7 @@ export default function ResourceAllocation({ scheduleView }: ResourceAllocationP
             <div className="flex justify-between items-center mb-2">
               <span className="text-sm font-medium">1st Shift (3AM - 3PM)</span>
               <span className="text-sm text-muted-foreground">
-                {filteredMachines.filter(m => m.availableShifts.includes(1)).length} machines
+                {resources?.filter(r => r.isActive && r.shiftSchedule.includes(1)).length || 0} operators
               </span>
             </div>
             <div className="w-full bg-background rounded-full h-2">
@@ -279,7 +295,7 @@ export default function ResourceAllocation({ scheduleView }: ResourceAllocationP
             <div className="flex justify-between items-center mb-2">
               <span className="text-sm font-medium">2nd Shift (3PM - 3AM)</span>
               <span className="text-sm text-muted-foreground">
-                {filteredMachines.filter(m => m.availableShifts.includes(2)).length} machines
+                {resources?.filter(r => r.isActive && r.shiftSchedule.includes(2)).length || 0} operators
               </span>
             </div>
             <div className="w-full bg-background rounded-full h-2">

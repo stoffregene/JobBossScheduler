@@ -490,6 +490,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Resources (people) endpoints
+  app.get("/api/resources", async (req, res) => {
+    try {
+      const resources = await storage.getResources();
+      res.json(resources);
+    } catch (error) {
+      console.error('Failed to fetch resources:', error);
+      res.status(500).json({ message: "Failed to fetch resources" });
+    }
+  });
+
   // Resource unavailability endpoint
   app.get("/api/resource-unavailability", async (req, res) => {
     try {
