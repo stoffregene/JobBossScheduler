@@ -5,7 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
 import Dashboard from "./pages/dashboard";
-import ResourceManagement from "./pages/resource-management";
+import ResourceManagement from "./pages/resource-management-simple";
 import MaterialTracking from "./pages/material-tracking";
 import NotFound from "./pages/not-found";
 

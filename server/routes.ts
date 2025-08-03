@@ -4,7 +4,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import { barFeederService } from "./bar-feeder-service";
 import { ReschedulingService } from "./rescheduling-service";
-import { insertJobSchema, insertMachineSchema, insertScheduleEntrySchema, insertAlertSchema, insertMaterialOrderSchema, insertOutsourcedOperationSchema } from "@shared/schema";
+import { insertJobSchema, insertMachineSchema, insertScheduleEntrySchema, insertAlertSchema, insertMaterialOrderSchema, insertOutsourcedOperationSchema, insertResourceSchema } from "@shared/schema";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -498,6 +498,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Failed to fetch resources:', error);
       res.status(500).json({ message: "Failed to fetch resources" });
+    }
+  });
+
+  app.get("/api/resources/:id", async (req, res) => {
+    try {
+      const resource = await storage.getResource(req.params.id);
+      if (!resource) {
+        return res.status(404).json({ message: "Resource not found" });
+      }
+      res.json(resource);
+    } catch (error) {
+      console.error('Failed to fetch resource:', error);
+      res.status(500).json({ message: "Failed to fetch resource" });
+    }
+  });
+
+  app.post("/api/resources", async (req, res) => {
+    try {
+      const resourceData = insertResourceSchema.parse(req.body);
+      const resource = await storage.createResource(resourceData);
+      
+      broadcast({ 
+        type: 'resource_created', 
+        data: resource 
+      });
+      
+      res.status(201).json(resource);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid resource data", errors: error.errors });
+      }
+      console.error('Failed to create resource:', error);
+      res.status(500).json({ message: "Failed to create resource" });
+    }
+  });
+
+  app.patch("/api/resources/:id", async (req, res) => {
+    try {
+      const updates = req.body;
+      const resource = await storage.updateResource(req.params.id, updates);
+      
+      if (!resource) {
+        return res.status(404).json({ message: "Resource not found" });
+      }
+      
+      broadcast({ 
+        type: 'resource_updated', 
+        data: resource 
+      });
+      
+      res.json(resource);
+    } catch (error) {
+      console.error('Failed to update resource:', error);
+      res.status(500).json({ message: "Failed to update resource" });
+    }
+  });
+
+  app.delete("/api/resources/:id", async (req, res) => {
+    try {
+      const success = await storage.deleteResource(req.params.id);
+      
+      if (!success) {
+        return res.status(404).json({ message: "Resource not found" });
+      }
+      
+      broadcast({ 
+        type: 'resource_deleted', 
+        data: { id: req.params.id } 
+      });
+      
+      res.status(204).send();
+    } catch (error) {
+      console.error('Failed to delete resource:', error);
+      res.status(500).json({ message: "Failed to delete resource" });
     }
   });
 
