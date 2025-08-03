@@ -490,6 +490,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Resource unavailability endpoint
+  app.get("/api/resource-unavailability", async (req, res) => {
+    try {
+      const unavailabilityData = await storage.getResourceUnavailabilities();
+      res.json(unavailabilityData);
+    } catch (error) {
+      console.error('Failed to fetch resource unavailability:', error);
+      res.status(500).json({ message: "Failed to fetch resource unavailability data" });
+    }
+  });
+
   // Bar feeder constraint endpoints
   app.post("/api/bar-feeder/analyze-job", async (req, res) => {
     try {

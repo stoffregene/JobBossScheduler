@@ -35,6 +35,7 @@ Preferred communication style: Simple, everyday language.
 - **Material Tracking**: Material orders tracked separately from scheduling decisions - materials flag for review rather than block scheduling
 - **Scheduling Logic**: Jobs schedule immediately (day 0) but optimal start is day 7 to allow material ordering/receiving window
 - **Review System**: Missing materials create alerts for review rather than auto-reschedule to handle JobBoss sync issues
+- **Resource Capacity Tracking**: Resource allocation component now properly accounts for resource unavailability when calculating capacity - integrates with resource unavailability data to provide accurate operator capacity calculations based on the selected date range
 - **Migrations**: Drizzle Kit for database schema migrations
 - **Connection**: Neon Database serverless PostgreSQL integration
 - **Current Implementation**: In-memory storage with full CRUD operations, designed for easy migration to persistent storage
