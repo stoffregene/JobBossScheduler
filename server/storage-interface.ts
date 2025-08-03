@@ -71,6 +71,8 @@ export interface IStorage {
   findBestMachineForOperation(operation: RoutingOperation, targetDate: Date, shift: number): Promise<{ machine: Machine; adjustedHours: number; score: number } | null>;
   autoScheduleJob(jobId: string): Promise<ScheduleEntry[] | null>;
   getMachinesBySubstitutionGroup(substitutionGroup: string): Promise<Machine[]>;
+  getCompatibleMachines(capability: string, category?: string, tier?: "Tier 1" | "Standard" | "Budget"): Promise<Machine[]>;
+  findOptimalMachineAssignment(routing: any[], priority: "Critical" | "High" | "Normal" | "Low"): Promise<any[]>;
 
   // Material Orders
   getMaterialOrders(): Promise<MaterialOrder[]>;

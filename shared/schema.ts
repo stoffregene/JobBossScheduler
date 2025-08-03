@@ -13,7 +13,7 @@ export const jobs = pgTable("jobs", {
   createdDate: timestamp("created_date").notNull().default(sql`now()`),
   priority: text("priority").notNull().default("Normal"), // Normal, High, Critical
   status: text("status").notNull().default("Unscheduled"), // Unscheduled, Scheduled, In Progress, Complete, Company Late, Customer Late
-  routing: jsonb("routing").$type<RoutingOperation[]>().notNull().default([]),
+  routing: jsonb("routing").$type<RoutingOperationType[]>().notNull().default([]),
   estimatedHours: decimal("estimated_hours", { precision: 10, scale: 2 }).notNull().default("0"),
 });
 
@@ -145,7 +145,7 @@ export const outsourcedOperations = pgTable("outsourced_operations", {
   updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
 });
 
-export type RoutingOperation = {
+export type RoutingOperationType = {
   sequence: number;
   name: string;
   machineType: string;

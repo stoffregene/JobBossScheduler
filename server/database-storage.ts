@@ -1,6 +1,22 @@
-import { type Job, type InsertJob, type Machine, type InsertMachine, type ScheduleEntry, type InsertScheduleEntry, type Alert, type InsertAlert, type DashboardStats, type RoutingOperation, type MaterialOrder, type InsertMaterialOrder, type OutsourcedOperation, type InsertOutsourcedOperation } from "@shared/schema";
+import { 
+  type Job, type InsertJob, 
+  type Machine, type InsertMachine, 
+  type ScheduleEntry, type InsertScheduleEntry, 
+  type Alert, type InsertAlert, 
+  type DashboardStats, 
+  type RoutingOperation, type InsertRoutingOperation,
+  type MaterialOrder, type InsertMaterialOrder, 
+  type OutsourcedOperation, type InsertOutsourcedOperation,
+  type Resource, type InsertResource,
+  type ResourceUnavailability, type InsertResourceUnavailability,
+  type RoutingOperationType
+} from "@shared/schema";
 import { db } from "./db";
-import { jobs, machines, scheduleEntries, alerts, materialOrders, outsourcedOperations, routingOperations } from "@shared/schema";
+import { 
+  jobs, machines, scheduleEntries, alerts, 
+  materialOrders, outsourcedOperations, routingOperations,
+  resources, resourceUnavailability 
+} from "@shared/schema";
 import { eq, and, gte, lte, desc, isNull, sql } from "drizzle-orm";
 import type { IStorage } from "./storage-interface";
 import { barFeederService } from "./bar-feeder-service";
@@ -809,10 +825,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async findOptimalMachineAssignment(
-    jobRouting: RoutingOperation[],
+    jobRouting: RoutingOperationType[],
     jobPriority: "Critical" | "High" | "Normal" | "Low" = "Normal"
-  ): Promise<{ operation: RoutingOperation; assignedMachine: Machine | null; alternatives: Machine[] }[]> {
-    const assignments: { operation: RoutingOperation; assignedMachine: Machine | null; alternatives: Machine[] }[] = [];
+  ): Promise<{ operation: RoutingOperationType; assignedMachine: Machine | null; alternatives: Machine[] }[]> {
+    const assignments: { operation: RoutingOperationType; assignedMachine: Machine | null; alternatives: Machine[] }[] = [];
     const allMachines = await this.getMachines();
     
     for (const operation of jobRouting) {
@@ -1378,5 +1394,163 @@ export class DatabaseStorage implements IStorage {
     await this.updateJob(jobId, { status: "Scheduled" });
     
     return scheduleEntries;
+  }
+
+  // Resources implementation
+  async getResources(): Promise<Resource[]> {
+    return await db.select().from(resources).where(eq(resources.isActive, true));
+  }
+
+  async getResource(id: string): Promise<Resource | undefined> {
+    const [resource] = await db.select().from(resources).where(eq(resources.id, id));
+    return resource || undefined;
+  }
+
+  async createResource(insertResource: InsertResource): Promise<Resource> {
+    const [resource] = await db.insert(resources).values(insertResource).returning();
+    return resource;
+  }
+
+  async updateResource(id: string, updates: Partial<Resource>): Promise<Resource | undefined> {
+    const [resource] = await db
+      .update(resources)
+      .set(updates)
+      .where(eq(resources.id, id))
+      .returning();
+    return resource || undefined;
+  }
+
+  async deleteResource(id: string): Promise<boolean> {
+    try {
+      const [deleted] = await db
+        .update(resources)
+        .set({ isActive: false })
+        .where(eq(resources.id, id))
+        .returning();
+      return !!deleted;
+    } catch (error) {
+      console.error('Error deleting resource:', error);
+      return false;
+    }
+  }
+
+  async getResourcesByWorkCenter(machineId: string): Promise<Resource[]> {
+    return await db
+      .select()
+      .from(resources)
+      .where(
+        and(
+          eq(resources.isActive, true),
+          sql`${resources.workCenters} @> ${JSON.stringify([machineId])}`
+        )
+      );
+  }
+
+  // Resource Unavailability implementation
+  async getResourceUnavailabilities(): Promise<ResourceUnavailability[]> {
+    return await db.select().from(resourceUnavailability).orderBy(desc(resourceUnavailability.startDate));
+  }
+
+  async getResourceUnavailability(id: string): Promise<ResourceUnavailability | undefined> {
+    const [unavailability] = await db
+      .select()
+      .from(resourceUnavailability)
+      .where(eq(resourceUnavailability.id, id));
+    return unavailability || undefined;
+  }
+
+  async createResourceUnavailability(insertUnavailability: InsertResourceUnavailability): Promise<ResourceUnavailability> {
+    const [unavailability] = await db
+      .insert(resourceUnavailability)
+      .values(insertUnavailability)
+      .returning();
+    return unavailability;
+  }
+
+  async updateResourceUnavailability(id: string, updates: Partial<ResourceUnavailability>): Promise<ResourceUnavailability | undefined> {
+    const [unavailability] = await db
+      .update(resourceUnavailability)
+      .set(updates)
+      .where(eq(resourceUnavailability.id, id))
+      .returning();
+    return unavailability || undefined;
+  }
+
+  async deleteResourceUnavailability(id: string): Promise<boolean> {
+    try {
+      await db.delete(resourceUnavailability).where(eq(resourceUnavailability.id, id));
+      return true;
+    } catch (error) {
+      console.error('Error deleting resource unavailability:', error);
+      return false;
+    }
+  }
+
+  async getResourceUnavailabilitiesInDateRange(startDate: Date, endDate: Date): Promise<ResourceUnavailability[]> {
+    return await db
+      .select()
+      .from(resourceUnavailability)
+      .where(
+        and(
+          gte(resourceUnavailability.startDate, startDate),
+          lte(resourceUnavailability.endDate, endDate)
+        )
+      )
+      .orderBy(resourceUnavailability.startDate);
+  }
+
+  async getScheduleEntriesInDateRange(startDate: Date, endDate: Date): Promise<ScheduleEntry[]> {
+    return await db
+      .select()
+      .from(scheduleEntries)
+      .where(
+        and(
+          gte(scheduleEntries.startTime, startDate),
+          lte(scheduleEntries.endTime, endDate)
+        )
+      )
+      .orderBy(scheduleEntries.startTime);
+  }
+
+  // Routing Operations implementation
+  async getAllRoutingOperations(): Promise<RoutingOperation[]> {
+    return await db.select().from(routingOperations).orderBy(routingOperations.jobId, routingOperations.sequence);
+  }
+
+  async getRoutingOperation(id: string): Promise<RoutingOperation | undefined> {
+    const [operation] = await db.select().from(routingOperations).where(eq(routingOperations.id, id));
+    return operation || undefined;
+  }
+
+  async getRoutingOperationsByJobId(jobId: string): Promise<RoutingOperation[]> {
+    return await db
+      .select()
+      .from(routingOperations)
+      .where(eq(routingOperations.jobId, jobId))
+      .orderBy(routingOperations.sequence);
+  }
+
+  async createRoutingOperation(operation: InsertRoutingOperation): Promise<RoutingOperation> {
+    const [created] = await db.insert(routingOperations).values(operation).returning();
+    return created;
+  }
+
+  async updateRoutingOperation(id: string, updates: Partial<RoutingOperation>): Promise<RoutingOperation | undefined> {
+    const [operation] = await db
+      .update(routingOperations)
+      .set(updates)
+      .where(eq(routingOperations.id, id))
+      .returning();
+    return operation || undefined;
+  }
+
+  async deleteRoutingOperation(id: string): Promise<boolean> {
+    try {
+      await db.delete(routingOperations).where(eq(routingOperations.id, id));
+      return true;
+    } catch (error) {
+      console.error('Error deleting routing operation:', error);
+      return false;
+    }
   }
 }
