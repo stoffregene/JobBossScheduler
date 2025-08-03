@@ -202,9 +202,6 @@ export default function ResourceAllocation({ scheduleView }: ResourceAllocationP
             <span className="text-lg font-bold text-blue-600 dark:text-blue-400">
               {Math.round(totalOperatorCapacity)}h
             </span>
-            <div className="text-xs text-gray-500 mt-1">
-              Debug: {shift1Operators} shift1 + {shift2Operators} shift2 ops × {hoursPerShift}h × {daysInPeriod} days
-            </div>
           </div>
           <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-3">
             <div 
