@@ -124,12 +124,12 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
   };
 
   return (
-    <Card className={`bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 ${isFullscreen ? 'fixed inset-4 z-50' : ''}`}>
+    <Card className={isFullscreen ? 'fixed inset-4 z-50' : ''}>
       <CardHeader className="pb-4">
         <div className="flex flex-col space-y-3">
           {/* Title and Navigation Row */}
           <div className="flex items-center justify-between">
-            <CardTitle className="text-gray-900 dark:text-white">
+            <CardTitle>
               Production Schedule ({displayMachines.length} machines)
             </CardTitle>
             <div className="flex items-center space-x-2">
@@ -137,18 +137,16 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
                 variant="ghost"
                 size="sm"
                 onClick={() => navigateWeek('prev')}
-                className="hover:bg-gray-100 dark:hover:bg-gray-800"
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <span className="text-sm font-medium text-gray-900 dark:text-white min-w-[140px] text-center">
+              <span className="text-sm font-medium min-w-[140px] text-center">
                 {getDateRangeTitle()}
               </span>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => navigateWeek('next')}
-                className="hover:bg-gray-100 dark:hover:bg-gray-800"
               >
                 <ChevronRight className="h-4 w-4" />
               </Button>
@@ -158,11 +156,11 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
           {/* Controls Row */}
           <div className="flex items-center justify-end space-x-2">
             <Select value={machineTypeFilter} onValueChange={setMachineTypeFilter}>
-              <SelectTrigger className="w-32 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600">
+              <SelectTrigger className="w-32">
                 <Filter className="w-4 h-4 mr-2" />
                 <SelectValue placeholder="Filter" />
               </SelectTrigger>
-              <SelectContent className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600">
+              <SelectContent>
                 <SelectItem value="ALL">All Types</SelectItem>
                 {machineTypes.map(type => (
                   <SelectItem key={type} value={type}>{type}</SelectItem>
@@ -176,10 +174,10 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
                 date: scheduleView.date
               })}
             >
-              <SelectTrigger className="w-28 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600">
+              <SelectTrigger className="w-28">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600">
+              <SelectContent>
                 <SelectItem value="week">Week</SelectItem>
                 <SelectItem value="month">Month</SelectItem>
               </SelectContent>
@@ -188,7 +186,6 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
               variant="outline" 
               size="sm"
               onClick={() => setIsFullscreen(!isFullscreen)}
-              className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
             >
               <Maximize2 className="h-4 w-4 mr-1" />
               {isFullscreen ? 'Exit' : 'Full'}
@@ -196,7 +193,6 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
             <Button 
               variant="outline" 
               size="sm"
-              className="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
             >
               <Download className="h-4 w-4 mr-1" />
               Export
@@ -205,10 +201,10 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
         </div>
       </CardHeader>
       
-      <CardContent className="bg-white dark:bg-gray-900">
+      <CardContent>
         <div className="space-y-4">
           {/* Day Headers */}
-          <div className="grid gap-2 text-sm font-medium text-gray-600 dark:text-gray-300" style={{ gridTemplateColumns: scheduleView.type === "month" ? "200px repeat(30, 1fr)" : "200px repeat(7, 1fr)" }}>
+          <div className="grid gap-2 text-sm font-medium text-muted-foreground" style={{ gridTemplateColumns: scheduleView.type === "month" ? "200px repeat(30, 1fr)" : "200px repeat(7, 1fr)" }}>
             <div className="text-right pr-4">Machine</div>
             {weekDays.map((day, index) => (
               <div key={index} className="text-center">
@@ -228,20 +224,20 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
               
               return (
                 <div key={machine.id} className="grid gap-2 items-center" style={{ gridTemplateColumns: scheduleView.type === "month" ? "200px repeat(30, 1fr)" : "200px repeat(7, 1fr)" }}>
-                  <div className="text-sm font-medium text-gray-900 dark:text-white text-right pr-4 min-w-0">
+                  <div className="text-sm font-medium text-right pr-4 min-w-0">
                     <div className="flex items-center justify-end gap-1 mb-1">
                       <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium flex-shrink-0 ${
                         machine.type === 'LATHE' 
-                          ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-200' 
+                          ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200' 
                           : machine.type === 'MILL'
-                          ? 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-200'
-                          : 'bg-gray-100 dark:bg-gray-700/50 text-gray-800 dark:text-gray-200'
+                          ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
                       }`}>
                         {machine.type}
                       </span>
-                      <span className="truncate text-gray-900 dark:text-white">{machine.machineId}</span>
+                      <span className="truncate">{machine.machineId}</span>
                     </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400 truncate">{machine.name}</div>
+                    <div className="text-xs text-muted-foreground truncate">{machine.name}</div>
                   </div>
                   
                   {weekDays.map((day, dayIndex) => {
@@ -259,8 +255,8 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
                         key={dayIndex} 
                         className={`h-12 rounded relative flex items-center justify-center ${
                           isUnavailable 
-                            ? 'bg-gray-50 dark:bg-gray-800/50 opacity-50' 
-                            : 'bg-gray-50 dark:bg-gray-800/30 border border-gray-200 dark:border-gray-700'
+                            ? 'bg-muted opacity-50' 
+                            : 'bg-muted border'
                         }`}
                       >
                         {dayJobs.length > 0 && (
@@ -283,7 +279,7 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
           </div>
 
           {/* Legend */}
-          <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 flex flex-wrap items-center gap-4 text-sm text-gray-700 dark:text-gray-300">
+          <div className="mt-6 pt-4 border-t border-border flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
             <div className="flex items-center">
               <div className="w-4 h-4 bg-blue-600 rounded mr-2"></div>
               <span>Normal Priority</span>
@@ -297,7 +293,7 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
               <span>Critical</span>
             </div>
             <div className="flex items-center">
-              <div className="w-4 h-4 bg-gray-300 dark:bg-gray-600 rounded mr-2 opacity-50"></div>
+              <div className="w-4 h-4 bg-muted rounded mr-2 opacity-50"></div>
               <span>Unavailable</span>
             </div>
           </div>
