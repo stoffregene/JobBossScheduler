@@ -5,7 +5,7 @@ import DashboardOverview from "../components/dashboard-overview";
 import JobQueue from "../components/job-queue";
 import ScheduleView from "../components/schedule-view";
 import MachineStatus from "../components/machine-status";
-import AlertPanel from "../components/alert-panel";
+
 import ResourceAllocation from "../components/resource-allocation";
 import JobDetailsModal from "../components/job-details-modal";
 import MaterialOrdersWidget from "../components/material-orders-widget";
@@ -140,7 +140,6 @@ export default function Dashboard() {
           <div className="xl:col-span-1 lg:col-span-1 space-y-6">
             <MaterialOrdersWidget />
             <JobsAwaitingMaterialWidget />
-            <AlertPanel />
           </div>
         </div>
       </div>

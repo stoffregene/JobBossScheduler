@@ -493,6 +493,78 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  async deleteAllJobs(): Promise<number> {
+    try {
+      // Get count of jobs before deletion
+      const jobCount = await db.select({ count: sql<number>`count(*)` }).from(jobs);
+      const count = Number(jobCount[0]?.count || 0);
+      
+      // Delete all related data in correct order to avoid foreign key constraints
+      // 1. Delete all alerts
+      await db.delete(alerts);
+      
+      // 2. Delete all schedule entries
+      await db.delete(scheduleEntries);
+      
+      // 3. Delete all routing operations
+      await db.delete(routingOperations);
+      
+      // 4. Delete all material orders
+      await db.delete(materialOrders);
+      
+      // 5. Delete all outsourced operations
+      await db.delete(outsourcedOperations);
+      
+      // Finally, delete all jobs
+      await db.delete(jobs);
+      
+      return count;
+    } catch (error) {
+      console.error('Error deleting all jobs:', error);
+      throw error;
+    }
+  }
+
+  async scheduleAllJobs(): Promise<{ scheduled: number; failed: number; details: Array<{ jobId: string; status: string; reason?: string }> }> {
+    try {
+      const allJobs = await this.getJobs();
+      const unscheduledJobs = allJobs.filter(job => job.status === 'Unscheduled' || job.status === 'Planning');
+      
+      let scheduled = 0;
+      let failed = 0;
+      const details: Array<{ jobId: string; status: string; reason?: string }> = [];
+      
+      for (const job of unscheduledJobs) {
+        try {
+          const result = await this.autoScheduleJobWithMaterialCheck(job.id);
+          if (result.success) {
+            scheduled++;
+            details.push({ jobId: job.id, status: 'scheduled' });
+          } else {
+            failed++;
+            details.push({ 
+              jobId: job.id, 
+              status: 'failed', 
+              reason: result.reason || 'Unknown scheduling error'
+            });
+          }
+        } catch (error) {
+          failed++;
+          details.push({ 
+            jobId: job.id, 
+            status: 'failed', 
+            reason: `Scheduling error: ${error instanceof Error ? error.message : 'Unknown error'}`
+          });
+        }
+      }
+      
+      return { scheduled, failed, details };
+    } catch (error) {
+      console.error('Error scheduling all jobs:', error);
+      throw error;
+    }
+  }
+
   // Machines implementation
   async getMachines(): Promise<Machine[]> {
     return await db.select().from(machines);

@@ -113,6 +113,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.delete("/api/jobs", async (req, res) => {
+    try {
+      const deleteCount = await storage.deleteAllJobs();
+      broadcast({ type: 'all_jobs_deleted', data: { count: deleteCount } });
+      res.json({ message: `Deleted ${deleteCount} jobs`, count: deleteCount });
+    } catch (error) {
+      console.error('Error deleting all jobs:', error);
+      res.status(500).json({ message: "Failed to delete all jobs" });
+    }
+  });
+
+  app.post("/api/jobs/schedule-all", async (req, res) => {
+    try {
+      const result = await storage.scheduleAllJobs();
+      broadcast({ type: 'all_jobs_scheduled', data: result });
+      res.json(result);
+    } catch (error) {
+      console.error('Error scheduling all jobs:', error);
+      res.status(500).json({ message: "Failed to schedule all jobs" });
+    }
+  });
+
   // Machines endpoints
   app.get("/api/machines", async (req, res) => {
     try {
@@ -265,55 +287,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Alerts endpoints
-  app.get("/api/alerts", async (req, res) => {
-    try {
-      const alerts = await storage.getAlerts();
-      res.json(alerts);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch alerts" });
-    }
-  });
 
-  app.post("/api/alerts", async (req, res) => {
-    try {
-      const alertData = insertAlertSchema.parse(req.body);
-      const alert = await storage.createAlert(alertData);
-      broadcast({ type: 'alert_created', data: alert });
-      res.status(201).json(alert);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Invalid alert data", errors: error.errors });
-      }
-      res.status(500).json({ message: "Failed to create alert" });
-    }
-  });
-
-  app.put("/api/alerts/:id/read", async (req, res) => {
-    try {
-      const success = await storage.markAlertAsRead(req.params.id);
-      if (!success) {
-        return res.status(404).json({ message: "Alert not found" });
-      }
-      broadcast({ type: 'alert_read', data: { id: req.params.id } });
-      res.status(204).send();
-    } catch (error) {
-      res.status(500).json({ message: "Failed to mark alert as read" });
-    }
-  });
-
-  app.delete("/api/alerts/:id", async (req, res) => {
-    try {
-      const success = await storage.deleteAlert(req.params.id);
-      if (!success) {
-        return res.status(404).json({ message: "Alert not found" });
-      }
-      broadcast({ type: 'alert_deleted', data: { id: req.params.id } });
-      res.status(204).send();
-    } catch (error) {
-      res.status(500).json({ message: "Failed to delete alert" });
-    }
-  });
 
   // Dashboard stats endpoint
   app.get("/api/dashboard/stats", async (req, res) => {

@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Filter, Plus, Calendar, Edit, Zap, Trash2, Settings, Upload } from "lucide-react";
+import { Filter, Plus, Calendar, Edit, Zap, Trash2, Settings, Upload, PlayCircle, AlertTriangle } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Job } from "@shared/schema";
@@ -174,6 +174,50 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
     },
   });
 
+  const deleteAllJobsMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest('/api/jobs', 'DELETE');
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/schedule'] });
+      toast({
+        title: "All Jobs Deleted",
+        description: `Successfully deleted ${data.count} jobs.`,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to delete all jobs. Please try again.",
+        variant: "destructive",
+      });
+    }
+  });
+
+  const scheduleAllJobsMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest('/api/jobs/schedule-all', 'POST');
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/schedule'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
+      toast({
+        title: "Scheduling Complete",
+        description: `Scheduled ${data.scheduled} jobs successfully. ${data.failed} jobs failed to schedule.`,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to schedule all jobs. Please try again.",
+        variant: "destructive",
+      });
+    }
+  });
+
   const handleCreateJob = () => {
     if (!newJob.jobNumber || !newJob.partNumber || !newJob.dueDate) {
       toast({
@@ -203,6 +247,36 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
   const handleDeleteJob = (jobId: string) => {
     if (confirm('Are you sure you want to delete this job? This action cannot be undone.')) {
       deleteJobMutation.mutate(jobId);
+    }
+  };
+
+  const handleDeleteAllJobs = () => {
+    const jobCount = jobs?.length || 0;
+    if (jobCount === 0) {
+      toast({
+        title: "No Jobs",
+        description: "There are no jobs to delete.",
+      });
+      return;
+    }
+    
+    if (confirm(`Are you sure you want to delete ALL ${jobCount} jobs? This action cannot be undone and will remove all associated scheduling and material orders.`)) {
+      deleteAllJobsMutation.mutate();
+    }
+  };
+
+  const handleScheduleAllJobs = () => {
+    const unscheduledJobs = jobs?.filter(job => job.status === 'Unscheduled' || job.status === 'Planning') || [];
+    if (unscheduledJobs.length === 0) {
+      toast({
+        title: "No Unscheduled Jobs",
+        description: "All jobs are already scheduled or in progress.",
+      });
+      return;
+    }
+    
+    if (confirm(`Schedule all ${unscheduledJobs.length} unscheduled jobs? This will automatically assign machines and create schedule entries.`)) {
+      scheduleAllJobsMutation.mutate();
     }
   };
 
@@ -472,6 +546,24 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
         <div className="flex items-center justify-between">
           <CardTitle>Job Queue</CardTitle>
           <div className="flex items-center space-x-2">
+            <Button 
+              variant="destructive" 
+              size="sm"
+              onClick={handleDeleteAllJobs}
+              disabled={deleteAllJobsMutation.isPending || !jobs || jobs.length === 0}
+            >
+              <AlertTriangle className="h-4 w-4 mr-1" />
+              Delete All
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={handleScheduleAllJobs}
+              disabled={scheduleAllJobsMutation.isPending}
+            >
+              <PlayCircle className="h-4 w-4 mr-1" />
+              Schedule All
+            </Button>
             <Button variant="outline" size="sm">
               <Filter className="h-4 w-4 mr-1" />
               Filter
