@@ -10,15 +10,21 @@ import ResourceAllocation from "../components/resource-allocation";
 import JobDetailsModal from "../components/job-details-modal";
 import MaterialOrdersWidget from "../components/material-orders-widget";
 import JobsAwaitingMaterialWidget from "../components/jobs-awaiting-material-widget";
-import { Building2, Clock, Users, Package } from "lucide-react";
+import { Building2, Clock, Users, Package, Moon, Sun } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
+import { useTheme } from "@/components/theme-provider";
 import type { Job } from "@shared/schema";
 
 export default function Dashboard() {
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [scheduleView, setScheduleView] = useState<{ type: 'week' | 'month', date: Date }>({ 
+    type: 'week', 
+    date: new Date() 
+  });
+  const { theme, toggleTheme } = useTheme();
 
   // Real-time updates via WebSocket
   useWebSocket((message) => {
@@ -67,15 +73,15 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
+      <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-2">
                 <Building2 className="text-primary-500 text-xl" />
-                <span className="text-xl font-bold text-gray-900">JobBoss Scheduler</span>
+                <span className="text-xl font-bold text-gray-900 dark:text-white">JobBoss Scheduler</span>
               </div>
               <nav className="flex items-center space-x-4">
                 <Link href="/resources">
@@ -91,22 +97,37 @@ export default function Dashboard() {
                   </Button>
                 </Link>
               </nav>
-              <div className="hidden md:flex items-center text-sm text-gray-500">
+              <div className="hidden md:flex items-center text-sm text-gray-500 dark:text-gray-400">
                 <Clock className="mr-1 h-4 w-4" />
                 <span>{formatCurrentTime(currentTime)}</span>
               </div>
             </div>
             
             <div className="flex items-center space-x-4">
+              {/* Theme Toggle */}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={toggleTheme}
+                className="w-9 h-9"
+              >
+                {theme === "light" ? (
+                  <Moon className="h-4 w-4" />
+                ) : (
+                  <Sun className="h-4 w-4" />
+                )}
+                <span className="sr-only">Toggle theme</span>
+              </Button>
+              
               {/* Database Status */}
               <div className="flex items-center space-x-2">
                 <div className="w-2 h-2 bg-success-500 rounded-full"></div>
-                <span className="text-sm text-gray-600">JobBoss Connected</span>
+                <span className="text-sm text-gray-600 dark:text-gray-300">JobBoss Connected</span>
               </div>
               
               {/* User Menu */}
               <div className="flex items-center space-x-2">
-                <span className="text-sm font-medium text-gray-700">Production Manager</span>
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-200">Production Manager</span>
                 <button className="w-8 h-8 bg-primary-500 text-white rounded-full flex items-center justify-center">
                   <span className="text-sm font-medium">PM</span>
                 </button>
@@ -127,13 +148,18 @@ export default function Dashboard() {
           {/* Left Column: Job Queue & Schedule - Wider */}
           <div className="xl:col-span-2 lg:col-span-2 space-y-6">
             <JobQueue onJobSelect={setSelectedJobId} />
-            <ScheduleView />
+            <ScheduleView 
+              scheduleView={scheduleView}
+              onScheduleViewChange={setScheduleView}
+            />
           </div>
 
           {/* Middle Column: Machine Status & Resource Allocation */}
           <div className="xl:col-span-1 lg:col-span-1 space-y-6">
             <MachineStatus />
-            <ResourceAllocation />
+            <ResourceAllocation 
+              scheduleView={scheduleView}
+            />
           </div>
 
           {/* Right Column: Material & Alerts Sidebar */}

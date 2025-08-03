@@ -2,13 +2,21 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Download, Filter } from "lucide-react";
+import { Download, Filter, Maximize2, ChevronLeft, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import type { Job, Machine, ScheduleEntry } from "@shared/schema";
 
-export default function ScheduleView() {
+interface ScheduleViewProps {
+  scheduleView: {
+    type: "week" | "month";
+    date: Date;
+  };
+  onScheduleViewChange: (view: { type: "week" | "month"; date: Date }) => void;
+}
+
+export default function ScheduleView({ scheduleView, onScheduleViewChange }: ScheduleViewProps) {
   const [machineTypeFilter, setMachineTypeFilter] = useState<string>("ALL");
-  const [timeView, setTimeView] = useState<string>("this-week");
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const { data: jobs } = useQuery<Job[]>({
     queryKey: ['/api/jobs'],
@@ -23,23 +31,19 @@ export default function ScheduleView() {
   });
 
   const getWeekDays = () => {
-    const today = new Date();
     const currentWeek = [];
-    let startOfWeek = new Date(today);
+    let startOfWeek = new Date(scheduleView.date);
     
-    if (timeView === "next-week") {
-      // Next week starts 7 days from now
-      startOfWeek.setDate(today.getDate() + 7 - today.getDay());
-    } else if (timeView === "this-month") {
+    if (scheduleView.type === "month") {
       // Show current month - first Monday of the month or around today
       startOfWeek.setDate(1);
       startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay() + 1);
     } else {
       // This week (default)
-      startOfWeek.setDate(today.getDate() - today.getDay() + 1); // Monday
+      startOfWeek.setDate(scheduleView.date.getDate() - scheduleView.date.getDay() + 1); // Monday
     }
 
-    const daysToShow = timeView === "this-month" ? 30 : 7;
+    const daysToShow = scheduleView.type === "month" ? 30 : 7;
     
     for (let i = 0; i < daysToShow; i++) {
       const day = new Date(startOfWeek);
@@ -48,6 +52,34 @@ export default function ScheduleView() {
     }
 
     return currentWeek;
+  };
+
+  const navigateWeek = (direction: 'prev' | 'next') => {
+    const newDate = new Date(scheduleView.date);
+    const daysToMove = scheduleView.type === "month" ? 30 : 7;
+    
+    if (direction === 'prev') {
+      newDate.setDate(newDate.getDate() - daysToMove);
+    } else {
+      newDate.setDate(newDate.getDate() + daysToMove);
+    }
+    
+    onScheduleViewChange({
+      type: scheduleView.type,
+      date: newDate
+    });
+  };
+
+  const getDateRangeTitle = () => {
+    const weekDays = getWeekDays();
+    const start = weekDays[0];
+    const end = weekDays[weekDays.length - 1];
+    
+    if (scheduleView.type === "month") {
+      return start.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    } else {
+      return `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+    }
   };
 
   const weekDays = getWeekDays();
@@ -92,10 +124,31 @@ export default function ScheduleView() {
   };
 
   return (
-    <Card>
+    <Card className={`dark:bg-gray-800 dark:border-gray-700 ${isFullscreen ? 'fixed inset-4 z-50' : ''}`}>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle>Production Schedule ({displayMachines.length} machines)</CardTitle>
+          <div className="flex items-center space-x-4">
+            <CardTitle className="dark:text-white">Production Schedule ({displayMachines.length} machines)</CardTitle>
+            <div className="flex items-center space-x-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => navigateWeek('prev')}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-sm font-medium dark:text-white min-w-[140px] text-center">
+                {getDateRangeTitle()}
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => navigateWeek('next')}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
           <div className="flex items-center space-x-2">
             <Select value={machineTypeFilter} onValueChange={setMachineTypeFilter}>
               <SelectTrigger className="w-32">
@@ -109,16 +162,29 @@ export default function ScheduleView() {
                 ))}
               </SelectContent>
             </Select>
-            <Select value={timeView} onValueChange={setTimeView}>
-              <SelectTrigger className="w-40">
+            <Select 
+              value={scheduleView.type} 
+              onValueChange={(value) => onScheduleViewChange({
+                type: value as "week" | "month",
+                date: scheduleView.date
+              })}
+            >
+              <SelectTrigger className="w-32">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="this-week">This Week</SelectItem>
-                <SelectItem value="next-week">Next Week</SelectItem>
-                <SelectItem value="this-month">This Month</SelectItem>
+                <SelectItem value="week">Week View</SelectItem>
+                <SelectItem value="month">Month View</SelectItem>
               </SelectContent>
             </Select>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setIsFullscreen(!isFullscreen)}
+            >
+              <Maximize2 className="h-4 w-4 mr-1" />
+              {isFullscreen ? 'Exit' : 'Fullscreen'}
+            </Button>
             <Button variant="outline" size="sm">
               <Download className="h-4 w-4 mr-1" />
               Export
@@ -130,11 +196,11 @@ export default function ScheduleView() {
       <CardContent>
         <div className="space-y-4">
           {/* Day Headers */}
-          <div className="grid gap-2 text-sm font-medium text-gray-500" style={{ gridTemplateColumns: timeView === "this-month" ? "200px repeat(30, 1fr)" : "200px repeat(7, 1fr)" }}>
+          <div className="grid gap-2 text-sm font-medium text-gray-500 dark:text-gray-400" style={{ gridTemplateColumns: scheduleView.type === "month" ? "200px repeat(30, 1fr)" : "200px repeat(7, 1fr)" }}>
             <div className="text-right pr-4">Machine</div>
             {weekDays.map((day, index) => (
               <div key={index} className="text-center">
-                {timeView === "this-month" ? 
+                {scheduleView.type === "month" ? 
                   `${day.getMonth() + 1}/${day.getDate()}` :
                   `${day.toLocaleDateString('en-US', { weekday: 'short' })} ${day.getMonth() + 1}/${day.getDate()}`
                 }
@@ -149,8 +215,8 @@ export default function ScheduleView() {
               const isWeekendOnly = machine.availableShifts.length === 1 && machine.availableShifts[0] === 1;
               
               return (
-                <div key={machine.id} className="grid gap-2 items-center" style={{ gridTemplateColumns: timeView === "this-month" ? "200px repeat(30, 1fr)" : "200px repeat(7, 1fr)" }}>
-                  <div className="text-sm font-medium text-gray-900 text-right pr-4 min-w-0">
+                <div key={machine.id} className="grid gap-2 items-center" style={{ gridTemplateColumns: scheduleView.type === "month" ? "200px repeat(30, 1fr)" : "200px repeat(7, 1fr)" }}>
+                  <div className="text-sm font-medium text-gray-900 dark:text-white text-right pr-4 min-w-0">
                     <div className="flex items-center justify-end gap-1 mb-1">
                       <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium flex-shrink-0 ${
                         machine.type === 'LATHE' 
@@ -163,7 +229,7 @@ export default function ScheduleView() {
                       </span>
                       <span className="truncate">{machine.machineId}</span>
                     </div>
-                    <div className="text-xs text-gray-500 truncate">{machine.name}</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400 truncate">{machine.name}</div>
                   </div>
                   
                   {weekDays.map((day, dayIndex) => {

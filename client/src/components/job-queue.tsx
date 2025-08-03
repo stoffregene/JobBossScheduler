@@ -8,7 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Filter, Plus, Calendar, Edit, Zap, Trash2, Settings, Upload, PlayCircle, AlertTriangle } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Filter, Plus, Calendar, Edit, Zap, Trash2, Settings, Upload, PlayCircle, AlertTriangle, ChevronDown, ChevronUp } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Job } from "@shared/schema";
@@ -23,6 +24,7 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
   const [isEditJobOpen, setIsEditJobOpen] = useState(false);
   const [editingJob, setEditingJob] = useState<Job | null>(null);
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [newJob, setNewJob] = useState({
     jobNumber: '',
     partNumber: '',
@@ -541,11 +543,32 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle>Job Queue</CardTitle>
-          <div className="flex items-center space-x-2">
+    <Collapsible open={!isCollapsed} onOpenChange={(open) => setIsCollapsed(!open)}>
+      <Card className="dark:bg-gray-800 dark:border-gray-700">
+        <CollapsibleTrigger asChild>
+          <CardHeader className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+            <div className="flex items-center justify-between">
+              <CardTitle className="dark:text-white">Job Queue ({jobs.length} jobs)</CardTitle>
+              <div className="flex items-center space-x-2">
+                {isCollapsed && (
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                    {jobs.filter(j => j.status === 'Unscheduled' || j.status === 'Planning').length} unscheduled
+                  </span>
+                )}
+                {isCollapsed ? (
+                  <ChevronDown className="h-4 w-4 text-gray-500" />
+                ) : (
+                  <ChevronUp className="h-4 w-4 text-gray-500" />
+                )}
+              </div>
+            </div>
+          </CardHeader>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <CardHeader className="pt-0">
+            <div className="flex items-center justify-between">
+              <div></div>
+              <div className="flex items-center space-x-2">
             <Button 
               variant="destructive" 
               size="sm"
@@ -703,41 +726,41 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
         </div>
       </CardHeader>
       
-      <CardContent className="p-0">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Job #</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Part</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Due Date</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 dark:bg-gray-700">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Job #</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Part</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Due Date</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Priority</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
               {jobs.map((job) => {
                 const daysRemaining = getDaysRemaining(job.dueDate);
                 
                 return (
                   <tr 
                     key={job.id} 
-                    className="hover:bg-gray-50 cursor-pointer"
+                    className="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer"
                     onClick={() => onJobSelect(job.id)}
                   >
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-mono text-gray-900">{job.jobNumber}</div>
-                      <div className="text-xs text-gray-500">
+                      <div className="text-sm font-mono text-gray-900 dark:text-white">{job.jobNumber}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
                         Created: {new Date(job.createdDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{job.partNumber}</div>
-                      <div className="text-xs text-gray-500">{job.description}</div>
+                      <div className="text-sm text-gray-900 dark:text-white">{job.partNumber}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">{job.description}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">
+                      <div className="text-sm text-gray-900 dark:text-white">
                         {new Date(job.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                       </div>
                       <div className={`text-xs ${daysRemaining.className}`}>
@@ -752,7 +775,7 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
                         <div className={`w-2 h-2 ${getPriorityColor(job.priority)} rounded-full mr-2`}></div>
-                        <span className="text-sm text-gray-900">{job.priority}</span>
+                        <span className="text-sm text-gray-900 dark:text-white">{job.priority}</span>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -912,6 +935,8 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
           )}
         </DialogContent>
       </Dialog>
-    </Card>
+        </CollapsibleContent>
+      </Card>
+    </Collapsible>
   );
 }
