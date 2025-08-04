@@ -43,7 +43,7 @@ export default function ResourceManagement() {
   // Mutations
   const updateResourceMutation = useMutation({
     mutationFn: (data: { id: string; resource: Partial<Resource> }) =>
-      apiRequest(`/api/resources/${data.id}`, 'PUT', data.resource),
+      apiRequest(`/api/resources/${data.id}`, 'PATCH', data.resource),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/resources'] });
       setEditingResource(null);
@@ -359,12 +359,16 @@ export default function ResourceManagement() {
                 
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span>1st Shift Coverage:</span>
+                    <span>1st Shift Coverage (3 AM-3 PM):</span>
                     <span>{resources?.filter(r => r.isActive && r.shiftSchedule.includes(1)).length || 0} operators</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span>2nd Shift Coverage:</span>
+                    <span>2nd Shift Coverage (3 PM-3 AM):</span>
                     <span>{resources?.filter(r => r.isActive && r.shiftSchedule.includes(2)).length || 0} operators</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span>Working Days:</span>
+                    <span>Monday - Thursday</span>
                   </div>
                 </div>
               </div>
@@ -454,7 +458,7 @@ export default function ResourceManagement() {
                 <p className="text-sm text-muted-foreground">Select which shifts this employee works</p>
               </div>
               <div className="flex gap-4">
-                {[1, 2, 3].map(shift => (
+                {[1, 2].map(shift => (
                   <div key={shift} className="flex items-center space-x-2">
                     <Checkbox
                       id={`shift-${shift}`}
@@ -463,9 +467,8 @@ export default function ResourceManagement() {
                       data-testid={`checkbox-edit-shift-${shift}`}
                     />
                     <Label htmlFor={`shift-${shift}`}>
-                      {shift === 1 ? "1st Shift (6 AM - 2 PM)" : 
-                       shift === 2 ? "2nd Shift (2 PM - 10 PM)" : 
-                       "3rd Shift (10 PM - 6 AM)"}
+                      {shift === 1 ? "1st Shift (3 AM - 3 PM) Mon-Thu" : 
+                       "2nd Shift (3 PM - 3 AM) Mon-Thu"}
                     </Label>
                   </div>
                 ))}
