@@ -6,9 +6,18 @@ import { barFeederService } from "./bar-feeder-service";
 import { ReschedulingService } from "./rescheduling-service";
 import { insertJobSchema, insertMachineSchema, insertScheduleEntrySchema, insertAlertSchema, insertMaterialOrderSchema, insertOutsourcedOperationSchema, insertResourceSchema } from "@shared/schema";
 import { z } from "zod";
+import multer from "multer";
+import csv from "csv-parser";
+import { Readable } from "stream";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
+  
+  // Configure multer for file uploads
+  const upload = multer({ 
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
+  });
 
   // WebSocket server for real-time updates
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
@@ -132,6 +141,133 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error scheduling all jobs:', error);
       res.status(500).json({ message: "Failed to schedule all jobs" });
+    }
+  });
+
+  // CSV Import endpoint for jobs
+  app.post("/api/jobs/import", upload.single('csv'), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "No CSV file provided" });
+      }
+
+      const results: any[] = [];
+      const errors: string[] = [];
+      let processed = 0;
+      let created = 0;
+      let updated = 0;
+
+      // Parse CSV data
+      const readable = Readable.from(req.file.buffer);
+      const csvData: any[] = [];
+
+      await new Promise((resolve, reject) => {
+        readable
+          .pipe(csv())
+          .on('data', (data) => csvData.push(data))
+          .on('end', resolve)
+          .on('error', reject);
+      });
+
+      // Process each row
+      for (const row of csvData) {
+        processed++;
+        try {
+          // Map CSV columns to job schema
+          const jobData = {
+            jobNumber: row.Job?.trim(),
+            customer: row.Customer?.trim() || 'Unknown',
+            quantity: parseInt(row.Est_Required_Qty) || 1,
+            partNumber: row.Job?.trim() || `PART-${Date.now()}`, // Use job number if no part number
+            description: `Job ${row.Job?.trim()} for ${row.Customer?.trim()}`,
+            orderDate: new Date(row.Order_Date || Date.now()),
+            promisedDate: new Date(row.Promised_Date || Date.now()),
+            dueDate: new Date(row.Promised_Date || Date.now()), // Use promised date as due date
+            estimatedHours: parseFloat(row['Est Total Hours']) || 0,
+            outsourcedVendor: row.WC_Vendor?.trim() || null,
+            leadDays: parseInt(row.Lead_Days) || null,
+            linkMaterial: row.Link_Material?.toUpperCase() === 'TRUE',
+            material: row.Material?.trim() || null,
+            status: row.Status?.trim() === 'Active' ? 'Unscheduled' : 
+                   row.Status?.trim() === 'Closed' ? 'Complete' :
+                   row.Status?.trim() === 'Canceled' ? 'Complete' : 'Unscheduled',
+            priority: 'Normal',
+            routing: []
+          };
+
+          // Validate job data
+          const validatedJob = insertJobSchema.parse(jobData);
+
+          // Check if job already exists
+          const existingJobs = await storage.getJobs();
+          const existingJob = existingJobs.find(j => j.jobNumber === validatedJob.jobNumber);
+
+          if (existingJob) {
+            // Update existing job
+            await storage.updateJob(existingJob.id, validatedJob);
+            updated++;
+            
+            // If job status changed to Complete, update schedule entries
+            if (validatedJob.status === 'Complete' && existingJob.status !== 'Complete') {
+              const scheduleEntries = await storage.getScheduleEntries();
+              for (const entry of scheduleEntries) {
+                if (entry.jobId === existingJob.id && entry.status !== 'Complete') {
+                  await storage.updateScheduleEntry(entry.id, { status: 'Complete' });
+                }
+              }
+            }
+          } else {
+            // Create new job
+            await storage.createJob(validatedJob);
+            created++;
+          }
+
+          // Handle jobs awaiting material
+          if (validatedJob.linkMaterial) {
+            // Create or update material order if needed
+            const materialOrders = await storage.getMaterialOrders();
+            const existingOrder = materialOrders.find(order => order.jobId === (existingJob?.id));
+            
+            if (!existingOrder && existingJob) {
+              const materialOrderData = {
+                jobId: existingJob.id,
+                orderNumber: `MAT-${validatedJob.jobNumber}`,
+                materialDescription: validatedJob.material || 'Material for job',
+                quantity: validatedJob.quantity,
+                unit: 'EA',
+                supplier: validatedJob.outsourcedVendor || 'TBD',
+                orderDate: validatedJob.orderDate,
+                dueDate: new Date(validatedJob.orderDate.getTime() + (validatedJob.leadDays || 7) * 24 * 60 * 60 * 1000),
+                status: 'Open'
+              };
+              
+              await storage.createMaterialOrder(materialOrderData);
+            }
+          }
+
+        } catch (error) {
+          console.error(`Error processing row ${processed}:`, error);
+          errors.push(`Row ${processed}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      }
+
+      // Broadcast updates
+      broadcast({ type: 'jobs_imported', data: { processed, created, updated } });
+
+      res.json({
+        success: errors.length === 0,
+        processed,
+        created,
+        updated,
+        errors
+      });
+
+    } catch (error) {
+      console.error('CSV import error:', error);
+      res.status(500).json({ 
+        message: "Failed to process CSV import",
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
     }
   });
 

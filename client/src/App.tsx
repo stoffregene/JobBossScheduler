@@ -7,6 +7,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import Dashboard from "./pages/dashboard";
 import ResourceManagement from "./pages/resource-management-simple";
 import MaterialTracking from "./pages/material-tracking";
+import JobImport from "./pages/job-import";
 import NotFound from "./pages/not-found";
 
 function Router() {
@@ -15,6 +16,7 @@ function Router() {
       <Route path="/" component={Dashboard} />
       <Route path="/resources" component={ResourceManagement} />
       <Route path="/materials" component={MaterialTracking} />
+      <Route path="/job-import" component={JobImport} />
       <Route component={NotFound} />
     </Switch>
   );

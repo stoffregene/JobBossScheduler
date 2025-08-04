@@ -8,13 +8,20 @@ export const jobs = pgTable("jobs", {
   jobNumber: text("job_number").notNull().unique(),
   partNumber: text("part_number").notNull(),
   description: text("description").notNull(),
+  customer: text("customer").notNull(),
   quantity: integer("quantity").notNull(),
   dueDate: timestamp("due_date").notNull(),
   createdDate: timestamp("created_date").notNull().default(sql`now()`),
+  orderDate: timestamp("order_date").notNull(),
+  promisedDate: timestamp("promised_date").notNull(),
   priority: text("priority").notNull().default("Normal"), // Normal, High, Critical
   status: text("status").notNull().default("Unscheduled"), // Unscheduled, Scheduled, In Progress, Complete, Company Late, Customer Late
   routing: jsonb("routing").$type<RoutingOperationType[]>().notNull().default([]),
   estimatedHours: decimal("estimated_hours", { precision: 10, scale: 2 }).notNull().default("0"),
+  outsourcedVendor: text("outsourced_vendor"), // WC_Vendor from CSV
+  leadDays: integer("lead_days"), // Lead_Days from CSV
+  linkMaterial: boolean("link_material").notNull().default(false), // Link_Material from CSV
+  material: text("material"), // Material from CSV
 });
 
 export const machines = pgTable("machines", {
@@ -162,6 +169,11 @@ export type RoutingOperationType = {
 export const insertJobSchema = createInsertSchema(jobs).omit({
   id: true,
   createdDate: true,
+}).extend({
+  dueDate: z.string().or(z.date()).transform(str => typeof str === 'string' ? new Date(str) : str),
+  orderDate: z.string().or(z.date()).transform(str => typeof str === 'string' ? new Date(str) : str),
+  promisedDate: z.string().or(z.date()).transform(str => typeof str === 'string' ? new Date(str) : str),
+  routing: z.array(z.any()).optional().default([]),
 });
 
 export const insertMachineSchema = createInsertSchema(machines).omit({

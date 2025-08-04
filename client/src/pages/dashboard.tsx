@@ -10,7 +10,7 @@ import ResourceAllocation from "../components/resource-allocation";
 import JobDetailsModal from "../components/job-details-modal";
 import MaterialOrdersWidget from "../components/material-orders-widget";
 import JobsAwaitingMaterialWidget from "../components/jobs-awaiting-material-widget";
-import { Building2, Clock, Users, Package, Moon, Sun } from "lucide-react";
+import { Building2, Clock, Users, Package, Upload, Moon, Sun } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -94,6 +94,12 @@ export default function Dashboard() {
                   <Button variant="outline" size="sm" className="flex items-center gap-2">
                     <Package className="w-4 h-4" />
                     Material Tracking
+                  </Button>
+                </Link>
+                <Link href="/job-import">
+                  <Button variant="outline" size="sm" className="flex items-center gap-2">
+                    <Upload className="w-4 h-4" />
+                    Import Jobs
                   </Button>
                 </Link>
               </nav>
