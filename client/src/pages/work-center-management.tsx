@@ -375,6 +375,11 @@ export default function WorkCenterManagement() {
     return acc;
   }, {});
 
+  // Sort machines within each group alphabetically by machineId
+  Object.keys(groupedMachines).forEach(type => {
+    groupedMachines[type].sort((a, b) => a.machineId.localeCompare(b.machineId));
+  });
+
   const toggleGroup = (groupName: string) => {
     setExpandedGroups(prev => ({
       ...prev,
