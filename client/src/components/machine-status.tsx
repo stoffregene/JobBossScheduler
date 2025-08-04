@@ -3,7 +3,11 @@ import { Settings, Cpu } from "lucide-react";
 import CollapsibleCard from "@/components/collapsible-card";
 import type { Machine } from "@shared/schema";
 
-export default function MachineStatus() {
+interface MachineStatusProps {
+  minimized?: boolean;
+}
+
+export default function MachineStatus({ minimized = false }: MachineStatusProps) {
   const { data: machines, isLoading, error } = useQuery<Machine[]>({
     queryKey: ['/api/machines'],
   });
@@ -96,6 +100,8 @@ export default function MachineStatus() {
     <CollapsibleCard
       title="Work Center Status"
       icon={<Cpu className="h-4 w-4 text-blue-500" />}
+      defaultCollapsed={minimized}
+      className={minimized ? "opacity-75 text-xs" : ""}
     >
       <div className="space-y-6">
         {Object.entries(sortedGroupedMachines).map(([type, typeMachines]) => (
