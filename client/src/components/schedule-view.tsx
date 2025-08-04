@@ -206,16 +206,25 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
       <CardContent>
         <div className="space-y-4">
           {/* Day Headers */}
-          <div className="grid gap-2 text-sm font-medium text-muted-foreground" style={{ gridTemplateColumns: scheduleView.type === "month" ? "200px repeat(30, 1fr)" : "200px repeat(7, 1fr)" }}>
-            <div className="text-right pr-4">Machine</div>
-            {weekDays.map((day, index) => (
-              <div key={index} className="text-center">
-                {scheduleView.type === "month" ? 
-                  `${day.getMonth() + 1}/${day.getDate()}` :
-                  `${day.toLocaleDateString('en-US', { weekday: 'short' })} ${day.getMonth() + 1}/${day.getDate()}`
-                }
-              </div>
-            ))}
+          <div className={`grid gap-1 text-sm font-medium text-muted-foreground ${scheduleView.type === "month" ? "overflow-x-auto" : ""}`} style={{ gridTemplateColumns: scheduleView.type === "month" ? "200px repeat(30, minmax(40px, 1fr))" : "200px repeat(7, 1fr)" }}>
+            <div className="text-right pr-4 sticky left-0 bg-background z-10">Machine</div>
+            {weekDays.map((day, index) => {
+              const isWeekend = day.getDay() === 0 || day.getDay() === 6;
+              const isFriday = day.getDay() === 5;
+              const isUnavailable = isWeekend || isFriday;
+              
+              return (
+                <div key={index} className={`text-center text-xs ${isUnavailable ? 'text-gray-400' : ''}`}>
+                  {scheduleView.type === "month" ? 
+                    <div className="flex flex-col">
+                      <span>{day.getDate()}</span>
+                      <span className="text-xs">{day.toLocaleDateString('en-US', { weekday: 'short' }).substring(0, 1)}</span>
+                    </div> :
+                    `${day.toLocaleDateString('en-US', { weekday: 'short' })} ${day.getMonth() + 1}/${day.getDate()}`
+                  }
+                </div>
+              );
+            })}
           </div>
 
           {/* Machine Rows */}
@@ -225,8 +234,8 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
               const isWeekendOnly = machine.availableShifts.length === 1 && machine.availableShifts[0] === 1;
               
               return (
-                <div key={machine.id} className="grid gap-2 items-center" style={{ gridTemplateColumns: scheduleView.type === "month" ? "200px repeat(30, 1fr)" : "200px repeat(7, 1fr)" }}>
-                  <div className="text-sm font-medium text-right pr-4 min-w-0">
+                <div key={machine.id} className={`grid gap-1 items-center ${scheduleView.type === "month" ? "overflow-x-auto" : ""}`} style={{ gridTemplateColumns: scheduleView.type === "month" ? "200px repeat(30, minmax(40px, 1fr))" : "200px repeat(7, 1fr)" }}>
+                  <div className="text-sm font-medium text-right pr-4 min-w-0 sticky left-0 bg-background z-10">
                     <div className="flex items-center justify-end gap-1 mb-1">
                       <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium flex-shrink-0 ${
                         machine.type === 'LATHE' 
@@ -245,8 +254,10 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
                   </div>
                   
                   {weekDays.map((day, dayIndex) => {
-                    const isWeekend = day.getDay() === 0 || day.getDay() === 6;
-                    const isUnavailable = (isWeekend && isWeekendOnly);
+                    const isWeekend = day.getDay() === 0 || day.getDay() === 6; // Saturday = 6, Sunday = 0
+                    const isFriday = day.getDay() === 5; // Friday = 5
+                    const isWeekendOrFriday = isWeekend || isFriday;
+                    const isUnavailable = isWeekendOrFriday; // All machines should be unavailable on Fri-Sun
                     
                     // Find jobs scheduled for this day
                     const dayJobs = machineJobs.filter(entry => {
@@ -259,8 +270,8 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
                         key={dayIndex} 
                         className={`h-12 rounded relative flex items-center justify-center ${
                           isUnavailable 
-                            ? 'bg-muted opacity-50' 
-                            : 'bg-muted border'
+                            ? 'bg-gray-200 dark:bg-gray-700 opacity-60' 
+                            : 'bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-600'
                         }`}
                       >
                         {dayJobs.length > 0 && (
@@ -310,7 +321,6 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
       {selectedJobId && (
         <JobDetailsModal
           jobId={selectedJobId}
-          isOpen={!!selectedJobId}
           onClose={() => setSelectedJobId(null)}
         />
       )}

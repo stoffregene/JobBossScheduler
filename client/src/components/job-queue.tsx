@@ -720,47 +720,52 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
         </CollapsibleTrigger>
         <CollapsibleContent>
           <CardHeader className="pt-0">
-            <div className="flex items-center justify-between">
-              <div></div>
-              <div className="flex items-center space-x-2">
-            <Button 
-              variant="destructive" 
-              size="sm"
-              onClick={handleDeleteAllJobs}
-              disabled={deleteAllJobsMutation.isPending || !jobs || jobs.length === 0}
-            >
-              <AlertTriangle className="h-4 w-4 mr-1" />
-              Delete All
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={handleScheduleAllJobs}
-              disabled={scheduleAllJobsMutation.isPending}
-            >
-              <PlayCircle className="h-4 w-4 mr-1" />
-              Schedule All
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={handleUnscheduleAll}
-              disabled={unscheduleAllMutation.isPending}
-              data-testid="button-unschedule-all"
-            >
-              <Trash2 className="h-4 w-4 mr-1" />
-              {unscheduleAllMutation.isPending ? 'Unscheduling...' : 'Unschedule All'}
-            </Button>
-            <Dialog open={isFilterOpen} onOpenChange={setIsFilterOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline" size="sm" data-testid="button-filter">
-                  <Filter className="h-4 w-4 mr-1" />
-                  Filter
-                  {(filters.status !== 'all' || filters.priority !== 'all' || filters.customer || filters.search) && (
-                    <span className="ml-1 bg-blue-500 text-white text-xs rounded-full px-1.5 py-0.5">•</span>
-                  )}
+            <div className="flex flex-col space-y-3">
+              {/* Action Buttons Row */}
+              <div className="flex flex-wrap items-center gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={handleScheduleAllJobs}
+                  disabled={scheduleAllJobsMutation.isPending}
+                >
+                  <PlayCircle className="h-4 w-4 mr-1" />
+                  Schedule All
                 </Button>
-              </DialogTrigger>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={handleUnscheduleAll}
+                  disabled={unscheduleAllMutation.isPending}
+                  data-testid="button-unschedule-all"
+                >
+                  <Trash2 className="h-4 w-4 mr-1" />
+                  {unscheduleAllMutation.isPending ? 'Unscheduling...' : 'Unschedule All'}
+                </Button>
+                <Button 
+                  variant="destructive" 
+                  size="sm"
+                  onClick={handleDeleteAllJobs}
+                  disabled={deleteAllJobsMutation.isPending || !jobs || jobs.length === 0}
+                >
+                  <AlertTriangle className="h-4 w-4 mr-1" />
+                  Delete All
+                </Button>
+              </div>
+              
+              {/* Filter and Controls Row */}
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Dialog open={isFilterOpen} onOpenChange={setIsFilterOpen}>
+                    <DialogTrigger asChild>
+                      <Button variant="outline" size="sm" data-testid="button-filter">
+                        <Filter className="h-4 w-4 mr-1" />
+                        Filter
+                        {(filters.status !== 'all' || filters.priority !== 'all' || filters.customer || filters.search) && (
+                          <span className="ml-1 bg-blue-500 text-white text-xs rounded-full px-1.5 py-0.5">•</span>
+                        )}
+                      </Button>
+                    </DialogTrigger>
               <DialogContent className="max-w-md">
                 <DialogHeader>
                   <DialogTitle>Filter Jobs</DialogTitle>
@@ -826,14 +831,16 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
                   </div>
                 </div>
               </DialogContent>
-            </Dialog>
-            <Dialog open={isImportOpen} onOpenChange={setIsImportOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <Upload className="h-4 w-4 mr-1" />
-                  Import CSV
-                </Button>
-              </DialogTrigger>
+                  </Dialog>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Dialog open={isImportOpen} onOpenChange={setIsImportOpen}>
+                    <DialogTrigger asChild>
+                      <Button variant="outline" size="sm">
+                        <Upload className="h-4 w-4 mr-1" />
+                        Import CSV
+                      </Button>
+                    </DialogTrigger>
               <DialogContent className="max-w-md">
                 <DialogHeader>
                   <DialogTitle>Import Jobs from CSV</DialogTitle>
@@ -856,14 +863,14 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
                   </div>
                 </div>
               </DialogContent>
-            </Dialog>
-            <Dialog open={isAddJobOpen} onOpenChange={setIsAddJobOpen}>
-              <DialogTrigger asChild>
-                <Button size="sm">
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add Job
-                </Button>
-              </DialogTrigger>
+                  </Dialog>
+                  <Dialog open={isAddJobOpen} onOpenChange={setIsAddJobOpen}>
+                    <DialogTrigger asChild>
+                      <Button size="sm">
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add Job
+                      </Button>
+                    </DialogTrigger>
               <DialogContent className="max-w-md">
                 <DialogHeader>
                   <DialogTitle>Add New Job</DialogTitle>
@@ -953,10 +960,11 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
                   </div>
                 </div>
               </DialogContent>
-            </Dialog>
-          </div>
-        </div>
-      </CardHeader>
+                  </Dialog>
+                </div>
+              </div>
+            </div>
+          </CardHeader>
       
           <CardContent className="p-0">
             <div className="overflow-x-auto">
