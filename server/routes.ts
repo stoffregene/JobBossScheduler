@@ -164,8 +164,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       for (const job of unscheduledJobs) {
         try {
-          const scheduleEntries = await storage.autoScheduleJob(job.id);
-          if (scheduleEntries && scheduleEntries.length > 0) {
+          const scheduleResult = await storage.autoScheduleJob(job.id);
+          if (scheduleResult && Array.isArray(scheduleResult) && scheduleResult.length > 0) {
             await storage.updateJob(job.id, { status: 'Scheduled' });
             scheduled++;
           }
@@ -241,7 +241,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Group CSV rows by job number to handle multiple routing steps
-      const jobGroups = new Map();
+      const jobGroups = new Map<string, any[]>();
       
       for (const row of csvData) {
         if (!row.Job || !row.Customer) {
@@ -261,22 +261,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // Debug: Show job grouping for multi-step jobs
         if (jobRows.length > 1) {
-          console.log(`🔍 Job ${jobNumber} has ${jobRows.length} rows:`, jobRows.map(r => `${r['AMT Workcenter & Vendor']}(${r['Est Total Hours']}h)`));
+          console.log(`🔍 Job ${jobNumber} has ${jobRows.length} rows:`, jobRows.map((r: any) => `${r['AMT Workcenter & Vendor']}(${r['Est Total Hours']}h)`));
         }
         
         try {
           // Build routing entries from all rows for this job
-          const routingEntries = [];
+          const routingEntries: any[] = [];
           let totalEstimatedHours = 0;
-          let outsourcedVendor = null;
+          let outsourcedVendor: string | null = null;
           let linkMaterial = false;
-          let material = null;
+          let material: string | null = null;
           
           // Use the first row for job-level data, but collect routing from all rows
           const firstRow = jobRows[0];
           
           // Process each routing step
-          jobRows.forEach((row, index) => {
+          jobRows.forEach((row: any, index: number) => {
             const amtWorkCenterVendor = row['AMT Workcenter & Vendor']?.trim();
             const vendor = row.Vendor?.trim();
             
@@ -688,7 +688,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.clearAllScheduleEntries();
       
       // Reset all job statuses back to "Open" 
-      for (const jobId of affectedJobIds) {
+      for (const jobId of Array.from(affectedJobIds)) {
         await storage.updateJob(jobId, { status: "Open" });
       }
       
