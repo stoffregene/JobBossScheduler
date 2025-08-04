@@ -220,6 +220,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log('📋 CSV Headers:', Object.keys(csvData[0]));
         console.log('📋 First row sample:', csvData[0]);
         console.log('📋 Second row sample:', csvData[1]);
+        
+        // Fix BOM issue: clean up headers
+        const cleanData = csvData.map(row => {
+          const cleanRow: any = {};
+          Object.keys(row).forEach(key => {
+            // Remove BOM and clean key name
+            const cleanKey = key.replace(/^\uFEFF/, '').trim();
+            cleanRow[cleanKey] = row[key];
+          });
+          return cleanRow;
+        });
+        
+        // Replace original data with cleaned data
+        csvData.length = 0;
+        csvData.push(...cleanData);
+        
+        console.log('📋 Cleaned CSV Headers:', Object.keys(csvData[0]));
+        console.log('📋 Cleaned First row:', csvData[0]);
       }
 
       // Process each row
@@ -266,11 +284,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           // Map CSV columns to job schema
           const jobData = {
-            jobNumber: (row.Job?.trim() || `JOB-${Date.now()}-${processed}`),
+            jobNumber: row.Job?.trim() || `JOB-${Date.now()}-${processed}`,
             customer: row.Customer?.trim() || 'Unknown',
             quantity: parseInt(row.Est_Required_Qty) || 1,
-            partNumber: row.Job?.trim() || `PART-${Date.now()}-${processed}`, // Use job number if no part number
-            description: `Job ${row.Job?.trim() || 'N/A'} for ${row.Customer?.trim() || 'Unknown'}`,
+            partNumber: row.Material?.trim() || row.Job?.trim() || `PART-${Date.now()}-${processed}`, // Use Material column as part number
+            description: `Job ${row.Job?.trim() || 'N/A'} - ${row.Material?.trim() || 'Unknown Material'} for ${row.Customer?.trim() || 'Unknown'}`,
             orderDate: new Date(row.Order_Date || Date.now()),
             promisedDate: new Date(row.Promised_Date || Date.now()),
             dueDate: new Date(row.Promised_Date || Date.now()), // Use promised date as due date
