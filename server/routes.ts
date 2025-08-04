@@ -192,10 +192,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let updated = 0;
 
       // Define standard work centers that are in-house
-      const standardWorkCenters = ['SAW', 'MILL', 'LATHE', 'WATERJET', 'BEAD BLAST', 'WELD', 'INSPECT', 'ASSEMBLE'];
+      const standardWorkCenters = ['SAW', 'MILL', 'LATHE', 'WATERJET', 'BEAD BLAST', 'WELD', 'INSPECT', 'ASSEMBLE', 'VMC', 'HMC'];
       
       const isStandardWorkCenter = (wcName: string): boolean => {
-        return standardWorkCenters.some(wc => wcName.toUpperCase().includes(wc));
+        return standardWorkCenters.some(wc => wcName.toUpperCase().includes(wc.toUpperCase()));
       };
 
       // Parse CSV data
@@ -283,17 +283,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.log(`🔄 Job ${jobNumber} - ${hasSequenceColumn ? 'Using CSV Sequence column' : 'Using row order'} for operation ordering`);
           }
           
-          // Process each routing step in proper sequence order
-          sortedRows.forEach((row: any, index: number) => {
+          // Remove duplicate rows based on unique combinations of sequence, work center, and hours
+          const uniqueRows = new Map<string, any>();
+          sortedRows.forEach((row: any) => {
+            const csvSequence = parseInt(row.Sequence) || parseInt(row.sequence) || 0;
+            const workCenter = row['AMT Workcenter & Vendor']?.trim();
+            const hours = parseFloat(row['Est Total Hours']) || 0;
+            const uniqueKey = `${csvSequence}-${workCenter}-${hours}`;
+            
+            if (!uniqueRows.has(uniqueKey)) {
+              uniqueRows.set(uniqueKey, row);
+            }
+          });
+          
+          // Process each unique routing step in proper sequence order
+          Array.from(uniqueRows.values()).forEach((row: any, index: number) => {
             const amtWorkCenterVendor = row['AMT Workcenter & Vendor']?.trim();
             const vendor = row.Vendor?.trim();
             
-            // Get sequence from CSV (0-10) or use processed index + 1
+            // Get sequence from CSV (0-10) or use processed index
             const csvSequence = parseInt(row.Sequence) || parseInt(row.sequence);
-            const finalSequence = csvSequence !== undefined && !isNaN(csvSequence) ? csvSequence : index + 1;
+            const finalSequence = csvSequence !== undefined && !isNaN(csvSequence) ? csvSequence : index;
             
-            // Determine if this is outsourced work - only outsourced if vendor is different from standard work centers
-            const isOutsourced = amtWorkCenterVendor && vendor && amtWorkCenterVendor === vendor && !isStandardWorkCenter(amtWorkCenterVendor);
+            // Determine if this is outsourced work - only outsourced if vendor exists and work center is NOT a standard work center
+            const isOutsourced = vendor && amtWorkCenterVendor && amtWorkCenterVendor === vendor && !isStandardWorkCenter(amtWorkCenterVendor);
             const workCenter = amtWorkCenterVendor;
             
             // Track unfound work centers for flagging

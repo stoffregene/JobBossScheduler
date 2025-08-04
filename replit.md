@@ -10,6 +10,14 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+**August 4, 2025** - Fixed CSV import sequence duplication and job queue delete performance bugs:
+- **CSV SEQUENCE FIX**: Fixed duplicate operation creation where jobs like 58923 were getting 6 operations instead of 3
+- **DEDUPLICATION LOGIC**: Added unique operation detection based on sequence, work center, and hours combination
+- **SEQUENCE MAPPING**: Properly maps CSV Sequence column (0-10) to correct operation ordering (saw→mill→inspect workflow)
+- **WORK CENTER DETECTION**: Enhanced standard work center recognition to include VMC and HMC operations
+- **DELETE ALL PERFORMANCE**: Fixed job queue "Delete All" button hanging by replacing 77+ individual database calls with single bulk operation
+- **INTERFACE CONSISTENCY**: Added deleteAllJobs() method to storage interface for proper type safety
+
 **August 4, 2025** - Fixed critical "unschedule all" function bug:
 - Identified route matching issue where `/api/schedule/:id` was intercepting `/api/schedule/all` requests
 - Moved specific route above parameterized route to ensure proper matching
