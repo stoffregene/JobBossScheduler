@@ -17,12 +17,12 @@ Preferred communication style: Simple, everyday language.
 - Application running stably with all core features operational
 
 **August 4, 2025** - Dashboard reorganization for improved workflow:
-- Removed machine utilization and resource capacity tiles from dashboard top section
 - Restructured main grid from 4-column to 5-column layout for better space allocation
 - Production schedule calendar now gets dedicated 2-column space for enhanced visibility
 - Job queue enhanced with dedicated 2-column space for better accessibility
 - Work center status component moved to sidebar and starts minimized with lower visual priority
 - Dashboard overview simplified to show only active jobs and at-risk jobs tiles
+- **RESTORED**: Resource capacity tile added back below production schedule calendar, synchronized with week/month view selection
 
 **August 4, 2025** - Fixed job scheduling functionality and UI improvements:
 - Fixed job details modal "Schedule Job" button - now uses correct `/api/jobs/:id/auto-schedule` endpoint
