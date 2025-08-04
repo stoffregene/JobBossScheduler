@@ -100,9 +100,16 @@ export default function ResourceManagement() {
     },
     onError: (error) => {
       console.error('Error creating resource:', error);
+      let errorMessage = error.message;
+      
+      // Handle specific duplicate employee ID error
+      if (error.message.includes('duplicate key') && error.message.includes('employee_id')) {
+        errorMessage = `Employee ID "${editForm.employeeId}" already exists. Please use a different Employee ID.`;
+      }
+      
       toast({ 
         title: "Error creating resource", 
-        description: error.message,
+        description: errorMessage,
         variant: "destructive" 
       });
     }
@@ -138,9 +145,20 @@ export default function ResourceManagement() {
   };
 
   const openAddDialog = () => {
+    // Generate a unique employee ID suggestion
+    const existingIds = resources?.map(r => r.employeeId) || [];
+    let suggestedId = "";
+    for (let i = 1; i <= 999; i++) {
+      const testId = `EMP${i.toString().padStart(3, '0')}`;
+      if (!existingIds.includes(testId)) {
+        suggestedId = testId;
+        break;
+      }
+    }
+    
     setEditForm({
       name: "",
-      employeeId: "",
+      employeeId: suggestedId,
       email: "",
       role: "",
       isActive: true,
