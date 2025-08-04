@@ -69,9 +69,12 @@ export default function ResourceAllocation({ scheduleView }: ResourceAllocationP
         shift1OperatorCapacity: 0,
         shift2OperatorCapacity: 0,
         shift1OperatorUsed: 0,
-        shift2OperatorUsed: 0
+        shift2OperatorUsed: 0,
+        dateRange: getDateRange()
       };
     }
+
+    const dateRange = getDateRange();
 
     const { start, end } = getDateRange();
     const daysInPeriod = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
@@ -188,6 +191,18 @@ export default function ResourceAllocation({ scheduleView }: ResourceAllocationP
   }, [machines, resources, scheduleEntries, jobs, unavailabilityData, workCenterFilter, scheduleView]);
 
   const periodLabel = scheduleView.type === "month" ? "Month" : "Week";
+  
+  // Format date range for display
+  const getDateRangeDisplay = () => {
+    const { start, end } = getDateRange();
+    const formatDate = (date: Date) => date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    
+    if (scheduleView.type === "month") {
+      return `${start.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`;
+    } else {
+      return `${formatDate(start)} - ${formatDate(end)}`;
+    }
+  };
   const {
     filteredMachines,
     totalOperatorCapacity,
@@ -235,9 +250,10 @@ export default function ResourceAllocation({ scheduleView }: ResourceAllocationP
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle>
-            Resource Allocation ({periodLabel})
-          </CardTitle>
+          <div>
+            <CardTitle>Resource Allocation</CardTitle>
+            <p className="text-sm text-muted-foreground mt-1">{getDateRangeDisplay()}</p>
+          </div>
           <Select value={workCenterFilter} onValueChange={setWorkCenterFilter}>
             <SelectTrigger className="w-32">
               <Filter className="w-4 h-4 mr-2" />
