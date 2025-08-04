@@ -35,8 +35,8 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
   const [sortField, setSortField] = useState<SortField>('dueDate');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [filters, setFilters] = useState({
-    status: '',
-    priority: '',
+    status: 'all',
+    priority: 'all',
     customer: '',
     search: ''
   });
@@ -61,8 +61,8 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
     if (!rawJobs) return [];
     
     let filteredJobs = rawJobs.filter(job => {
-      if (filters.status && job.status !== filters.status) return false;
-      if (filters.priority && job.priority !== filters.priority) return false;
+      if (filters.status && filters.status !== 'all' && job.status !== filters.status) return false;
+      if (filters.priority && filters.priority !== 'all' && job.priority !== filters.priority) return false;
       if (filters.customer && !job.customer?.toLowerCase().includes(filters.customer.toLowerCase())) return false;
       if (filters.search) {
         const searchLower = filters.search.toLowerCase();
@@ -349,8 +349,8 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
 
   const clearFilters = () => {
     setFilters({
-      status: '',
-      priority: '',
+      status: 'all',
+      priority: 'all',
       customer: '',
       search: ''
     });
@@ -719,7 +719,7 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
                 <Button variant="outline" size="sm" data-testid="button-filter">
                   <Filter className="h-4 w-4 mr-1" />
                   Filter
-                  {(filters.status || filters.priority || filters.customer || filters.search) && (
+                  {(filters.status !== 'all' || filters.priority !== 'all' || filters.customer || filters.search) && (
                     <span className="ml-1 bg-blue-500 text-white text-xs rounded-full px-1.5 py-0.5">•</span>
                   )}
                 </Button>
@@ -746,7 +746,7 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
                         <SelectValue placeholder="All statuses" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">All statuses</SelectItem>
+                        <SelectItem value="all">All statuses</SelectItem>
                         <SelectItem value="Unscheduled">Unscheduled</SelectItem>
                         <SelectItem value="Scheduled">Scheduled</SelectItem>
                         <SelectItem value="In Progress">In Progress</SelectItem>
@@ -762,7 +762,7 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
                         <SelectValue placeholder="All priorities" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">All priorities</SelectItem>
+                        <SelectItem value="all">All priorities</SelectItem>
                         <SelectItem value="Normal">Normal</SelectItem>
                         <SelectItem value="High">High</SelectItem>
                         <SelectItem value="Critical">Critical</SelectItem>
