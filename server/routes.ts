@@ -601,13 +601,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Reason is required" });
       }
 
+      // Fix timezone issues by parsing dates as local dates
+      const parseLocalDate = (dateStr: string) => {
+        const [year, month, day] = dateStr.split('-').map(Number);
+        return new Date(year, month - 1, day); // month is 0-indexed in JS Date
+      };
+
+      const parsedStartDate = parseLocalDate(startDate);
+      const parsedEndDate = parseLocalDate(endDate);
+
       // Create unavailability record for each resource
       const createdUnavailabilities = [];
       for (const resourceId of resourceIds) {
         const unavailabilityData = {
           resourceId: resourceId,
-          startDate: new Date(startDate),
-          endDate: new Date(endDate),
+          startDate: parsedStartDate,
+          endDate: parsedEndDate,
           reason,
           shifts: shifts || [1, 2],
           notes: notes || "",
@@ -620,8 +629,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check for affected jobs and reschedule if necessary
       const affectedJobs = await storage.getJobsRequiringRescheduling(
         resourceIds,
-        new Date(startDate),
-        new Date(endDate),
+        parsedStartDate,
+        parsedEndDate,
         shifts
       );
 

@@ -614,8 +614,12 @@ export default function ResourceManagement() {
                 ) : unavailabilityData && unavailabilityData.length > 0 ? (
                   unavailabilityData.map(item => {
                     const resource = resources?.find(r => item.resourceIds?.includes(r.id));
-                    const isActive = new Date(item.startDate) <= new Date() && new Date(item.endDate) >= new Date();
-                    const isUpcoming = new Date(item.startDate) > new Date();
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0); // Reset to start of day for proper comparison
+                    const startDate = new Date(item.startDate);
+                    const endDate = new Date(item.endDate);
+                    const isActive = startDate <= today && endDate >= today;
+                    const isUpcoming = startDate > today;
                     
                     return (
                       <div key={item.id} className="flex items-center justify-between p-3 border rounded-lg">
@@ -627,7 +631,7 @@ export default function ResourceManagement() {
                             </Badge>
                           </div>
                           <div className="text-sm text-muted-foreground">
-                            {item.reason} • {new Date(item.startDate).toLocaleDateString()} - {new Date(item.endDate).toLocaleDateString()}
+                            {item.reason} • {new Date(item.startDate).toLocaleDateString('en-US', { timeZone: 'UTC' })} - {new Date(item.endDate).toLocaleDateString('en-US', { timeZone: 'UTC' })}
                           </div>
                           {item.shifts && (
                             <div className="text-xs text-muted-foreground">
