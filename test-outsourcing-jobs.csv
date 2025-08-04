@@ -1,0 +1,5 @@
+Job,Customer,Est_Required_Qty,WC_Vendor,Lead_Days,Order_Date,Promised_Date,Est Total Hours,Link_Material,Status,Material
+OS001,TestCorp,2,Custom Coating Inc,5,"2025-08-01","2025-08-15",8.0,FALSE,Active,Steel Part
+OS002,MetalWorks,1,ABC Plating,3,"2025-08-02","2025-08-12",4.5,TRUE,Active,Aluminum Component  
+IN001,LocalShop,3,MILL,2,"2025-08-01","2025-08-10",6.0,FALSE,Active,Brass Block
+IN002,QuickParts,5,LATHE,4,"2025-08-03","2025-08-18",12.0,FALSE,Active,Steel Rod

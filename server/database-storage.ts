@@ -34,6 +34,21 @@ export class DatabaseStorage implements IStorage {
 
       // Initialize machines based on user's exact machine hierarchy
       const defaultMachines: InsertMachine[] = [
+        // OUTSOURCE work center for third-party operations
+        { 
+          machineId: "OUTSOURCE-01", 
+          name: "Outsourced Operations", 
+          type: "OUTSOURCE", 
+          category: "Third Party",
+          subcategory: "External Vendor",
+          tier: "External", 
+          capabilities: ["plating", "coating", "heat_treat", "finishing"], 
+          status: "Available", 
+          utilization: "0", 
+          availableShifts: [1, 2, 3], // Available 24/7 since it's external
+          efficiencyFactor: "1.0", 
+          substitutionGroup: null // No substitution for outsourced work
+        },
         // MILL - Horizontal Milling Centers
         { 
           machineId: "HMC-001", 

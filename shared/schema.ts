@@ -28,7 +28,7 @@ export const machines = pgTable("machines", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   machineId: text("machine_id").notNull().unique(),
   name: text("name").notNull(),
-  type: text("type").notNull(), // MILL, LATHE, WATERJET, BEAD BLAST, SAW, WELD, INSPECT, ASSEMBLE
+  type: text("type").notNull(), // MILL, LATHE, WATERJET, BEAD BLAST, SAW, WELD, INSPECT, ASSEMBLE, OUTSOURCE
   category: text("category"), // For MILL: Horizontal Milling Centers, 3-Axis Vertical Milling Centers, etc.
   subcategory: text("subcategory"), // For detailed groupings like Bar Fed Lathes, Live Tooling Lathes
   tier: text("tier").notNull().default("Tier 1"), // Tier 1 for all main machine types

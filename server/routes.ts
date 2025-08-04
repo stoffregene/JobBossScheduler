@@ -157,6 +157,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let created = 0;
       let updated = 0;
 
+      // Define standard work centers that are in-house
+      const standardWorkCenters = ['SAW', 'MILL', 'LATHE', 'WATERJET', 'BEAD BLAST', 'WELD', 'INSPECT', 'ASSEMBLE'];
+      
+      function isStandardWorkCenter(wcName: string): boolean {
+        return standardWorkCenters.some(wc => wcName.toUpperCase().includes(wc));
+      }
+
       // Parse CSV data
       const readable = Readable.from(req.file.buffer);
       const csvData: any[] = [];
@@ -173,6 +180,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const row of csvData) {
         processed++;
         try {
+          // Determine if this is outsourced work
+          const wcVendor = row.WC_Vendor?.trim();
+          const isOutsourced = wcVendor && !isStandardWorkCenter(wcVendor);
+          
+          // Create routing entry based on work center
+          const routingEntry = {
+            sequence: 1,
+            name: isOutsourced ? 'OUTSOURCE' : (wcVendor || 'GENERAL'),
+            machineType: isOutsourced ? 'OUTSOURCE' : (wcVendor || 'GENERAL'),
+            compatibleMachines: isOutsourced ? [] : [wcVendor || 'GENERAL'],
+            estimatedHours: parseFloat(row['Est Total Hours']) || 0,
+            notes: isOutsourced ? `Outsourced to: ${wcVendor}` : undefined,
+            operationType: isOutsourced ? 'OUTSOURCE' : undefined
+          };
+
           // Map CSV columns to job schema
           const jobData = {
             jobNumber: row.Job?.trim(),
@@ -184,7 +206,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             promisedDate: new Date(row.Promised_Date || Date.now()),
             dueDate: new Date(row.Promised_Date || Date.now()), // Use promised date as due date
             estimatedHours: String(parseFloat(row['Est Total Hours']) || 0),
-            outsourcedVendor: row.WC_Vendor?.trim() || null,
+            outsourcedVendor: isOutsourced ? wcVendor : null,
             leadDays: parseInt(row.Lead_Days) || null,
             linkMaterial: row.Link_Material?.toUpperCase() === 'TRUE',
             material: row.Material?.trim() || null,
@@ -192,7 +214,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                    row.Status?.trim() === 'Closed' ? 'Complete' :
                    row.Status?.trim() === 'Canceled' ? 'Complete' : 'Unscheduled',
             priority: 'Normal',
-            routing: []
+            routing: [routingEntry]
           };
 
           // Create valid job data by bypassing schema validation for CSV import
@@ -203,7 +225,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             estimatedHours: jobData.estimatedHours, // Already converted to string
             leadDays: jobData.leadDays,
             linkMaterial: Boolean(jobData.linkMaterial),
+            routing: jobData.routing || [] // Preserve routing data
           };
+          
+          console.log(`📋 Job ${validatedJob.jobNumber} routing:`, JSON.stringify(validatedJob.routing, null, 2));
 
           // Check if job already exists
           const existingJobs = await storage.getJobs();
