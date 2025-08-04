@@ -173,6 +173,7 @@ export const insertJobSchema = createInsertSchema(jobs).omit({
   dueDate: z.string().or(z.date()).transform(str => typeof str === 'string' ? new Date(str) : str),
   orderDate: z.string().or(z.date()).transform(str => typeof str === 'string' ? new Date(str) : str),
   promisedDate: z.string().or(z.date()).transform(str => typeof str === 'string' ? new Date(str) : str),
+  estimatedHours: z.string().or(z.number()).transform(val => typeof val === 'number' ? val.toString() : val),
   routing: z.array(z.any()).optional().default([]),
 });
 

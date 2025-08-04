@@ -1,0 +1,6 @@
+Job,Customer,Est_Required_Qty,WC_Vendor,Lead_Days,Order_Date,Promised_Date,Est Total Hours,Link_Material,Status,Material
+J001,Acme Corp,5,,,"2025-08-01","2025-08-15",12.5,FALSE,Active,Steel Bar
+J002,Widget Inc,10,Precision Machining,7,"2025-08-02","2025-08-20",8.0,TRUE,Active,Aluminum Block
+J003,TechCorp,3,,,"2025-08-01","2025-08-12",15.0,FALSE,Active,Titanium Sheet
+J004,MegaCorp,2,Surface Coating,5,"2025-08-03","2025-08-18",6.5,FALSE,Closed,Stainless Steel
+J005,StartupXYZ,8,,,"2025-08-02","2025-08-25",20.0,TRUE,Active,Copper Tube
