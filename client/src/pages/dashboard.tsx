@@ -10,6 +10,7 @@ import ResourceAllocation from "../components/resource-allocation";
 import JobDetailsModal from "../components/job-details-modal";
 import MaterialOrdersWidget from "../components/material-orders-widget";
 import JobsAwaitingMaterialWidget from "../components/jobs-awaiting-material-widget";
+import { EfficiencyImpactWidget } from "../components/efficiency-impact-widget";
 import { Building2, Clock, Users, Package, Upload, Moon, Sun } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
@@ -178,6 +179,7 @@ export default function Dashboard() {
           <div className="xl:col-span-1 lg:col-span-1 space-y-6">
             <MaterialOrdersWidget />
             <JobsAwaitingMaterialWidget />
+            <EfficiencyImpactWidget />
           </div>
         </div>
       </div>

@@ -1086,5 +1086,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Efficiency impact endpoint
+  app.get('/api/efficiency-impact', async (req, res) => {
+    try {
+      const efficiencyData = await storage.getEfficiencyImpactData();
+      res.json(efficiencyData);
+    } catch (error) {
+      console.error('Error fetching efficiency data:', error);
+      res.status(500).json({ error: 'Failed to fetch efficiency data' });
+    }
+  });
+
   return httpServer;
 }

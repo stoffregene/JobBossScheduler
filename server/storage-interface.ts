@@ -70,9 +70,23 @@ export interface IStorage {
   getDashboardStats(): Promise<DashboardStats>;
 
   // Auto-scheduling methods
-  findBestMachineForOperation(operation: RoutingOperation, targetDate: Date, shift: number): Promise<{ machine: Machine; adjustedHours: number; score: number } | null>;
+  findBestMachineForOperation(operation: RoutingOperation, targetDate: Date, shift: number): Promise<{ machine: Machine; adjustedHours: number; score: number; efficiencyImpact?: number } | null>;
   autoScheduleJob(jobId: string): Promise<ScheduleEntry[] | null>;
   getMachinesBySubstitutionGroup(substitutionGroup: string): Promise<Machine[]>;
+  
+  // Efficiency tracking
+  getEfficiencyImpactData(): Promise<{
+    totalOperations: number;
+    substitutedOperations: number;
+    averageEfficiencyImpact: number;
+    worstImpacts: Array<{
+      jobNumber: string;
+      operationName: string;
+      originalMachine: string;
+      assignedMachine: string;
+      efficiencyImpact: number;
+    }>;
+  }>;
   getCompatibleMachines(capability: string, category?: string, tier?: "Tier 1" | "Standard" | "Budget"): Promise<Machine[]>;
   findOptimalMachineAssignment(routing: any[], priority: "Critical" | "High" | "Normal" | "Low"): Promise<any[]>;
 

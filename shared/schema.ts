@@ -116,6 +116,9 @@ export const routingOperations = pgTable("routing_operations", {
   scheduledEndTime: timestamp("scheduled_end_time"),
   assignedMachineId: varchar("assigned_machine_id").references(() => machines.id),
   assignedResourceId: varchar("assigned_resource_id").references(() => resources.id),
+  originalQuotedMachineId: varchar("original_quoted_machine_id").references(() => machines.id), // Machine operation was originally quoted for
+  originalEstimatedHours: decimal("original_estimated_hours", { precision: 10, scale: 2 }), // Original estimate for the quoted machine
+  efficiencyImpact: decimal("efficiency_impact", { precision: 5, scale: 2 }).default("0"), // Percentage impact from substitution (+ is slower, - is faster)
   notes: text("notes"),
 });
 
