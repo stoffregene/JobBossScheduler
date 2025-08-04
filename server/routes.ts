@@ -252,7 +252,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (!jobGroups.has(jobNumber)) {
           jobGroups.set(jobNumber, []);
         }
-        jobGroups.get(jobNumber).push(row);
+        jobGroups.get(jobNumber)!.push(row);
       }
 
       // Process each job group
@@ -613,7 +613,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error("❌ Failed to unschedule all jobs:", error);
-      return res.status(500).json({ message: "Failed to unschedule all jobs", error: error.message });
+      return res.status(500).json({ message: "Failed to unschedule all jobs", error: error instanceof Error ? error.message : 'Unknown error' });
     }
   });
 
