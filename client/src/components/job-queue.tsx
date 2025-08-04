@@ -286,6 +286,29 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
     }
   });
 
+  const unscheduleAllMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest('/api/schedule/all', 'DELETE');
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/schedule'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/machines'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
+      toast({
+        title: "All Schedules Cleared",
+        description: `Successfully unscheduled ${data.clearedEntries} entries for ${data.affectedJobs} jobs.`,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Unschedule Failed",
+        description: "Unable to clear all schedules. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleCreateJob = () => {
     if (!newJob.jobNumber || !newJob.partNumber || !newJob.dueDate) {
       toast({
@@ -330,6 +353,12 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
     
     if (confirm(`Are you sure you want to delete ALL ${jobCount} jobs? This action cannot be undone and will remove all associated scheduling and material orders.`)) {
       deleteAllJobsMutation.mutate();
+    }
+  };
+
+  const handleUnscheduleAll = () => {
+    if (confirm('Are you sure you want to unschedule ALL jobs? This will clear all schedule entries and reset job statuses to "Open".')) {
+      unscheduleAllMutation.mutate();
     }
   };
 
@@ -711,6 +740,16 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
             >
               <PlayCircle className="h-4 w-4 mr-1" />
               Schedule All
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={handleUnscheduleAll}
+              disabled={unscheduleAllMutation.isPending}
+              data-testid="button-unschedule-all"
+            >
+              <Trash2 className="h-4 w-4 mr-1" />
+              {unscheduleAllMutation.isPending ? 'Unscheduling...' : 'Unschedule All'}
             </Button>
             <Dialog open={isFilterOpen} onOpenChange={setIsFilterOpen}>
               <DialogTrigger asChild>

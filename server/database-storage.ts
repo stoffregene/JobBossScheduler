@@ -720,6 +720,10 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  async clearAllScheduleEntries(): Promise<void> {
+    await db.delete(scheduleEntries);
+  }
+
   // Alerts implementation
   async getAlerts(): Promise<Alert[]> {
     return await db.select().from(alerts).orderBy(desc(alerts.createdAt));
