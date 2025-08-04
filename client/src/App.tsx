@@ -18,6 +18,7 @@ function Router() {
       <Route path="/resources" component={ResourceManagement} />
       <Route path="/materials" component={MaterialTracking} />
       <Route path="/job-import" component={JobImport} />
+      <Route path="/import" component={JobImport} />
       <Route path="/work-centers" component={WorkCenterManagement} />
       <Route component={NotFound} />
     </Switch>
