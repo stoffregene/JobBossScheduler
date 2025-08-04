@@ -1224,11 +1224,18 @@ export class DatabaseStorage implements IStorage {
       currentOperation?: number;
       totalOperations?: number;
     }) => void
-  ): Promise<ScheduleEntry[] | null> {
+  ): Promise<{ success: boolean; scheduleEntries?: ScheduleEntry[]; failureReason?: string; failureDetails?: any[] }> {
     const job = await this.getJob(jobId);
-    if (!job || !job.routing || job.routing.length === 0) return null;
+    if (!job || !job.routing || job.routing.length === 0) {
+      return { 
+        success: false, 
+        failureReason: "Job not found or has no routing operations",
+        failureDetails: []
+      };
+    }
 
     const scheduleEntries: ScheduleEntry[] = [];
+    const failureDetails: any[] = [];
     const now = new Date();
     const dayInMs = 24 * 60 * 60 * 1000;
     
@@ -1282,8 +1289,42 @@ export class DatabaseStorage implements IStorage {
 
         // For regular operations: Try shifts with load balancing (prefer less loaded shifts)
         const shifts = await this.getShiftsOrderedByLoad(currentDate);
+        let operationFailureReasons: string[] = [];
+        
         for (const shift of shifts) {
           const result = await this.findBestMachineForOperation(operation, currentDate, shift);
+          
+          if (!result) {
+            // Collect detailed failure reason for this shift attempt
+            const availableMachines = await this.getMachines();
+            const directlyCompatible = availableMachines.filter(m => 
+              operation.compatibleMachines.includes(m.machineId)
+            );
+            
+            // Check substitution compatibility for machines with substitution groups
+            const substitutionCompatible = [];
+            for (const machine of availableMachines) {
+              if (machine.substitutionGroup && !operation.compatibleMachines.includes(machine.machineId)) {
+                if (await this.canSubstitute(machine, operation)) {
+                  substitutionCompatible.push(machine);
+                }
+              }
+            }
+            
+            const compatibleMachines = [...directlyCompatible, ...substitutionCompatible];
+            
+            if (compatibleMachines.length === 0) {
+              operationFailureReasons.push(`Shift ${shift}: No compatible machines available for ${operation.machineType}`);
+            } else {
+              const shiftAvailableMachines = compatibleMachines.filter(m => m.availableShifts?.includes(shift));
+              if (shiftAvailableMachines.length === 0) {
+                operationFailureReasons.push(`Shift ${shift}: Compatible machines (${compatibleMachines.map(m => m.machineId).join(', ')}) not available on shift ${shift}`);
+              } else {
+                operationFailureReasons.push(`Shift ${shift}: Compatible machines available but fully booked or conflicted`);
+              }
+            }
+            continue;
+          }
           
           if (result) {
             const shiftStart = shift === 1 ? 3 : 15; // 3 AM or 3 PM
@@ -1326,22 +1367,37 @@ export class DatabaseStorage implements IStorage {
         }
       }
       
-      // If couldn't schedule within window, create alert
+      // If couldn't schedule within window, collect failure details and create alert
       if (!scheduled) {
+        const failureDetail = {
+          operationSequence: operation.sequence,
+          operationName: operation.name,
+          machineType: operation.machineType,
+          compatibleMachines: operation.compatibleMachines,
+          attemptedDates: Math.ceil((maxDate.getTime() - (job.createdDate.getTime() + (7 * dayInMs))) / dayInMs),
+          reasons: operationFailureReasons.length > 0 ? operationFailureReasons : [`No suitable machines found for ${operation.machineType}`]
+        };
+        failureDetails.push(failureDetail);
+        
         await this.createAlert({
           type: "warning",
           title: "Scheduling Conflict",
-          message: `Unable to schedule operation ${operation.sequence} for job ${job.jobNumber} within manufacturing window`,
+          message: `Unable to schedule operation ${operation.sequence} (${operation.name}) for job ${job.jobNumber}: ${failureDetail.reasons.join('; ')}`,
           jobId: job.id
         });
-        return null;
+        
+        return { 
+          success: false, 
+          failureReason: `Failed to schedule operation ${operation.sequence} (${operation.name})`,
+          failureDetails 
+        };
       }
     }
     
     // Update job status to scheduled
     await this.updateJob(jobId, { status: "Scheduled" });
     
-    return scheduleEntries;
+    return { success: true, scheduleEntries };
   }
 
   private async checkScheduleConflicts(machineId: string, startTime: Date, endTime: Date): Promise<boolean> {
@@ -1673,7 +1729,7 @@ export class DatabaseStorage implements IStorage {
     // Update job status to scheduled
     await this.updateJob(jobId, { status: "Scheduled" });
     
-    return scheduleEntries;
+    return { success: true, scheduleEntries };
   }
 
   // Resources implementation

@@ -11,6 +11,7 @@ import JobDetailsModal from "../components/job-details-modal";
 import MaterialOrdersWidget from "../components/material-orders-widget";
 import JobsAwaitingMaterialWidget from "../components/jobs-awaiting-material-widget";
 import { EfficiencyImpactWidget } from "../components/efficiency-impact-widget";
+import { SchedulingFailuresWidget } from "../components/scheduling-failures-widget";
 import { Building2, Clock, Users, Package, Upload, Moon, Sun } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
@@ -177,6 +178,7 @@ export default function Dashboard() {
 
           {/* Right Column: Material & Alerts Sidebar */}
           <div className="xl:col-span-1 lg:col-span-1 space-y-6">
+            <SchedulingFailuresWidget />
             <MaterialOrdersWidget />
             <JobsAwaitingMaterialWidget />
             <EfficiencyImpactWidget />

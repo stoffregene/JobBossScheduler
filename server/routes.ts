@@ -615,7 +615,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } 
       });
 
-      const scheduleEntries = await storage.autoScheduleJob(req.params.id, (progress) => {
+      const result = await storage.autoScheduleJob(req.params.id, (progress) => {
         // Broadcast progress updates via WebSocket
         broadcast({ 
           type: 'schedule_progress', 
@@ -631,17 +631,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       });
 
-      if (!scheduleEntries) {
+      if (!result.success) {
         broadcast({ 
           type: 'schedule_progress', 
           data: { 
             jobId: req.params.id, 
             progress: 100, 
-            status: 'Failed to schedule job',
-            stage: 'error'
+            status: `Failed: ${result.failureReason}`,
+            stage: 'error',
+            failureDetails: result.failureDetails
           } 
         });
-        return res.status(400).json({ message: "Unable to auto-schedule job" });
+        return res.status(400).json({ 
+          message: result.failureReason || "Unable to auto-schedule job",
+          failureDetails: result.failureDetails 
+        });
       }
 
       // Complete progress
@@ -655,8 +659,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } 
       });
 
-      broadcast({ type: 'job_auto_scheduled', data: { jobId: req.params.id, scheduleEntries } });
-      res.json({ scheduleEntries, message: "Job successfully auto-scheduled" });
+      broadcast({ type: 'job_auto_scheduled', data: { jobId: req.params.id, scheduleEntries: result.scheduleEntries } });
+      res.json({ scheduleEntries: result.scheduleEntries, message: "Job successfully auto-scheduled" });
     } catch (error) {
       broadcast({ 
         type: 'schedule_progress', 
