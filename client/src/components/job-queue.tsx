@@ -392,49 +392,47 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
     }
   };
 
-  const handleCSVImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCSVImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const csv = e.target?.result as string;
-      const lines = csv.split('\n');
-      const headers = lines[0].split(',').map(h => h.trim());
-      
-      // Expected CSV format: jobNumber,partNumber,description,customer,dueDate,priority,estimatedHours
-      for (let i = 1; i < lines.length; i++) {
-        const line = lines[i].trim();
-        if (!line) continue;
-        
-        const values = line.split(',').map(v => v.trim());
-        if (values.length >= 5) {
-          const jobData = {
-            jobNumber: values[0],
-            partNumber: values[1],
-            description: values[2] || '',
-            customer: values[3] || '',
-            dueDate: values[4],
-            priority: (values[5] || 'Normal') as any,
-            estimatedHours: values[6] || '2',
-            operations: [] as string[]
-          };
-          
-          // Create job with some delay to avoid overwhelming the API
-          setTimeout(() => {
-            createJobMutation.mutate(jobData);
-          }, i * 100);
-        }
-      }
-      
-      setIsImportOpen(false);
-      toast({
-        title: "CSV Import Started",
-        description: `Processing ${lines.length - 1} jobs from CSV file.`,
+    try {
+      const formData = new FormData();
+      formData.append('csv', file);
+
+      const response = await fetch('/api/jobs/import', {
+        method: 'POST',
+        body: formData,
       });
-    };
-    
-    reader.readAsText(file);
+
+      const result = await response.json();
+
+      if (response.ok) {
+        // Invalidate queries to refresh the UI
+        queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/material-orders'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
+        
+        toast({
+          title: "CSV Import Complete",
+          description: `Successfully processed ${result.processed} rows. Created ${result.created} jobs, updated ${result.updated} jobs.`,
+        });
+      } else {
+        toast({
+          title: "Import Failed",
+          description: result.message || "Failed to import CSV file.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Import Error",
+        description: "An error occurred while importing the CSV file.",
+        variant: "destructive",
+      });
+    }
+
+    setIsImportOpen(false);
     event.target.value = ''; // Reset file input
   };
 
@@ -496,11 +494,7 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
                   </DialogHeader>
                   <div className="space-y-4 py-4">
                     <div className="text-sm text-gray-600">
-                      Upload a CSV file with the following columns:
-                      <br />
-                      <code className="text-xs bg-gray-100 px-1 rounded">
-                        jobNumber,partNumber,description,customer,dueDate,priority,estimatedHours
-                      </code>
+                      Upload a JobBoss scheduling report CSV file. The system will automatically parse multi-step routing and create jobs with proper work center assignments.
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="csvFile">CSV File</Label>
@@ -512,7 +506,7 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
                       />
                     </div>
                     <div className="text-xs text-gray-500">
-                      Example: J001,PN-123,Bracket,Acme Corp,2025-08-15,High,4.5
+                      Expected format: JobBoss Scheduling Report with Job Number, Customer, Work Center, Hours, Materials, etc.
                     </div>
                   </div>
                 </DialogContent>
@@ -803,11 +797,7 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                   <div className="text-sm text-gray-600">
-                    Upload a CSV file with the following columns:
-                    <br />
-                    <code className="text-xs bg-gray-100 px-1 rounded">
-                      jobNumber,partNumber,description,customer,dueDate,priority,estimatedHours
-                    </code>
+                    Upload a JobBoss scheduling report CSV file. The system will automatically parse multi-step routing and create jobs with proper work center assignments.
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="csvFileMain2">CSV File</Label>
@@ -819,7 +809,7 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
                     />
                   </div>
                   <div className="text-xs text-gray-500">
-                    Example: J001,PN-123,Bracket,Acme Corp,2025-08-15,High,4.5
+                    Expected format: JobBoss Scheduling Report with Job Number, Customer, Work Center, Hours, Materials, etc.
                   </div>
                 </div>
               </DialogContent>
