@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Download, Filter, Maximize2, ChevronLeft, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import type { Job, Machine, ScheduleEntry } from "@shared/schema";
+import JobDetailsModal from "./job-details-modal";
 
 interface ScheduleViewProps {
   scheduleView: {
@@ -17,6 +18,7 @@ interface ScheduleViewProps {
 export default function ScheduleView({ scheduleView, onScheduleViewChange }: ScheduleViewProps) {
   const [machineTypeFilter, setMachineTypeFilter] = useState<string>("ALL");
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
 
   const { data: jobs } = useQuery<Job[]>({
     queryKey: ['/api/jobs'],
@@ -262,15 +264,17 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
                         }`}
                       >
                         {dayJobs.length > 0 && (
-                          <div 
-                            className={`absolute inset-1 rounded text-white text-xs px-2 flex items-center justify-center font-medium ${
+                          <button
+                            className={`absolute inset-1 rounded text-white text-xs px-2 flex items-center justify-center font-medium cursor-pointer hover:opacity-80 transition-opacity ${
                               getJobColor(dayJobs[0].job?.priority || 'Normal')
                             }`}
+                            onClick={() => setSelectedJobId(dayJobs[0].job?.id || null)}
+                            data-testid={`schedule-job-${dayJobs[0].job?.jobNumber}`}
                           >
                             <span className="truncate">
                               {dayJobs[0].job?.jobNumber} ({Math.round(parseFloat(dayJobs[0].job?.estimatedHours || '0'))}h)
                             </span>
-                          </div>
+                          </button>
                         )}
                       </div>
                     );
@@ -301,6 +305,15 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
           </div>
         </div>
       </CardContent>
+      
+      {/* Job Details Modal */}
+      {selectedJobId && (
+        <JobDetailsModal
+          jobId={selectedJobId}
+          isOpen={!!selectedJobId}
+          onClose={() => setSelectedJobId(null)}
+        />
+      )}
     </Card>
   );
 }

@@ -1035,10 +1035,20 @@ export class DatabaseStorage implements IStorage {
     targetDate: Date, 
     shift: number
   ): Promise<{ machine: Machine; adjustedHours: number; score: number } | null> {
+    // Check if target date is a working day (Monday-Thursday only)
+    const dayOfWeek = targetDate.getDay(); 
+    if (dayOfWeek < 1 || dayOfWeek > 4) { // 0=Sunday, 1=Monday, ..., 4=Thursday, 5=Friday, 6=Saturday
+      console.log(`   ❌ Target date ${targetDate.toDateString()} is not a working day (Mon-Thu only)`);
+      return null;
+    }
+
     const allMachines = await this.getMachines();
-    console.log(`🔍 Finding machine for operation: ${operation.name}, machineType: ${operation.machineType}`);
+    const allResources = await this.getResources();
+    
+    console.log(`🔍 Finding machine for operation: ${operation.operationName || operation.name}, machineType: ${operation.machineType}`);
     console.log(`   Compatible machines required: [${operation.compatibleMachines.join(', ')}]`);
     console.log(`   Available machines: ${allMachines.length}`);
+    console.log(`   Target date: ${targetDate.toDateString()} (${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dayOfWeek]}), shift: ${shift}`);
     
     // Find machines that can handle this operation
     const compatibleMachines = [];
@@ -1047,15 +1057,34 @@ export class DatabaseStorage implements IStorage {
       console.log(`     Status: ${machine.status}, availableShifts: ${machine.availableShifts}, shift needed: ${shift}`);
       console.log(`     Compatible check: ${operation.compatibleMachines.includes(machine.machineId)}`);
       
-      if (machine.status === "Available" &&
-          machine.availableShifts?.includes(shift) &&
-          (operation.compatibleMachines.includes(machine.machineId) || 
-           (machine.substitutionGroup && await this.canSubstitute(machine, operation)))) {
-        console.log(`     ✅ Machine ${machine.machineId} is compatible`);
-        compatibleMachines.push(machine);
-      } else {
-        console.log(`     ❌ Machine ${machine.machineId} rejected`);
+      // Check if machine has available shifts that match the requested shift
+      if (machine.status !== "Available" || !machine.availableShifts?.includes(shift)) {
+        console.log(`     ❌ Machine ${machine.machineId} rejected - not available or shift mismatch`);
+        continue;
       }
+
+      // Check if machine is compatible or can substitute
+      const isDirectlyCompatible = operation.compatibleMachines.includes(machine.machineId);
+      const canSubstitute = machine.substitutionGroup && await this.canSubstitute(machine, operation);
+      
+      if (!isDirectlyCompatible && !canSubstitute) {
+        console.log(`     ❌ Machine ${machine.machineId} rejected - not compatible`);
+        continue;
+      }
+
+      // Check if there are resources available for this machine on this shift
+      // For now, assume resources are available (can be enhanced later with proper resource-machine mapping)
+      const machineResources = allResources.filter(resource => 
+        resource.shiftSchedule?.includes(shift)
+      );
+      
+      if (machineResources.length === 0) {
+        console.log(`     ❌ Machine ${machine.machineId} rejected - no resources available for shift ${shift}`);
+        continue;
+      }
+
+      console.log(`     ✅ Machine ${machine.machineId} is compatible with ${machineResources.length} resources available`);
+      compatibleMachines.push(machine);
     }
 
     if (compatibleMachines.length === 0) return null;
@@ -1063,7 +1092,7 @@ export class DatabaseStorage implements IStorage {
     // Score each machine based on multiple factors
     const scoredMachines = compatibleMachines.map(machine => {
       const efficiencyFactor = parseFloat(machine.efficiencyFactor);
-      const adjustedHours = operation.estimatedHours / efficiencyFactor;
+      const adjustedHours = parseFloat(operation.estimatedHours) / efficiencyFactor;
       
       // Calculate efficiency impact if this is a substitution
       let efficiencyImpact = 0;
@@ -1104,7 +1133,7 @@ export class DatabaseStorage implements IStorage {
     
     // Log efficiency impact if this is a substitution
     if (bestMatch.efficiencyImpact !== 0) {
-      console.log(`⚠️ Efficiency Impact: ${bestMatch.efficiencyImpact.toFixed(1)}% for ${operation.name} (${bestMatch.machine.machineId})`);
+      console.log(`⚠️ Efficiency Impact: ${bestMatch.efficiencyImpact.toFixed(1)}% for ${operation.operationName || operation.name} (${bestMatch.machine.machineId})`);
     }
     
     return bestMatch;
@@ -1409,8 +1438,13 @@ export class DatabaseStorage implements IStorage {
     const optimalStartDate = new Date(currentDate);
     optimalStartDate.setDate(optimalStartDate.getDate() + 7);
     
-    // Use optimal start date as actual start date
+    // Use optimal start date as actual start date, but ensure it's a working day (Mon-Thu)
     currentDate = new Date(optimalStartDate);
+    
+    // Adjust to next working day if needed (Monday-Thursday only)
+    while (currentDate.getDay() < 1 || currentDate.getDay() > 4) {
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
     
     const dayInMs = 24 * 60 * 60 * 1000;
     const maxDaysOut = 30; // Manufacturing window
@@ -1426,8 +1460,11 @@ export class DatabaseStorage implements IStorage {
         const machineResults = machineResult ? [machineResult] : [];
         
         if (machineResults.length === 0) {
-          currentDate = new Date(currentDate.getTime() + dayInMs);
-          attemptDays++;
+          // Move to next day, but skip weekends and Fridays
+          do {
+            currentDate = new Date(currentDate.getTime() + dayInMs);
+            attemptDays++;
+          } while ((currentDate.getDay() < 1 || currentDate.getDay() > 4) && attemptDays < maxDaysOut);
           continue;
         }
         
