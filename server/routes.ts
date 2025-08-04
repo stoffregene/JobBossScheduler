@@ -240,68 +240,103 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log('📋 Cleaned First row:', csvData[0]);
       }
 
-      // Process each row
+      // Group CSV rows by job number to handle multiple routing steps
+      const jobGroups = new Map();
+      
       for (const row of csvData) {
-        processed++;
-        try {
-          // Handle new column format: "AMT Workcenter & Vendor" replaces "WC_Vendor"
-          const amtWorkCenterVendor = row['AMT Workcenter & Vendor']?.trim();
-          const vendor = row.Vendor?.trim();
-          
-          // Debug logging for problematic rows
-          if (processed <= 5 || !row.Job) {
-            console.log(`📋 Row ${processed}:`, { 
-              Job: row.Job, 
-              Customer: row.Customer,
-              'AMT Workcenter & Vendor': amtWorkCenterVendor,
-              Vendor: vendor,
-              allKeys: Object.keys(row)
-            });
-          }
-          
-          // Determine if this is outsourced work:
-          // - If both AMT Workcenter & Vendor AND Vendor have identical values = outsourced
-          // - If only AMT Workcenter & Vendor has a value = internal work center
-          const isOutsourced = amtWorkCenterVendor && vendor && amtWorkCenterVendor === vendor;
-          const workCenter = amtWorkCenterVendor;
-          
-          // Track unfound work centers for flagging
-          if (!isOutsourced && workCenter && !isStandardWorkCenter(workCenter)) {
-            // This is an internal work center we don't recognize
-            errors.push(`⚠️ Unknown internal work center: "${workCenter}" for job ${row.Job} - please add this work center to the system`);
-          }
-          
-          // Create routing entry based on work center
-          const routingEntry = {
-            sequence: 1,
-            name: isOutsourced ? 'OUTSOURCE' : (workCenter || 'GENERAL'),
-            machineType: isOutsourced ? 'OUTSOURCE' : (workCenter || 'GENERAL'),
-            compatibleMachines: isOutsourced ? ['OUTSOURCE-01'] : [workCenter || 'GENERAL'],
-            estimatedHours: parseFloat(row['Est Total Hours']) || 0,
-            notes: isOutsourced ? `Outsourced to: ${vendor}` : undefined,
-            operationType: isOutsourced ? 'OUTSOURCE' : undefined
-          };
+        if (!row.Job || !row.Customer) {
+          continue; // Skip empty rows
+        }
+        
+        const jobNumber = row.Job.trim();
+        if (!jobGroups.has(jobNumber)) {
+          jobGroups.set(jobNumber, []);
+        }
+        jobGroups.get(jobNumber).push(row);
+      }
 
-          // Map CSV columns to job schema
+      // Process each job group
+      for (const [jobNumber, jobRows] of jobGroups) {
+        processed++;
+        
+        // Debug: Show job grouping for multi-step jobs
+        if (jobRows.length > 1) {
+          console.log(`🔍 Job ${jobNumber} has ${jobRows.length} rows:`, jobRows.map(r => `${r['AMT Workcenter & Vendor']}(${r['Est Total Hours']}h)`));
+        }
+        
+        try {
+          // Build routing entries from all rows for this job
+          const routingEntries = [];
+          let totalEstimatedHours = 0;
+          let outsourcedVendor = null;
+          let linkMaterial = false;
+          let material = null;
+          
+          // Use the first row for job-level data, but collect routing from all rows
+          const firstRow = jobRows[0];
+          
+          // Process each routing step
+          jobRows.forEach((row, index) => {
+            const amtWorkCenterVendor = row['AMT Workcenter & Vendor']?.trim();
+            const vendor = row.Vendor?.trim();
+            
+            // Determine if this is outsourced work
+            const isOutsourced = amtWorkCenterVendor && vendor && amtWorkCenterVendor === vendor;
+            const workCenter = amtWorkCenterVendor;
+            
+            // Track unfound work centers for flagging
+            if (!isOutsourced && workCenter && !isStandardWorkCenter(workCenter)) {
+              errors.push(`⚠️ Unknown internal work center: "${workCenter}" for job ${jobNumber} - please add this work center to the system`);
+            }
+            
+            // Create routing entry
+            const routingEntry = {
+              sequence: index + 1,
+              name: isOutsourced ? 'OUTSOURCE' : (workCenter || 'GENERAL'),
+              machineType: isOutsourced ? 'OUTSOURCE' : (workCenter || 'GENERAL'),
+              compatibleMachines: isOutsourced ? ['OUTSOURCE-01'] : [workCenter || 'GENERAL'],
+              estimatedHours: parseFloat(row['Est Total Hours']) || 0,
+              notes: isOutsourced ? `Outsourced to: ${vendor}` : undefined,
+              operationType: isOutsourced ? 'OUTSOURCE' : undefined
+            };
+            
+            routingEntries.push(routingEntry);
+            totalEstimatedHours += routingEntry.estimatedHours;
+            
+            // Capture job-level data
+            if (isOutsourced && !outsourcedVendor) {
+              outsourcedVendor = vendor;
+            }
+            
+            // Material and linkMaterial logic: use first row or any populated value
+            if (!material && row.Material?.trim()) {
+              material = row.Material.trim();
+            }
+            if (!linkMaterial && row.Link_Material?.trim() !== '' && row.Link_Material?.trim() !== null) {
+              linkMaterial = true;
+            }
+          });
+
+          // Map CSV columns to job schema using first row for job data
           const jobData = {
-            jobNumber: row.Job?.trim() || `JOB-${Date.now()}-${processed}`,
-            customer: row.Customer?.trim() || 'Unknown',
-            quantity: parseInt(row.Est_Required_Qty) || 1,
-            partNumber: `PART-${row.Job?.trim() || Date.now()}-${processed}`, // Generate part number based on job number
-            description: `Job ${row.Job?.trim() || 'N/A'} for ${row.Customer?.trim() || 'Unknown'}`,
-            orderDate: new Date(row.Order_Date || Date.now()),
-            promisedDate: new Date(row.Promised_Date || Date.now()),
-            dueDate: new Date(row.Promised_Date || Date.now()), // Use promised date as due date
-            estimatedHours: String(parseFloat(row['Est Total Hours']) || 0),
-            outsourcedVendor: isOutsourced ? vendor : null,
-            leadDays: parseInt(row.Lead_Days) || null,
-            linkMaterial: row.Link_Material?.trim() !== '' && row.Link_Material?.trim() !== null, // Has material order if Link_Material has any value
-            material: row.Material?.trim() || null, // Raw material specification, not part number
-            status: row.Status?.trim() === 'Active' ? 'Unscheduled' : 
-                   row.Status?.trim() === 'Closed' ? 'Complete' :
-                   row.Status?.trim() === 'Canceled' ? 'Complete' : 'Unscheduled',
+            jobNumber: jobNumber,
+            customer: firstRow.Customer?.trim() || 'Unknown',
+            quantity: parseInt(firstRow.Est_Required_Qty) || 1,
+            partNumber: `PART-${jobNumber}-${processed}`,
+            description: `Job ${jobNumber} for ${firstRow.Customer?.trim() || 'Unknown'}`,
+            orderDate: new Date(firstRow.Order_Date || Date.now()),
+            promisedDate: new Date(firstRow.Promised_Date || Date.now()),
+            dueDate: new Date(firstRow.Promised_Date || Date.now()),
+            estimatedHours: String(totalEstimatedHours),
+            outsourcedVendor: outsourcedVendor,
+            leadDays: parseInt(firstRow.Lead_Days) || null,
+            linkMaterial: linkMaterial,
+            material: material,
+            status: firstRow.Status?.trim() === 'Active' ? 'Unscheduled' : 
+                   firstRow.Status?.trim() === 'Closed' ? 'Complete' :
+                   firstRow.Status?.trim() === 'Canceled' ? 'Complete' : 'Unscheduled',
             priority: 'Normal',
-            routing: [routingEntry]
+            routing: routingEntries
           };
 
           // Create valid job data by bypassing schema validation for CSV import
@@ -314,7 +349,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             linkMaterial: Boolean(jobData.linkMaterial)
           };
           
-          console.log(`📋 Job ${validatedJob.jobNumber} - PartNumber: ${validatedJob.partNumber}, Material: ${validatedJob.material}, WorkCenter: ${workCenter}, Vendor: ${vendor}, isOutsourced: ${isOutsourced}`);
+          console.log(`📋 Job ${validatedJob.jobNumber} - Routing Steps: ${validatedJob.routing.length}, Total Hours: ${validatedJob.estimatedHours}, Material: ${validatedJob.material}`);
 
           // Check if job already exists
           const existingJobs = await storage.getJobs();
