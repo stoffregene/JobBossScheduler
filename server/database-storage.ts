@@ -567,11 +567,16 @@ export class DatabaseStorage implements IStorage {
       
       for (const job of unscheduledJobs) {
         try {
+          console.log(`🔄 Attempting to schedule job ${job.jobNumber} (${job.id})`);
+          console.log(`   Job routing:`, job.routing);
+          
           const result = await this.autoScheduleJobWithMaterialCheck(job.id);
           if (result.success) {
+            console.log(`✅ Successfully scheduled job ${job.jobNumber}`);
             scheduled++;
             details.push({ jobId: job.id, status: 'scheduled' });
           } else {
+            console.log(`❌ Failed to schedule job ${job.jobNumber}: ${result.reason}`);
             failed++;
             details.push({ 
               jobId: job.id, 
@@ -580,6 +585,7 @@ export class DatabaseStorage implements IStorage {
             });
           }
         } catch (error) {
+          console.log(`💥 Exception while scheduling job ${job.jobNumber}:`, error);
           failed++;
           details.push({ 
             jobId: job.id, 
@@ -989,15 +995,25 @@ export class DatabaseStorage implements IStorage {
     shift: number
   ): Promise<{ machine: Machine; adjustedHours: number; score: number } | null> {
     const allMachines = await this.getMachines();
+    console.log(`🔍 Finding machine for operation: ${operation.name}, machineType: ${operation.machineType}`);
+    console.log(`   Compatible machines required: [${operation.compatibleMachines.join(', ')}]`);
+    console.log(`   Available machines: ${allMachines.length}`);
     
     // Find machines that can handle this operation
     const compatibleMachines = [];
     for (const machine of allMachines) {
+      console.log(`   Checking machine: ${machine.machineId} (${machine.type})`);
+      console.log(`     Status: ${machine.status}, availableShifts: ${machine.availableShifts}, shift needed: ${shift}`);
+      console.log(`     Compatible check: ${operation.compatibleMachines.includes(machine.machineId)}`);
+      
       if (machine.status === "Available" &&
-          machine.availableShifts.includes(shift) &&
+          machine.availableShifts?.includes(shift) &&
           (operation.compatibleMachines.includes(machine.machineId) || 
            (machine.substitutionGroup && await this.canSubstitute(machine, operation)))) {
+        console.log(`     ✅ Machine ${machine.machineId} is compatible`);
         compatibleMachines.push(machine);
+      } else {
+        console.log(`     ❌ Machine ${machine.machineId} rejected`);
       }
     }
 

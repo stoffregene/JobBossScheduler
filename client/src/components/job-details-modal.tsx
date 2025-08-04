@@ -1,8 +1,10 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { X, Edit, Calendar } from "lucide-react";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import type { Job } from "@shared/schema";
 
 interface JobDetailsModalProps {
@@ -11,8 +13,31 @@ interface JobDetailsModalProps {
 }
 
 export default function JobDetailsModal({ jobId, onClose }: JobDetailsModalProps) {
+  const { toast } = useToast();
+  
   const { data: job, isLoading } = useQuery<Job>({
     queryKey: ['/api/jobs', jobId],
+  });
+
+  const scheduleJobMutation = useMutation({
+    mutationFn: () => apiRequest(`/api/jobs/${jobId}/schedule`, {
+      method: 'POST',
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/schedule'] });
+      toast({
+        title: "Job Scheduled",
+        description: `Job ${job?.jobNumber} has been scheduled successfully.`,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Scheduling Failed",
+        description: "Failed to schedule the job. Please check the routing and try again.",
+        variant: "destructive",
+      });
+    }
   });
 
   if (isLoading) {
@@ -72,12 +97,7 @@ export default function JobDetailsModal({ jobId, onClose }: JobDetailsModalProps
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-screen overflow-y-auto">
         <DialogHeader>
-          <div className="flex items-center justify-between">
-            <DialogTitle>Job Details - {job.jobNumber}</DialogTitle>
-            <Button variant="ghost" size="sm" onClick={onClose}>
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
+          <DialogTitle>Job Details - {job.jobNumber}</DialogTitle>
         </DialogHeader>
         
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -179,9 +199,12 @@ export default function JobDetailsModal({ jobId, onClose }: JobDetailsModalProps
             <Edit className="h-4 w-4 mr-1" />
             Edit Job
           </Button>
-          <Button>
+          <Button 
+            onClick={() => scheduleJobMutation.mutate()}
+            disabled={scheduleJobMutation.isPending || job?.status === 'Scheduled' || job?.status === 'Complete'}
+          >
             <Calendar className="h-4 w-4 mr-1" />
-            Schedule Job
+            {scheduleJobMutation.isPending ? 'Scheduling...' : 'Schedule Job'}
           </Button>
         </div>
       </DialogContent>
