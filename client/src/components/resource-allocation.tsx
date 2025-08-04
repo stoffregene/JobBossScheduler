@@ -124,7 +124,10 @@ export default function ResourceAllocation({ scheduleView }: ResourceAllocationP
           // Calculate overlapping days for the period
           const overlapStart = new Date(Math.max(unavailStart.getTime(), start.getTime()));
           const overlapEnd = new Date(Math.min(unavailEnd.getTime(), end.getTime()));
-          const overlapDays = Math.ceil((overlapEnd.getTime() - overlapStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+          
+          // For same-day unavailability (startDate === endDate), treat as 1 day
+          const overlapDays = unavailStart.toDateString() === unavailEnd.toDateString() ? 1 : 
+            Math.ceil((overlapEnd.getTime() - overlapStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
           
           // Calculate hours per day for 4x10 schedule (40 hours / 4 days = 10 hours per day)
           const hoursPerDay = 10;
@@ -156,6 +159,18 @@ export default function ResourceAllocation({ scheduleView }: ResourceAllocationP
     const shift1OperatorCapacity = Math.max(0, shift1BaseCapacity - shift1UnavailableEffectiveHours);
     const shift2OperatorCapacity = Math.max(0, shift2BaseCapacity - shift2UnavailableEffectiveHours);
     const totalOperatorCapacity = shift1OperatorCapacity + shift2OperatorCapacity;
+    
+    // Debug capacity calculation when unavailability exists
+    if (shift1UnavailableHours > 0 || shift2UnavailableHours > 0) {
+      console.log('Unavailability affecting capacity:', {
+        shift1UnavailableHours,
+        shift2UnavailableHours,
+        shift1BaseCapacity,
+        shift1UnavailableEffectiveHours,
+        shift1OperatorCapacity,
+        dateRange: { start: start.toDateString(), end: end.toDateString() }
+      });
+    }
 
     // Calculate actual usage from schedule entries
     const relevantScheduleEntries = scheduleEntries.filter(entry => {
