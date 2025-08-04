@@ -189,7 +189,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             sequence: 1,
             name: isOutsourced ? 'OUTSOURCE' : (wcVendor || 'GENERAL'),
             machineType: isOutsourced ? 'OUTSOURCE' : (wcVendor || 'GENERAL'),
-            compatibleMachines: isOutsourced ? [] : [wcVendor || 'GENERAL'],
+            compatibleMachines: isOutsourced ? ['OUTSOURCE-01'] : [wcVendor || 'GENERAL'],
             estimatedHours: parseFloat(row['Est Total Hours']) || 0,
             notes: isOutsourced ? `Outsourced to: ${wcVendor}` : undefined,
             operationType: isOutsourced ? 'OUTSOURCE' : undefined
@@ -224,11 +224,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             quantity: parseInt(jobData.quantity) || 1,
             estimatedHours: jobData.estimatedHours, // Already converted to string
             leadDays: jobData.leadDays,
-            linkMaterial: Boolean(jobData.linkMaterial),
-            routing: jobData.routing || [] // Preserve routing data
+            linkMaterial: Boolean(jobData.linkMaterial)
           };
           
-          console.log(`📋 Job ${validatedJob.jobNumber} routing:`, JSON.stringify(validatedJob.routing, null, 2));
+          console.log(`📋 Job ${validatedJob.jobNumber} - WC_Vendor: ${wcVendor}, isOutsourced: ${isOutsourced}, routing:`, JSON.stringify(validatedJob.routing, null, 2));
 
           // Check if job already exists
           const existingJobs = await storage.getJobs();
