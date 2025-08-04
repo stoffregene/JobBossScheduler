@@ -2,7 +2,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { X, Edit, Calendar } from "lucide-react";
+import { X, Edit, Calendar, Zap } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Job } from "@shared/schema";
@@ -19,22 +19,23 @@ export default function JobDetailsModal({ jobId, onClose }: JobDetailsModalProps
     queryKey: ['/api/jobs', jobId],
   });
 
-  const scheduleJobMutation = useMutation({
-    mutationFn: () => apiRequest(`/api/jobs/${jobId}/schedule`, {
-      method: 'POST',
-    }),
+  const autoScheduleJobMutation = useMutation({
+    mutationFn: () => apiRequest(`/api/jobs/${jobId}/auto-schedule`, 'POST'),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
       queryClient.invalidateQueries({ queryKey: ['/api/schedule'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
       toast({
-        title: "Job Scheduled",
-        description: `Job ${job?.jobNumber} has been scheduled successfully.`,
+        title: "Job Auto-Scheduled",
+        description: `Job ${job?.jobNumber} has been auto-scheduled successfully.`,
       });
+      onClose(); // Close modal after successful scheduling
     },
-    onError: () => {
+    onError: (error: any) => {
+      const errorMessage = error?.failureDetails || error?.message || "Failed to auto-schedule the job. Please check the routing and try again.";
       toast({
-        title: "Scheduling Failed",
-        description: "Failed to schedule the job. Please check the routing and try again.",
+        title: "Auto-Scheduling Failed",
+        description: errorMessage,
         variant: "destructive",
       });
     }
@@ -200,11 +201,12 @@ export default function JobDetailsModal({ jobId, onClose }: JobDetailsModalProps
             Edit Job
           </Button>
           <Button 
-            onClick={() => scheduleJobMutation.mutate()}
-            disabled={scheduleJobMutation.isPending || job?.status === 'Scheduled' || job?.status === 'Complete'}
+            onClick={() => autoScheduleJobMutation.mutate()}
+            disabled={autoScheduleJobMutation.isPending || job?.status === 'Scheduled' || job?.status === 'Complete'}
+            className="bg-primary-500 hover:bg-primary-600 text-white"
           >
-            <Calendar className="h-4 w-4 mr-1" />
-            {scheduleJobMutation.isPending ? 'Scheduling...' : 'Schedule Job'}
+            <Zap className="h-4 w-4 mr-1" />
+            {autoScheduleJobMutation.isPending ? 'Auto-Scheduling...' : 'Auto Schedule'}
           </Button>
         </div>
       </DialogContent>

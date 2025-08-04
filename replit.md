@@ -24,6 +24,14 @@ Preferred communication style: Simple, everyday language.
 - Work center status component moved to sidebar and starts minimized with lower visual priority
 - Dashboard overview simplified to show only active jobs and at-risk jobs tiles
 
+**August 4, 2025** - Fixed job scheduling functionality and UI improvements:
+- Fixed job details modal "Schedule Job" button - now uses correct `/api/jobs/:id/auto-schedule` endpoint
+- Replaced "Schedule Job" with "Auto Schedule" button using lightning bolt icon for consistency
+- Added proper error handling with detailed failure messages from backend
+- Fixed weekend shading in production schedule to properly show Friday-Sunday as unavailable
+- Improved job queue button layout with flex-wrap to prevent buttons from running off tile edges
+- Enhanced month view in production schedule with sticky machine labels and better column sizing
+
 ## System Architecture
 
 ### Frontend Architecture
