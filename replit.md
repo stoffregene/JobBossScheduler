@@ -41,6 +41,7 @@ Preferred communication style: Simple, everyday language.
 - **SHIFT DISPLAY FIX**: Fixed resource allocation component to use database shift values instead of recalculating from time - eliminates incorrect "shift 2" display for 3 AM jobs that are correctly scheduled on shift 1
 - **SCHEDULE COLOR CODING**: Added visual distinction between shift 1 and shift 2 operations - shift 2 jobs have lighter opacity and colored borders for easy identification
 - **SEQUENCE-BASED ROUTING**: Enhanced CSV import to support "Sequence" column (0-10) for proper operation ordering - ensures saw→mill→inspect workflow sequencing from JobBoss routing data
+- **ENHANCED CSV IMPORT**: Added support for "Part Description" column and fixed created date to use "Order_Date" from CSV instead of current timestamp
 
 ## System Architecture
 

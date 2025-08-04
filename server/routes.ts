@@ -297,8 +297,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const csvSequence = parseInt(row.Sequence) || parseInt(row.sequence);
             const finalSequence = csvSequence !== undefined && !isNaN(csvSequence) ? csvSequence : index + 1;
             
-            // Determine if this is outsourced work
-            const isOutsourced = amtWorkCenterVendor && vendor && amtWorkCenterVendor === vendor;
+            // Determine if this is outsourced work - only outsourced if vendor is different from standard work centers
+            const isOutsourced = amtWorkCenterVendor && vendor && amtWorkCenterVendor === vendor && !isStandardWorkCenter(amtWorkCenterVendor);
             const workCenter = amtWorkCenterVendor;
             
             // Track unfound work centers for flagging
@@ -343,10 +343,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             customer: firstRow.Customer?.trim() || 'Unknown',
             quantity: parseInt(firstRow.Est_Required_Qty) || 1,
             partNumber: `PART-${jobNumber}-${processed}`,
-            description: `Job ${jobNumber} for ${firstRow.Customer?.trim() || 'Unknown'}`,
+            description: firstRow['Part Description']?.trim() || `Job ${jobNumber} for ${firstRow.Customer?.trim() || 'Unknown'}`,
             orderDate: new Date(firstRow.Order_Date || Date.now()),
             promisedDate: new Date(firstRow.Promised_Date || Date.now()),
             dueDate: new Date(firstRow.Promised_Date || Date.now()),
+            createdDate: new Date(firstRow.Order_Date || Date.now()),
             estimatedHours: String(totalEstimatedHours),
             outsourcedVendor: outsourcedVendor,
             leadDays: parseInt(firstRow.Lead_Days) || null,
@@ -366,7 +367,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             quantity: jobData.quantity || 1,
             estimatedHours: jobData.estimatedHours, // Already converted to string
             leadDays: jobData.leadDays,
-            linkMaterial: Boolean(jobData.linkMaterial)
+            linkMaterial: Boolean(jobData.linkMaterial),
+            createdDate: jobData.createdDate // Use Order_Date as created date
           };
           
           console.log(`📋 Job ${validatedJob.jobNumber} - Routing Steps: ${validatedJob.routing.length}, Total Hours: ${validatedJob.estimatedHours}, Material: ${validatedJob.material}`);
