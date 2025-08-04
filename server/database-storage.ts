@@ -1102,17 +1102,19 @@ export class DatabaseStorage implements IStorage {
       }
 
       // Check if there are resources available for this machine on this shift
-      // For now, assume resources are available (can be enhanced later with proper resource-machine mapping)
+      // Resources must be active, work the shift, AND be qualified for this specific machine
       const machineResources = allResources.filter(resource => 
-        resource.shiftSchedule?.includes(shift)
+        resource.isActive &&
+        resource.shiftSchedule?.includes(shift) &&
+        resource.workCenters?.includes(machine.id)
       );
       
       if (machineResources.length === 0) {
-        console.log(`     ❌ Machine ${machine.machineId} rejected - no resources available for shift ${shift}`);
+        console.log(`     ❌ Machine ${machine.machineId} has NO qualified resources on shift ${shift}`);
         continue;
       }
 
-      console.log(`     ✅ Machine ${machine.machineId} is compatible with ${machineResources.length} resources available`);
+      console.log(`     ✅ Machine ${machine.machineId} has ${machineResources.length} qualified resources on shift ${shift}`);
       compatibleMachines.push(machine);
     }
 

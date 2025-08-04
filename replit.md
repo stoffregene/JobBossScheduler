@@ -37,6 +37,7 @@ Preferred communication style: Simple, everyday language.
 - **DISPLAY FIX**: Updated job display to show operation sequence instead of total hours for better clarity in multi-operation jobs
 - **TIMEZONE FIX**: Fixed UTC date comparison in schedule view to prevent jobs from appearing on wrong days due to timezone differences
 - **SHIFT PRIORITY FIX**: Changed scheduler to always prioritize shift 1 first instead of load balancing - ensures machines that only run on shift 1 get scheduled properly
+- **RESOURCE AVAILABILITY FIX**: Enhanced scheduler to check if machines have qualified resources (operators) available on the specific shift - prevents scheduling jobs on machines when no operators are available
 
 ## System Architecture
 
