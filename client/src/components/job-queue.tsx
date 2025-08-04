@@ -1,4 +1,5 @@
 import { useState } from "react";
+import React from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Filter, Plus, Calendar, Edit, Zap, Trash2, Settings, Upload, PlayCircle, AlertTriangle, ChevronDown, ChevronUp } from "lucide-react";
+import { Filter, Plus, Calendar, Edit, Zap, Trash2, Settings, Upload, PlayCircle, AlertTriangle, ChevronDown, ChevronUp, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Job } from "@shared/schema";
@@ -17,6 +18,9 @@ import type { Job } from "@shared/schema";
 interface JobQueueProps {
   onJobSelect: (jobId: string) => void;
 }
+
+type SortField = 'jobNumber' | 'partNumber' | 'dueDate' | 'status' | 'priority' | 'customer' | 'estimatedHours';
+type SortDirection = 'asc' | 'desc';
 
 export default function JobQueue({ onJobSelect }: JobQueueProps) {
   const { toast } = useToast();
@@ -27,6 +31,15 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isRoutingDialogOpen, setIsRoutingDialogOpen] = useState(false);
   const [selectedJobForRouting, setSelectedJobForRouting] = useState<Job | null>(null);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [sortField, setSortField] = useState<SortField>('dueDate');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const [filters, setFilters] = useState({
+    status: '',
+    priority: '',
+    customer: '',
+    search: ''
+  });
   const [newJob, setNewJob] = useState({
     jobNumber: '',
     partNumber: '',
@@ -38,10 +51,52 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
     operations: [] as string[]
   });
 
-  const { data: jobs, isLoading } = useQuery<Job[]>({
+  const { data: rawJobs, isLoading } = useQuery<Job[]>({
     queryKey: ['/api/jobs'],
     queryFn: () => fetch('/api/jobs?includeCompleted=false').then(res => res.json()),
   });
+
+  // Sort and filter jobs
+  const jobs = React.useMemo(() => {
+    if (!rawJobs) return [];
+    
+    let filteredJobs = rawJobs.filter(job => {
+      if (filters.status && job.status !== filters.status) return false;
+      if (filters.priority && job.priority !== filters.priority) return false;
+      if (filters.customer && !job.customer?.toLowerCase().includes(filters.customer.toLowerCase())) return false;
+      if (filters.search) {
+        const searchLower = filters.search.toLowerCase();
+        return job.jobNumber.toLowerCase().includes(searchLower) ||
+               job.partNumber.toLowerCase().includes(searchLower) ||
+               job.description?.toLowerCase().includes(searchLower) ||
+               job.customer?.toLowerCase().includes(searchLower);
+      }
+      return true;
+    });
+
+    // Sort jobs
+    filteredJobs.sort((a, b) => {
+      let aValue: any = a[sortField];
+      let bValue: any = b[sortField];
+
+      if (sortField === 'dueDate') {
+        aValue = new Date(a.dueDate).getTime();
+        bValue = new Date(b.dueDate).getTime();
+      } else if (sortField === 'estimatedHours') {
+        aValue = parseFloat(a.estimatedHours || '0');
+        bValue = parseFloat(b.estimatedHours || '0');
+      } else if (typeof aValue === 'string') {
+        aValue = aValue.toLowerCase();
+        bValue = bValue?.toLowerCase() || '';
+      }
+
+      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return filteredJobs;
+  }, [rawJobs, sortField, sortDirection, filters]);
 
   const { data: machines } = useQuery<any[]>({
     queryKey: ['/api/machines'],
@@ -260,7 +315,7 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
   };
 
   const handleDeleteAllJobs = () => {
-    const jobCount = jobs?.length || 0;
+    const jobCount = rawJobs?.length || 0;
     if (jobCount === 0) {
       toast({
         title: "No Jobs",
@@ -272,6 +327,33 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
     if (confirm(`Are you sure you want to delete ALL ${jobCount} jobs? This action cannot be undone and will remove all associated scheduling and material orders.`)) {
       deleteAllJobsMutation.mutate();
     }
+  };
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  const getSortIcon = (field: SortField) => {
+    if (sortField !== field) {
+      return <ArrowUpDown className="h-3 w-3 opacity-50" />;
+    }
+    return sortDirection === 'asc' ? 
+      <ArrowUp className="h-3 w-3" /> : 
+      <ArrowDown className="h-3 w-3" />;
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      status: '',
+      priority: '',
+      customer: '',
+      search: ''
+    });
   };
 
   const handleOpenRoutingDialog = (job: Job) => {
@@ -380,10 +462,27 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
           <div className="flex items-center justify-between">
             <CardTitle>Job Queue</CardTitle>
             <div className="flex items-center space-x-2">
-              <Button variant="outline" size="sm">
-                <Filter className="h-4 w-4 mr-1" />
-                Filter
-              </Button>
+              <Dialog open={isFilterOpen} onOpenChange={setIsFilterOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm" data-testid="button-filter-empty">
+                    <Filter className="h-4 w-4 mr-1" />
+                    Filter
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Filter Jobs</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="text-sm text-gray-600">No jobs available to filter.</div>
+                    <div className="flex justify-end pt-4">
+                      <Button onClick={() => setIsFilterOpen(false)} data-testid="button-close-filter-empty">
+                        Close
+                      </Button>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
               <Dialog open={isImportOpen} onOpenChange={setIsImportOpen}>
                 <DialogTrigger asChild>
                   <Button variant="outline" size="sm">
@@ -615,10 +714,82 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
               <PlayCircle className="h-4 w-4 mr-1" />
               Schedule All
             </Button>
-            <Button variant="outline" size="sm">
-              <Filter className="h-4 w-4 mr-1" />
-              Filter
-            </Button>
+            <Dialog open={isFilterOpen} onOpenChange={setIsFilterOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm" data-testid="button-filter">
+                  <Filter className="h-4 w-4 mr-1" />
+                  Filter
+                  {(filters.status || filters.priority || filters.customer || filters.search) && (
+                    <span className="ml-1 bg-blue-500 text-white text-xs rounded-full px-1.5 py-0.5">•</span>
+                  )}
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Filter Jobs</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="searchFilter">Search</Label>
+                    <Input
+                      id="searchFilter"
+                      placeholder="Search job number, part, or description..."
+                      value={filters.search}
+                      onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
+                      data-testid="input-search-filter"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="statusFilter">Status</Label>
+                    <Select value={filters.status} onValueChange={(value) => setFilters(prev => ({ ...prev, status: value }))}>
+                      <SelectTrigger data-testid="select-status-filter">
+                        <SelectValue placeholder="All statuses" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">All statuses</SelectItem>
+                        <SelectItem value="Unscheduled">Unscheduled</SelectItem>
+                        <SelectItem value="Scheduled">Scheduled</SelectItem>
+                        <SelectItem value="In Progress">In Progress</SelectItem>
+                        <SelectItem value="Complete">Complete</SelectItem>
+                        <SelectItem value="On Hold">On Hold</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="priorityFilter">Priority</Label>
+                    <Select value={filters.priority} onValueChange={(value) => setFilters(prev => ({ ...prev, priority: value }))}>
+                      <SelectTrigger data-testid="select-priority-filter">
+                        <SelectValue placeholder="All priorities" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">All priorities</SelectItem>
+                        <SelectItem value="Normal">Normal</SelectItem>
+                        <SelectItem value="High">High</SelectItem>
+                        <SelectItem value="Critical">Critical</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="customerFilter">Customer</Label>
+                    <Input
+                      id="customerFilter"
+                      placeholder="Filter by customer name..."
+                      value={filters.customer}
+                      onChange={(e) => setFilters(prev => ({ ...prev, customer: e.target.value }))}
+                      data-testid="input-customer-filter"
+                    />
+                  </div>
+                  <div className="flex justify-between pt-4">
+                    <Button variant="outline" onClick={clearFilters} data-testid="button-clear-filters">
+                      Clear All
+                    </Button>
+                    <Button onClick={() => setIsFilterOpen(false)} data-testid="button-apply-filters">
+                      Apply
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
             <Dialog open={isImportOpen} onOpenChange={setIsImportOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline" size="sm">
@@ -759,11 +930,56 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
               <table className="w-full">
                 <thead className="bg-gray-50 dark:bg-gray-700">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Job #</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Part</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Due Date</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Priority</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      <button 
+                        className="flex items-center space-x-1 hover:text-gray-700 dark:hover:text-gray-200"
+                        onClick={() => handleSort('jobNumber')}
+                        data-testid="sort-job-number"
+                      >
+                        <span>Job #</span>
+                        {getSortIcon('jobNumber')}
+                      </button>
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      <button 
+                        className="flex items-center space-x-1 hover:text-gray-700 dark:hover:text-gray-200"
+                        onClick={() => handleSort('partNumber')}
+                        data-testid="sort-part-number"
+                      >
+                        <span>Part</span>
+                        {getSortIcon('partNumber')}
+                      </button>
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      <button 
+                        className="flex items-center space-x-1 hover:text-gray-700 dark:hover:text-gray-200"
+                        onClick={() => handleSort('dueDate')}
+                        data-testid="sort-due-date"
+                      >
+                        <span>Due Date</span>
+                        {getSortIcon('dueDate')}
+                      </button>
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      <button 
+                        className="flex items-center space-x-1 hover:text-gray-700 dark:hover:text-gray-200"
+                        onClick={() => handleSort('status')}
+                        data-testid="sort-status"
+                      >
+                        <span>Status</span>
+                        {getSortIcon('status')}
+                      </button>
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      <button 
+                        className="flex items-center space-x-1 hover:text-gray-700 dark:hover:text-gray-200"
+                        onClick={() => handleSort('priority')}
+                        data-testid="sort-priority"
+                      >
+                        <span>Priority</span>
+                        {getSortIcon('priority')}
+                      </button>
+                    </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
