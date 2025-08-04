@@ -202,9 +202,9 @@ export default function ResourceAllocation({ scheduleView }: ResourceAllocationP
       if (machine && job && (workCenterFilter === "ALL" || machine.type === workCenterFilter)) {
         const hours = parseFloat(job.estimatedHours || "0");
         
-        // Determine which shift based on time (simplified) - hours represent operator time
-        const startHour = new Date(entry.startTime).getHours();
-        if (startHour >= 6 && startHour < 14) {
+        // Use the database shift value directly instead of recalculating from time
+        // This ensures consistency with the scheduler's decisions
+        if (entry.shift === 1) {
           shift1OperatorUsed += hours;
         } else {
           shift2OperatorUsed += hours;
