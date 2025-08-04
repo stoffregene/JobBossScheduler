@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Edit, Trash2, Settings } from "lucide-react";
+import { Plus, Edit, Trash2, Settings, ArrowLeft, Home, Users, Package, Upload } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useForm } from "react-hook-form";
@@ -15,6 +15,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { Link } from "wouter";
 import type { Machine } from "@shared/schema";
 
 // Work center configuration schema
@@ -371,14 +372,65 @@ export default function WorkCenterManagement() {
   }, {});
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Work Center Management</h1>
-          <p className="text-muted-foreground">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      {/* Header with Navigation */}
+      <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center space-x-4">
+              <Link href="/">
+                <button className="flex items-center space-x-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">
+                  <ArrowLeft className="h-5 w-5" />
+                  <span>Back to Dashboard</span>
+                </button>
+              </Link>
+              <div className="h-6 border-l border-gray-300 dark:border-gray-600"></div>
+              <div className="flex items-center space-x-2">
+                <Settings className="text-primary-500 text-xl" />
+                <span className="text-xl font-bold text-gray-900 dark:text-white">Work Center Management</span>
+              </div>
+            </div>
+            
+            <nav className="flex items-center space-x-4">
+              <Link href="/">
+                <button className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">
+                  <Home className="w-4 h-4" />
+                  Dashboard
+                </button>
+              </Link>
+              <Link href="/resources">
+                <button className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">
+                  <Users className="w-4 h-4" />
+                  Resources
+                </button>
+              </Link>
+              <Link href="/materials">
+                <button className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">
+                  <Package className="w-4 h-4" />
+                  Materials
+                </button>
+              </Link>
+              <Link href="/job-import">
+                <button className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">
+                  <Upload className="w-4 h-4" />
+                  Import Jobs
+                </button>
+              </Link>
+            </nav>
+          </div>
+        </div>
+      </header>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Work Center Management</h1>
+          <p className="text-gray-600 dark:text-gray-300">
             Manage your manufacturing work centers with proper hierarchical categorization
           </p>
         </div>
+
+        <div className="flex items-center justify-between mb-6">
+          <div></div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button onClick={handleCreate} data-testid="button-add-work-center">
@@ -821,9 +873,9 @@ export default function WorkCenterManagement() {
             </Form>
           </DialogContent>
         </Dialog>
-      </div>
+        </div>
 
-      <div className="space-y-6">
+        <div className="space-y-6">
         {Object.entries(groupedMachines).map(([type, machines]) => (
           <Card key={type}>
             <CardHeader>
@@ -897,6 +949,7 @@ export default function WorkCenterManagement() {
             </CardContent>
           </Card>
         ))}
+        </div>
       </div>
     </div>
   );
