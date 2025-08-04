@@ -8,9 +8,7 @@ export default function MachineStatus() {
     queryKey: ['/api/machines'],
   });
 
-  console.log('MachineStatus - machines data:', machines);
-  console.log('MachineStatus - loading state:', isLoading);
-  console.log('MachineStatus - error:', error);
+
 
   if (isLoading) {
     return (

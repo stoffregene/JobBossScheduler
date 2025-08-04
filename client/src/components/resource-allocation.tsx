@@ -161,7 +161,7 @@ export default function ResourceAllocation({ scheduleView }: ResourceAllocationP
     const totalOperatorCapacity = shift1OperatorCapacity + shift2OperatorCapacity;
     
     // Always log capacity calculation for debugging
-    console.log('Resource allocation calculation:', {
+    console.log('📊 Resource allocation calculation:', {
       dateRange: { start: start.toDateString(), end: end.toDateString() },
       unavailabilityEntries: unavailabilityData?.length || 0,
       shift1Resources: shift1Resources.length,
@@ -170,7 +170,8 @@ export default function ResourceAllocation({ scheduleView }: ResourceAllocationP
       shift2UnavailableHours,
       shift1BaseCapacity,
       shift1UnavailableEffectiveHours,
-      shift1OperatorCapacity
+      shift1OperatorCapacity,
+      chrisJohnsonFound: filteredResources.find(r => r.name === 'Chris Johnson') ? 'YES' : 'NO'
     });
 
     // Calculate actual usage from schedule entries
