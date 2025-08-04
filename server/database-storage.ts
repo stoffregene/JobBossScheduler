@@ -1358,7 +1358,10 @@ export class DatabaseStorage implements IStorage {
       let attemptDays = 0;
       
       while (!scheduled && attemptDays < maxDaysOut) {
-        const machineResults = await this.findOptimalMachineAssignment([operation], job.priority as "Critical" | "High" | "Normal" | "Low");
+        console.log(`🎯 Trying to find machine for operation ${operation.name} on attempt ${attemptDays}`);
+        const machineResult = await this.findBestMachineForOperation(operation, currentDate, 1);
+        console.log(`🎯 Machine result:`, machineResult);
+        const machineResults = machineResult ? [machineResult] : [];
         
         if (machineResults.length === 0) {
           currentDate = new Date(currentDate.getTime() + dayInMs);
@@ -1367,6 +1370,15 @@ export class DatabaseStorage implements IStorage {
         }
         
         for (const result of machineResults) {
+          console.log(`🔧 Processing machine result:`, result);
+          if (!result || !result.machine) {
+            console.log(`❌ Invalid machine result, skipping`);
+            continue;
+          }
+          if (!result.machine.availableShifts) {
+            console.log(`❌ Machine ${result.machine.machineId} has no availableShifts property`);
+            continue;
+          }
           for (const shift of result.machine.availableShifts) {
             const shiftStart = shift === 1 ? 3 : 15; // 3 AM or 3 PM
             const startTime = new Date(currentDate);
