@@ -1,9 +1,11 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Clock, AlertTriangle, Package2 } from "lucide-react";
+import { Clock, AlertTriangle, Package2, Trash2 } from "lucide-react";
 import { Link } from "wouter";
 import CollapsibleCard from "@/components/collapsible-card";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 import type { Job, MaterialOrder } from "@shared/schema";
 
 interface JobWithMaterials extends Job {
@@ -11,8 +13,31 @@ interface JobWithMaterials extends Job {
 }
 
 export default function JobsAwaitingMaterialWidget() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  
   const { data: jobsAwaitingMaterial, isLoading } = useQuery<JobWithMaterials[]>({
     queryKey: ['/api/jobs/awaiting-material'],
+  });
+
+  const deleteAllMutation = useMutation({
+    mutationFn: () => apiRequest('/api/jobs/awaiting-material/all', 'DELETE'),
+    onSuccess: (data: { deletedCount: number }) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs/awaiting-material'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/material-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      toast({
+        title: "Material dependencies cleared",
+        description: `Cleared material dependencies for ${data.deletedCount} orders.`,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to clear material dependencies.",
+        variant: "destructive",
+      });
+    },
   });
 
   if (isLoading) {
@@ -59,11 +84,24 @@ export default function JobsAwaitingMaterialWidget() {
       title="Jobs Awaiting Material"
       icon={<Package2 className="h-4 w-4 text-muted-foreground" />}
       headerActions={
-        <Link href="/materials">
-          <Button variant="ghost" size="sm" className="text-xs">
-            Manage
-          </Button>
-        </Link>
+        <div className="flex items-center space-x-1">
+          {awaitingJobs.length > 0 && (
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => deleteAllMutation.mutate()}
+              disabled={deleteAllMutation.isPending}
+              data-testid="delete-all-jobs-awaiting-material"
+            >
+              <Trash2 className="h-3 w-3" />
+            </Button>
+          )}
+          <Link href="/materials">
+            <Button variant="ghost" size="sm" className="text-xs">
+              Manage
+            </Button>
+          </Link>
+        </div>
       }
     >
         <div className="space-y-3">

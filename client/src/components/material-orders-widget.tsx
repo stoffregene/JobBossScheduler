@@ -1,14 +1,38 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Package, Clock, AlertTriangle, Plus } from "lucide-react";
+import { Package, Clock, AlertTriangle, Plus, Trash2 } from "lucide-react";
 import { Link } from "wouter";
 import CollapsibleCard from "@/components/collapsible-card";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 import type { MaterialOrder } from "@shared/schema";
 
 export default function MaterialOrdersWidget() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  
   const { data: materialOrders, isLoading } = useQuery<MaterialOrder[]>({
     queryKey: ['/api/material-orders'],
+  });
+
+  const deleteAllMutation = useMutation({
+    mutationFn: () => apiRequest('/api/material-orders/all', 'DELETE'),
+    onSuccess: (data: { deletedCount: number }) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/material-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs/awaiting-material'] });
+      toast({
+        title: "Material orders deleted",
+        description: `Successfully deleted ${data.deletedCount} material orders.`,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to delete material orders.",
+        variant: "destructive",
+      });
+    },
   });
 
   if (isLoading) {
@@ -53,11 +77,24 @@ export default function MaterialOrdersWidget() {
       title="Material Orders"
       icon={<Package className="h-4 w-4 text-muted-foreground" />}
       headerActions={
-        <Link href="/materials">
-          <Button variant="ghost" size="sm">
-            <Plus className="h-3 w-3" />
-          </Button>
-        </Link>
+        <div className="flex items-center space-x-1">
+          {openOrders.length > 0 && (
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => deleteAllMutation.mutate()}
+              disabled={deleteAllMutation.isPending}
+              data-testid="delete-all-material-orders"
+            >
+              <Trash2 className="h-3 w-3" />
+            </Button>
+          )}
+          <Link href="/materials">
+            <Button variant="ghost" size="sm">
+              <Plus className="h-3 w-3" />
+            </Button>
+          </Link>
+        </div>
       }
     >
         <div className="space-y-3">

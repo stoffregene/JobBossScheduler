@@ -1457,6 +1457,18 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
+  async deleteAllMaterialOrders(): Promise<number> {
+    const result = await db.delete(materialOrders);
+    return result.rowCount || 0;
+  }
+
+  async deleteAllJobsAwaitingMaterial(): Promise<number> {
+    // This deletes all material orders for jobs that are awaiting material
+    // which effectively removes them from the "awaiting material" status
+    const result = await db.delete(materialOrders).where(eq(materialOrders.status, "Open"));
+    return result.rowCount || 0;
+  }
+
   // Get jobs awaiting material - key method for material tracking
   async getJobsAwaitingMaterial(): Promise<Array<Job & { materialOrders: MaterialOrder[] }>> {
     const jobsWithMaterial = await db.select({

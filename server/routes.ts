@@ -1301,6 +1301,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.delete("/api/material-orders/all", async (req, res) => {
+    try {
+      const deletedCount = await storage.deleteAllMaterialOrders();
+      broadcast({ type: 'all_material_orders_deleted' });
+      res.json({ success: true, deletedCount });
+    } catch (error) {
+      console.error('Error deleting all material orders:', error);
+      res.status(500).json({ message: "Failed to delete all material orders" });
+    }
+  });
+
+  app.delete("/api/jobs/awaiting-material/all", async (req, res) => {
+    try {
+      const deletedCount = await storage.deleteAllJobsAwaitingMaterial();
+      broadcast({ type: 'all_jobs_awaiting_material_deleted' });
+      res.json({ success: true, deletedCount });
+    } catch (error) {
+      console.error('Error deleting all jobs awaiting material:', error);
+      res.status(500).json({ message: "Failed to delete all jobs awaiting material" });
+    }
+  });
+
   app.get("/api/jobs/:id/readiness", async (req, res) => {
     try {
       const readiness = await storage.isJobReadyForScheduling(req.params.id);

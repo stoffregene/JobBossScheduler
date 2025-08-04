@@ -97,6 +97,8 @@ export interface IStorage {
   createMaterialOrder(orderData: InsertMaterialOrder): Promise<MaterialOrder>;
   updateMaterialOrder(orderId: string, updates: Partial<MaterialOrder>): Promise<MaterialOrder | null>;
   markMaterialReceived(orderId: string): Promise<MaterialOrder | null>;
+  deleteAllMaterialOrders(): Promise<number>;
+  deleteAllJobsAwaitingMaterial(): Promise<number>;
   getJobsAwaitingMaterial(): Promise<Array<Job & { materialOrders: MaterialOrder[] }>>;
   isJobReadyForScheduling(jobId: string): Promise<{ ready: boolean; reason?: string; pendingMaterials?: MaterialOrder[] }>;
   autoScheduleJobWithMaterialCheck(jobId: string): Promise<{ success: boolean; scheduleEntries?: ScheduleEntry[]; reason?: string; pendingItems?: any[] }>;
