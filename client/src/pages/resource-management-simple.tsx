@@ -619,7 +619,7 @@ export default function ResourceManagement() {
                   <div className="text-sm text-muted-foreground">Loading...</div>
                 ) : unavailabilityData && unavailabilityData.length > 0 ? (
                   unavailabilityData.map(item => {
-                    const resource = resources?.find(r => item.resourceIds?.includes(r.id));
+                    const resource = resources?.find(r => r.id === item.resourceId);
                     // Use Central Time for proper comparison
                     const now = new Date();
                     const today = new Date(now.toLocaleString('en-US', { timeZone: 'America/Chicago' }));
