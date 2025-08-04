@@ -1155,6 +1155,27 @@ export class DatabaseStorage implements IStorage {
     return bestMatch;
   }
 
+  // Get shifts ordered by current load (least loaded first) for better load balancing
+  private async getShiftsOrderedByLoad(targetDate: Date): Promise<number[]> {
+    const allScheduleEntries = await this.getScheduleEntries();
+    
+    // Count hours scheduled per shift for the target date
+    const shiftLoads = { 1: 0, 2: 0 };
+    
+    for (const entry of allScheduleEntries) {
+      const entryDate = new Date(entry.startTime);
+      if (entryDate.toDateString() === targetDate.toDateString()) {
+        const duration = (new Date(entry.endTime).getTime() - new Date(entry.startTime).getTime()) / (1000 * 60 * 60);
+        shiftLoads[entry.shift as keyof typeof shiftLoads] += duration;
+      }
+    }
+    
+    console.log(`📊 Shift loads for ${targetDate.toDateString()}: Shift 1: ${shiftLoads[1].toFixed(1)}h, Shift 2: ${shiftLoads[2].toFixed(1)}h`);
+    
+    // Return shifts ordered by load (least loaded first)
+    return [1, 2].sort((a, b) => shiftLoads[a as keyof typeof shiftLoads] - shiftLoads[b as keyof typeof shiftLoads]);
+  }
+
   private async canSubstitute(machine: Machine, operation: RoutingOperation): Promise<boolean> {
     // Check if machine is in same substitution group as any compatible machine
     if (!machine.substitutionGroup) return false;
@@ -1230,8 +1251,38 @@ export class DatabaseStorage implements IStorage {
           continue;
         }
         
-        // Try both shifts, preferring first shift
-        for (const shift of [1, 2]) {
+        // OPTIMIZATION: Handle outsource operations specially - don't schedule them on specific machines
+        if (operation.machineType === 'OUTSOURCE' || operation.compatibleMachines.includes('OUTSOURCE-01')) {
+          // Outsource operations are placeholders - create entry without actual machine scheduling
+          const scheduleEntry = await this.createScheduleEntry({
+            jobId: job.id,
+            machineId: (await this.getMachines()).find(m => m.machineId === 'OUTSOURCE-01')?.id || 'outsource-placeholder', // Use actual outsource machine ID
+            operationSequence: operation.sequence,
+            startTime: currentDate,
+            endTime: new Date(currentDate.getTime() + (parseFloat(operation.estimatedHours) * 60 * 60 * 1000)),
+            shift: 1, // Default to shift 1 for outsource
+            status: "Outsourced"
+          });
+          
+          scheduleEntries.push(scheduleEntry);
+          onProgress?.({
+            percentage: ((i + 1) / sortedOperations.length) * 90,
+            status: `Operation ${i + 1} marked as outsourced`,
+            stage: 'scheduled',
+            operationName: operation.name,
+            currentOperation: i + 1,
+            totalOperations: sortedOperations.length
+          });
+          
+          // Move to next day
+          currentDate = new Date(currentDate.getTime() + dayInMs);
+          scheduled = true;
+          continue;
+        }
+
+        // For regular operations: Try shifts with load balancing (prefer less loaded shifts)
+        const shifts = await this.getShiftsOrderedByLoad(currentDate);
+        for (const shift of shifts) {
           const result = await this.findBestMachineForOperation(operation, currentDate, shift);
           
           if (result) {
