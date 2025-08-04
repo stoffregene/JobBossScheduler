@@ -17,7 +17,7 @@ import { z } from "zod";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
-import type { Machine } from "@shared/schema";
+import type { Machine, Resource } from "@shared/schema";
 
 // Work center configuration schema
 const workCenterSchema = z.object({
@@ -208,6 +208,15 @@ export default function WorkCenterManagement() {
     queryFn: async () => {
       const response = await fetch("/api/machines");
       if (!response.ok) throw new Error("Failed to fetch machines");
+      return response.json();
+    },
+  });
+
+  const { data: resources = [] } = useQuery<Resource[]>({
+    queryKey: ["/api/resources"],
+    queryFn: async () => {
+      const response = await fetch("/api/resources");
+      if (!response.ok) throw new Error("Failed to fetch resources");
       return response.json();
     },
   });
@@ -991,15 +1000,29 @@ export default function WorkCenterManagement() {
                 <CollapsibleContent>
                   <CardContent className="pt-0">
                     <div className="grid gap-3 sm:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3">
-                      {machinesInType.map((machine) => (
+                      {machinesInType.map((machine) => {
+                        // Check if machine has assigned operators
+                        const assignedResources = resources.filter(r => 
+                          r.isActive && r.workCenters.includes(machine.id)
+                        );
+                        const hasGap = assignedResources.length === 0;
+                        
+                        return (
                         <div
                           key={machine.id}
-                          className="flex items-start justify-between p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                          className={`flex items-start justify-between p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${
+                            hasGap ? 'border-orange-300 bg-orange-50 dark:border-orange-700 dark:bg-orange-950' : ''
+                          }`}
                         >
                           <div className="flex-1 min-w-0 space-y-2">
                             <div className="flex items-center gap-2">
                               <h4 className="font-medium text-sm truncate" data-testid={`text-machine-${machine.machineId}`}>{machine.machineId}</h4>
                               {getStatusBadge(machine.status)}
+                              {hasGap && (
+                                <Badge variant="outline" className="text-orange-600 border-orange-300 bg-orange-100 dark:text-orange-400 dark:border-orange-700 dark:bg-orange-900">
+                                  Gap
+                                </Badge>
+                              )}
                             </div>
                             <p className="text-xs text-muted-foreground truncate">{machine.name}</p>
                             
@@ -1055,7 +1078,8 @@ export default function WorkCenterManagement() {
                             </Button>
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </CardContent>
                 </CollapsibleContent>

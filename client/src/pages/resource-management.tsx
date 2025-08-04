@@ -423,7 +423,7 @@ export default function ResourceManagement() {
             </CardHeader>
             <CardContent>
               <div className="grid gap-4">
-                {resources?.map(resource => (
+                {resources?.sort((a, b) => a.name.localeCompare(b.name)).map(resource => (
                   <div key={resource.id} className="flex items-center justify-between p-4 border rounded-lg">
                     <div className="flex-1">
                       <div className="flex items-center gap-3">
@@ -488,11 +488,16 @@ export default function ResourceManagement() {
               ) || [];
               
               return (
-                <Card key={machine.id}>
+                <Card key={machine.id} className={assignedResources.length === 0 ? "border-orange-300 bg-orange-50 dark:border-orange-700 dark:bg-orange-950" : ""}>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <Wrench className="h-5 w-5" />
                       {machine.machineId} - {machine.name}
+                      {assignedResources.length === 0 && (
+                        <Badge variant="outline" className="text-orange-600 border-orange-300 bg-orange-100 dark:text-orange-400 dark:border-orange-700 dark:bg-orange-900">
+                          Gap
+                        </Badge>
+                      )}
                     </CardTitle>
                     <CardDescription>
                       {machine.type} • {assignedResources.length} qualified operators
