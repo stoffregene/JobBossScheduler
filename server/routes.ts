@@ -355,6 +355,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.delete("/api/machines/:id", async (req, res) => {
+    try {
+      await storage.deleteMachine(req.params.id);
+      broadcast({ type: 'machine_deleted', data: { id: req.params.id } });
+      res.json({ message: "Machine deleted successfully" });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete machine" });
+    }
+  });
+
   // Schedule endpoints
   app.get("/api/schedule", async (req, res) => {
     try {

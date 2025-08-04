@@ -102,6 +102,12 @@ export default function Dashboard() {
                     Import Jobs
                   </Button>
                 </Link>
+                <Link href="/work-centers">
+                  <Button variant="outline" size="sm" className="flex items-center gap-2" data-testid="link-work-centers">
+                    <Building2 className="w-4 h-4" />
+                    Work Centers
+                  </Button>
+                </Link>
               </nav>
               <div className="hidden md:flex items-center text-sm text-gray-500 dark:text-gray-400">
                 <Clock className="mr-1 h-4 w-4" />
