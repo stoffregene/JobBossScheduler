@@ -117,18 +117,26 @@ export default function ResourceAllocation({ scheduleView }: ResourceAllocationP
         
         // Check if unavailability overlaps with our date range
         if (unavailStart <= end && unavailEnd >= start) {
-          // Calculate overlapping weeks for 4x10 schedule
+          // Check if this resource is in our filtered resources
+          const affectedResource = filteredResources.find(r => r.id === unavailability.resourceId);
+          if (!affectedResource) return; // Skip if resource not in current filter
+          
+          // Calculate overlapping days for the period
           const overlapStart = new Date(Math.max(unavailStart.getTime(), start.getTime()));
           const overlapEnd = new Date(Math.min(unavailEnd.getTime(), end.getTime()));
-          const overlapWeeks = Math.ceil((overlapEnd.getTime() - overlapStart.getTime()) / (1000 * 60 * 60 * 24 * 7));
+          const overlapDays = Math.ceil((overlapEnd.getTime() - overlapStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
           
-          // Account for which shifts are affected - each employee works 40 hours/week
+          // Calculate hours per day for 4x10 schedule (40 hours / 4 days = 10 hours per day)
+          const hoursPerDay = 10;
+          const unavailableHours = overlapDays * hoursPerDay;
+          
+          // Account for which shifts are affected
           const shifts = unavailability.shifts || [1, 2];
-          if (shifts.includes(1)) {
-            shift1UnavailableHours += overlapWeeks * hoursPerWeek;
+          if (shifts.includes(1) && affectedResource.shiftSchedule.includes(1)) {
+            shift1UnavailableHours += unavailableHours;
           }
-          if (shifts.includes(2)) {
-            shift2UnavailableHours += overlapWeeks * hoursPerWeek;
+          if (shifts.includes(2) && affectedResource.shiftSchedule.includes(2)) {
+            shift2UnavailableHours += unavailableHours;
           }
         }
       });
@@ -141,7 +149,7 @@ export default function ResourceAllocation({ scheduleView }: ResourceAllocationP
     const shift1BaseCapacity = shift1Resources.length * hoursPerWeek * weeksInPeriod * shift1Efficiency;
     const shift2BaseCapacity = shift2Resources.length * hoursPerWeek * weeksInPeriod * shift2Efficiency;
     
-    // For unavailability, we need to adjust this calculation to match the efficiency-adjusted hours
+    // Apply efficiency to unavailable hours before subtracting from capacity
     const shift1UnavailableEffectiveHours = shift1UnavailableHours * shift1Efficiency;
     const shift2UnavailableEffectiveHours = shift2UnavailableHours * shift2Efficiency;
     
