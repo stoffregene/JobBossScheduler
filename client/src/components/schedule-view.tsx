@@ -37,19 +37,22 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
     let startOfWeek = new Date(scheduleView.date);
     
     if (scheduleView.type === "month") {
-      // Show current month - first Monday of the month or around today
+      // Show current month - first Sunday of display
       startOfWeek.setDate(1);
-      startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay() + 1);
+      const firstDayOfMonth = startOfWeek.getDay();
+      // Go back to the Sunday that starts the calendar view
+      startOfWeek.setDate(startOfWeek.getDate() - firstDayOfMonth);
     } else {
-      // This week (default)
-      startOfWeek.setDate(scheduleView.date.getDate() - scheduleView.date.getDay() + 1); // Monday
+      // Start from Sunday of current week (standard calendar week)
+      const currentDay = startOfWeek.getDay();
+      // Go back to Sunday (day 0)
+      startOfWeek.setDate(startOfWeek.getDate() - currentDay);
     }
 
     const daysToShow = scheduleView.type === "month" ? 30 : 7;
     
     for (let i = 0; i < daysToShow; i++) {
-      const day = new Date(startOfWeek);
-      day.setDate(startOfWeek.getDate() + i);
+      const day = new Date(startOfWeek.getTime() + (i * 24 * 60 * 60 * 1000));
       currentWeek.push(day);
     }
 
