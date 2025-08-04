@@ -18,6 +18,7 @@ export interface IStorage {
   createJob(job: InsertJob): Promise<Job>;
   updateJob(id: string, job: Partial<Job>): Promise<Job | undefined>;
   deleteJob(id: string): Promise<boolean>;
+  deleteAllJobs(): Promise<number>;
 
   // Machines
   getMachines(): Promise<Machine[]>;

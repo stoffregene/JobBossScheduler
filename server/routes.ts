@@ -140,13 +140,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/jobs", async (req, res) => {
     try {
-      // Note: deleteAllJobs method is not in interface, implementing basic version
-      const jobs = await storage.getJobs();
-      let deleteCount = 0;
-      for (const job of jobs) {
-        const deleted = await storage.deleteJob(job.id);
-        if (deleted) deleteCount++;
-      }
+      // Use the efficient deleteAllJobs method from database storage
+      const deleteCount = await storage.deleteAllJobs();
       broadcast({ type: 'all_jobs_deleted', data: { count: deleteCount } });
       res.json({ message: `Deleted ${deleteCount} jobs`, count: deleteCount });
     } catch (error) {
