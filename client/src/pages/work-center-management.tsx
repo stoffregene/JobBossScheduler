@@ -7,7 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Edit, Trash2, Settings, ArrowLeft, Home, Users, Package, Upload } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Plus, Edit, Trash2, Settings, ArrowLeft, Home, Users, Package, Upload, ChevronDown, ChevronRight, Eye, EyeOff } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useForm } from "react-hook-form";
@@ -196,6 +197,9 @@ export default function WorkCenterManagement() {
   const [selectedMachine, setSelectedMachine] = useState<Machine | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  const [isFormCollapsed, setIsFormCollapsed] = useState(false);
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
   const { toast } = useToast();
 
   const { data: machines = [], isLoading } = useQuery<Machine[]>({
@@ -371,6 +375,22 @@ export default function WorkCenterManagement() {
     return acc;
   }, {});
 
+  const toggleGroup = (groupName: string) => {
+    setExpandedGroups(prev => ({
+      ...prev,
+      [groupName]: !prev[groupName]
+    }));
+  };
+
+  const toggleAllGroups = () => {
+    const allExpanded = Object.keys(groupedMachines).every(key => expandedGroups[key]);
+    const newState = Object.keys(groupedMachines).reduce((acc, key) => ({
+      ...acc,
+      [key]: !allExpanded
+    }), {});
+    setExpandedGroups(newState);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header with Navigation */}
@@ -421,23 +441,54 @@ export default function WorkCenterManagement() {
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Work Center Management</h1>
-          <p className="text-gray-600 dark:text-gray-300">
-            Manage your manufacturing work centers with proper hierarchical categorization
-          </p>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        {/* Compact Header */}
+        <div className="mb-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Work Centers</h1>
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                {machines.length} total work centers
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={toggleAllGroups}
+                className="flex items-center gap-2"
+              >
+                {Object.keys(groupedMachines).every(key => expandedGroups[key]) ? (
+                  <>
+                    <EyeOff className="h-4 w-4" />
+                    Collapse All
+                  </>
+                ) : (
+                  <>
+                    <Eye className="h-4 w-4" />
+                    Expand All
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
         </div>
 
-        <div className="flex items-center justify-between mb-6">
-          <div></div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={handleCreate} data-testid="button-add-work-center">
-              <Plus className="h-4 w-4 mr-2" />
-              Add Work Center
-            </Button>
-          </DialogTrigger>
+        {/* Controls Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4 p-3 bg-white dark:bg-gray-800 rounded-lg shadow-sm border">
+          <div className="flex items-center gap-3">
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button 
+                  onClick={handleCreate}
+                  size="sm"
+                  className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700"
+                  data-testid="button-add-work-center"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Work Center
+                </Button>
+              </DialogTrigger>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" aria-describedby="work-center-form-description">
             <DialogHeader>
               <DialogTitle>
@@ -873,82 +924,121 @@ export default function WorkCenterManagement() {
             </Form>
           </DialogContent>
         </Dialog>
+          </div>
+          
+          <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+            <span>{Object.keys(groupedMachines).length} work center types</span>
+          </div>
         </div>
 
-        <div className="space-y-6">
-        {Object.entries(groupedMachines).map(([type, machines]) => (
-          <Card key={type}>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Settings className="h-5 w-5" />
-                {WORK_CENTER_HIERARCHY[type as keyof typeof WORK_CENTER_HIERARCHY]?.label || type}
-                <Badge variant="outline">{machines.length} machines</Badge>
-              </CardTitle>
-              <CardDescription>
-                Manage {type.toLowerCase()} work centers and their configurations
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4">
-                {machines.map((machine) => (
-                  <div key={machine.id} className="flex items-center justify-between p-4 border rounded-lg">
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium" data-testid={`text-machine-${machine.machineId}`}>{machine.machineId}</span>
-                        <span className="text-muted-foreground">-</span>
-                        <span>{machine.name}</span>
-                        {getTierBadge(machine.tier)}
-                        {getStatusBadge(machine.status)}
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        {machine.category && (
-                          <>
-                            <span>{machine.category}</span>
-                            {machine.subcategory && <span> → {machine.subcategory}</span>}
-                          </>
+        {/* Collapsible Work Center Groups */}
+        <div className="space-y-3">
+          {Object.entries(groupedMachines).map(([type, machinesInType]) => (
+            <Collapsible
+              key={type}
+              open={expandedGroups[type]}
+              onOpenChange={() => toggleGroup(type)}
+            >
+              <Card className="overflow-hidden">
+                <CollapsibleTrigger asChild>
+                  <CardHeader className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 py-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        {expandedGroups[type] ? (
+                          <ChevronDown className="h-4 w-4 text-gray-500" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 text-gray-500" />
                         )}
+                        <CardTitle className="text-lg">
+                          {WORK_CENTER_HIERARCHY[type as keyof typeof WORK_CENTER_HIERARCHY]?.label || type}
+                        </CardTitle>
+                        <Badge variant="outline" className="text-xs">
+                          {machinesInType.length}
+                        </Badge>
                       </div>
-                      <div className="flex flex-wrap gap-1">
-                        {machine.capabilities?.map((capability) => (
-                          <Badge key={capability} variant="secondary" className="text-xs">
-                            {capability.replace(/_/g, ' ')}
-                          </Badge>
-                        ))}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        Shifts: {machine.availableShifts?.join(", ")} | 
-                        Efficiency: {machine.efficiencyFactor} | 
-                        Utilization: {machine.utilization}%
+                      <div className="flex items-center gap-2">
+                        <div className="text-sm text-gray-500">
+                          {machinesInType.filter(m => m.status === 'Available').length} available
+                        </div>
                       </div>
                     </div>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleEdit(machine)}
-                        data-testid={`button-edit-${machine.machineId}`}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          if (confirm(`Are you sure you want to delete ${machine.machineId}?`)) {
-                            deleteMachine.mutate(machine.id);
-                          }
-                        }}
-                        data-testid={`button-delete-${machine.machineId}`}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                  </CardHeader>
+                </CollapsibleTrigger>
+                
+                <CollapsibleContent>
+                  <CardContent className="pt-0">
+                    <div className="grid gap-3 sm:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3">
+                      {machinesInType.map((machine) => (
+                        <div
+                          key={machine.id}
+                          className="flex items-start justify-between p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                        >
+                          <div className="flex-1 min-w-0 space-y-2">
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-medium text-sm truncate" data-testid={`text-machine-${machine.machineId}`}>{machine.machineId}</h4>
+                              {getStatusBadge(machine.status)}
+                            </div>
+                            <p className="text-xs text-muted-foreground truncate">{machine.name}</p>
+                            
+                            {machine.category && (
+                              <div className="text-xs text-muted-foreground">
+                                <span>{machine.category}</span>
+                                {machine.subcategory && <span> → {machine.subcategory}</span>}
+                              </div>
+                            )}
+                            
+                            <div className="flex flex-wrap gap-1">
+                              {machine.capabilities?.slice(0, 3).map((capability) => (
+                                <Badge key={capability} variant="secondary" className="text-xs px-1 py-0">
+                                  {capability.replace(/_/g, ' ')}
+                                </Badge>
+                              ))}
+                              {machine.capabilities && machine.capabilities.length > 3 && (
+                                <Badge variant="outline" className="text-xs px-1 py-0">
+                                  +{machine.capabilities.length - 3}
+                                </Badge>
+                              )}
+                            </div>
+                            
+                            <div className="text-xs text-muted-foreground">
+                              {getTierBadge(machine.tier)} • 
+                              Util: {machine.utilization}% • 
+                              Shifts: {machine.availableShifts?.join(",")}
+                            </div>
+                          </div>
+                          
+                          <div className="flex flex-col gap-1 ml-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                              onClick={() => handleEdit(machine)}
+                              data-testid={`button-edit-${machine.machineId}`}
+                            >
+                              <Edit className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                              onClick={() => {
+                                if (confirm(`Are you sure you want to delete ${machine.machineId}?`)) {
+                                  deleteMachine.mutate(machine.id);
+                                }
+                              }}
+                              data-testid={`button-delete-${machine.machineId}`}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+                  </CardContent>
+                </CollapsibleContent>
+              </Card>
+            </Collapsible>
+          ))}
         </div>
       </div>
     </div>
