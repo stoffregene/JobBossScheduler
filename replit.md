@@ -31,6 +31,7 @@ Preferred communication style: Simple, everyday language.
 - Fixed weekend shading in production schedule to properly show Friday-Sunday as unavailable
 - Improved job queue button layout with flex-wrap to prevent buttons from running off tile edges
 - Enhanced month view in production schedule with sticky machine labels and better column sizing
+- **CRITICAL FIX**: Fixed backend scheduling logic to properly skip Friday-Sunday (days 5,6,0) - jobs will no longer be scheduled on weekends
 
 ## System Architecture
 

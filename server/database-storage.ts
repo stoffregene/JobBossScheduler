@@ -1265,8 +1265,8 @@ export class DatabaseStorage implements IStorage {
       
       // Try to schedule within the 21-day window
       while (currentDate <= maxDate && !scheduled) {
-        // Skip weekends for most operations
-        if (currentDate.getDay() === 0 || currentDate.getDay() === 6) {
+        // Skip weekends (Friday-Sunday) for most operations
+        if (currentDate.getDay() === 0 || currentDate.getDay() === 5 || currentDate.getDay() === 6) {
           currentDate = new Date(currentDate.getTime() + dayInMs);
           continue;
         }
