@@ -12,13 +12,15 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Users, UserPlus, Edit, Trash2, Settings, Wrench, X, Plus } from "lucide-react";
+import { Users, UserPlus, Edit, Trash2, Settings, Wrench, X, Plus, ArrowLeft, Package, Building2 } from "lucide-react";
+import { Link } from "wouter";
 import type { Resource, Machine } from "@shared/schema";
 
 export default function ResourceManagement() {
   const [activeTab, setActiveTab] = useState("directory");
   const [editingResource, setEditingResource] = useState<Resource | null>(null);
   const [deletingResource, setDeletingResource] = useState<Resource | null>(null);
+  const [showAddDialog, setShowAddDialog] = useState(false);
   const [editForm, setEditForm] = useState({
     name: "",
     employeeId: "",
@@ -75,6 +77,33 @@ export default function ResourceManagement() {
     }
   });
 
+  const createResourceMutation = useMutation({
+    mutationFn: (resource: Partial<Resource>) =>
+      apiRequest('/api/resources', 'POST', resource),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/resources'] });
+      setShowAddDialog(false);
+      setEditForm({
+        name: "",
+        employeeId: "",
+        email: "",
+        role: "",
+        isActive: true,
+        shiftSchedule: [],
+        workCenters: [],
+        skills: []
+      });
+      toast({ title: "Resource created successfully" });
+    },
+    onError: (error) => {
+      toast({ 
+        title: "Error creating resource", 
+        description: error.message,
+        variant: "destructive" 
+      });
+    }
+  });
+
   // Helper functions
   const openEditDialog = (resource: Resource) => {
     setEditingResource(resource);
@@ -102,6 +131,24 @@ export default function ResourceManagement() {
   const handleDeleteResource = () => {
     if (!deletingResource?.id) return;
     deleteResourceMutation.mutate(deletingResource.id);
+  };
+
+  const openAddDialog = () => {
+    setEditForm({
+      name: "",
+      employeeId: "",
+      email: "",
+      role: "",
+      isActive: true,
+      shiftSchedule: [1],
+      workCenters: [],
+      skills: []
+    });
+    setShowAddDialog(true);
+  };
+
+  const handleCreateResource = () => {
+    createResourceMutation.mutate(editForm);
   };
 
   const toggleShift = (shift: number) => {
@@ -155,6 +202,28 @@ export default function ResourceManagement() {
 
   return (
     <div className="container mx-auto p-6 space-y-6">
+      {/* Navigation Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Link href="/">
+            <Button variant="outline" size="sm" className="flex items-center gap-2">
+              <ArrowLeft className="h-4 w-4" />
+              Dashboard
+            </Button>
+          </Link>
+          <Link href="/materials">
+            <Button variant="outline" size="sm" className="flex items-center gap-2">
+              <Package className="h-4 w-4" />
+              Material Tracking
+            </Button>
+          </Link>
+        </div>
+        <div className="flex items-center gap-2">
+          <Building2 className="text-primary-500 text-xl" />
+          <span className="text-xl font-bold text-gray-900 dark:text-white">JobBoss Scheduler</span>
+        </div>
+      </div>
+
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold">Resource Management</h1>
@@ -163,7 +232,11 @@ export default function ResourceManagement() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button className="flex items-center gap-2">
+          <Button 
+            onClick={openAddDialog}
+            className="flex items-center gap-2"
+            data-testid="button-add-resource"
+          >
             <UserPlus className="h-4 w-4" />
             Add Resource
           </Button>
@@ -593,6 +666,200 @@ export default function ResourceManagement() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Add Resource Dialog */}
+      <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Add New Resource</DialogTitle>
+            <DialogDescription>
+              Create a new employee with work center assignments, shifts, and skills
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="grid gap-6">
+            {/* Basic Information */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="add-name">Full Name</Label>
+                <Input
+                  id="add-name"
+                  value={editForm.name}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))}
+                  data-testid="input-add-name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="add-employeeId">Employee ID</Label>
+                <Input
+                  id="add-employeeId"
+                  value={editForm.employeeId}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, employeeId: e.target.value }))}
+                  data-testid="input-add-employee-id"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="add-email">Email</Label>
+                <Input
+                  id="add-email"
+                  type="email"
+                  value={editForm.email}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, email: e.target.value }))}
+                  data-testid="input-add-email"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="add-role">Role</Label>
+                <Select 
+                  value={editForm.role} 
+                  onValueChange={(value) => setEditForm(prev => ({ ...prev, role: value }))}
+                >
+                  <SelectTrigger data-testid="select-add-role">
+                    <SelectValue placeholder="Select role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Operator">Operator</SelectItem>
+                    <SelectItem value="Setup Technician">Setup Technician</SelectItem>
+                    <SelectItem value="Quality Inspector">Quality Inspector</SelectItem>
+                    <SelectItem value="Maintenance">Maintenance</SelectItem>
+                    <SelectItem value="Supervisor">Supervisor</SelectItem>
+                    <SelectItem value="Lead Operator">Lead Operator</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="add-isActive"
+                checked={editForm.isActive}
+                onCheckedChange={(checked) => setEditForm(prev => ({ ...prev, isActive: !!checked }))}
+                data-testid="checkbox-add-active"
+              />
+              <Label htmlFor="add-isActive">Active Employee</Label>
+            </div>
+
+            <Separator />
+
+            {/* Shift Schedule */}
+            <div className="space-y-4">
+              <div>
+                <Label className="text-base font-medium">Shift Schedule</Label>
+                <p className="text-sm text-muted-foreground">Select which shifts this employee works</p>
+              </div>
+              <div className="flex gap-4">
+                {[1, 2].map(shift => (
+                  <div key={shift} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`add-shift-${shift}`}
+                      checked={editForm.shiftSchedule.includes(shift)}
+                      onCheckedChange={() => toggleShift(shift)}
+                      data-testid={`checkbox-add-shift-${shift}`}
+                    />
+                    <Label htmlFor={`add-shift-${shift}`}>
+                      {shift === 1 ? "1st Shift (3 AM - 3 PM) Mon-Thu" : 
+                       "2nd Shift (3 PM - 3 AM) Mon-Thu"}
+                    </Label>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Work Center Assignments */}
+            <div className="space-y-4">
+              <div>
+                <Label className="text-base font-medium">Work Center Assignments</Label>
+                <p className="text-sm text-muted-foreground">Select which machines this employee can operate</p>
+              </div>
+              <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto">
+                {machines?.map(machine => (
+                  <div key={machine.id} className="flex items-center space-x-2 p-2 border rounded">
+                    <Checkbox
+                      id={`add-machine-${machine.id}`}
+                      checked={editForm.workCenters.includes(machine.id)}
+                      onCheckedChange={() => toggleWorkCenter(machine.id)}
+                      data-testid={`checkbox-add-machine-${machine.machineId}`}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <Label htmlFor={`add-machine-${machine.id}`} className="text-sm font-medium">
+                        {machine.machineId}
+                      </Label>
+                      <div className="text-xs text-muted-foreground truncate">
+                        {machine.name} • {machine.type}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Skills Management */}
+            <div className="space-y-4">
+              <div>
+                <Label className="text-base font-medium">Skills & Certifications</Label>
+                <p className="text-sm text-muted-foreground">Manage employee skills and certifications</p>
+              </div>
+              
+              <div className="flex gap-2">
+                <Select onValueChange={addSkill}>
+                  <SelectTrigger className="flex-1" data-testid="select-add-skill-new">
+                    <SelectValue placeholder="Add a skill..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cnc_operation">CNC Operation</SelectItem>
+                    <SelectItem value="manual_operation">Manual Operation</SelectItem>
+                    <SelectItem value="setup_certification">Setup Certification</SelectItem>
+                    <SelectItem value="quality_inspection">Quality Inspection</SelectItem>
+                    <SelectItem value="maintenance">Maintenance</SelectItem>
+                    <SelectItem value="crane_operation">Crane Operation</SelectItem>
+                    <SelectItem value="forklift_operation">Forklift Operation</SelectItem>
+                    <SelectItem value="programming">Programming</SelectItem>
+                    <SelectItem value="tooling">Tooling</SelectItem>
+                    <SelectItem value="blueprint_reading">Blueprint Reading</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {editForm.skills.map(skill => (
+                  <Badge key={skill} variant="secondary" className="gap-1">
+                    {skill.replace(/_/g, ' ')}
+                    <X 
+                      className="h-3 w-3 cursor-pointer" 
+                      onClick={() => removeSkill(skill)}
+                      data-testid={`button-remove-skill-new-${skill}`}
+                    />
+                  </Badge>
+                ))}
+                {editForm.skills.length === 0 && (
+                  <p className="text-sm text-muted-foreground">No skills assigned yet</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setShowAddDialog(false)}
+              data-testid="button-cancel-add"
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleCreateResource}
+              disabled={createResourceMutation.isPending}
+              data-testid="button-save-add"
+            >
+              {createResourceMutation.isPending ? "Creating..." : "Create Resource"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

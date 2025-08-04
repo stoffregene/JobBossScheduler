@@ -14,7 +14,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { insertMaterialOrderSchema } from "@shared/schema";
 import { z } from "zod";
 import { formatDistanceToNow, format } from "date-fns";
-import { Package, AlertTriangle, CheckCircle, Clock, Plus } from "lucide-react";
+import { Package, AlertTriangle, CheckCircle, Clock, Plus, ArrowLeft, Users, Building2 } from "lucide-react";
+import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -135,6 +136,28 @@ export default function MaterialTrackingPage() {
 
   return (
     <div className="container mx-auto p-6 space-y-6">
+      {/* Navigation Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Link href="/">
+            <Button variant="outline" size="sm" className="flex items-center gap-2">
+              <ArrowLeft className="h-4 w-4" />
+              Dashboard
+            </Button>
+          </Link>
+          <Link href="/resources">
+            <Button variant="outline" size="sm" className="flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              Resource Management
+            </Button>
+          </Link>
+        </div>
+        <div className="flex items-center gap-2">
+          <Building2 className="text-primary-500 text-xl" />
+          <span className="text-xl font-bold text-gray-900 dark:text-white">JobBoss Scheduler</span>
+        </div>
+      </div>
+
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Material Tracking</h1>
