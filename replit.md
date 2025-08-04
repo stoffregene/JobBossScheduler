@@ -10,6 +10,18 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+**August 4, 2025** - Implemented priority-based scheduling system with no past scheduling:
+- **PRIORITY CALCULATION**: Jobs automatically assigned priorities based on promised dates and completion hours
+  - Critical: Jobs that are late or will be late (negative buffer between promised date and required work days)
+  - High: Jobs with very tight timelines (0-2 day buffer)
+  - Normal: Jobs with some urgency (3-7 day buffer) 
+  - Low: Jobs with plenty of time (8+ day buffer)
+- **NO PAST SCHEDULING**: Jobs can never be scheduled in the past - earliest start is tomorrow
+- **PRIORITY-BASED SCHEDULING**: Schedule All function now processes jobs in priority order (Critical → High → Normal → Low)
+- **SMART START DATES**: High priority jobs start immediately, normal/low priority jobs get material buffer time but never past promised date
+- **UPDATE PRIORITIES**: Added API endpoint and UI button to recalculate all job priorities based on current dates
+- **ENHANCED UI**: Job queue now shows priority breakdown in scheduling completion messages
+
 **August 4, 2025** - Optimized CSV import performance and fixed sequence duplication bugs:
 - **ACTIVE JOBS FILTER**: Import now processes only "Active" jobs, skipping Closed/Canceled jobs for major performance boost
 - **BATCH PROCESSING**: Eliminated individual database calls during import - jobs are now created in batches

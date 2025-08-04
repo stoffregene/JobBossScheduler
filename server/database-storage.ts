@@ -1584,7 +1584,124 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  // New scheduling method with optimal start date logic
+  // Calculate job priority based on promised date and hours to complete
+  private calculateJobPriority(job: any): { priority: number, classification: string } {
+    const now = new Date();
+    const promisedDate = new Date(job.promisedDate);
+    const totalHours = parseFloat(job.estimatedHours) || 0;
+    
+    // Calculate days until promised date
+    const daysUntilPromised = Math.ceil((promisedDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
+    
+    // Estimate total work days needed (assuming 8-hour days)
+    const workDaysNeeded = Math.ceil(totalHours / 8);
+    
+    // Calculate urgency score (lower is more urgent)
+    const daysBuffer = daysUntilPromised - workDaysNeeded;
+    
+    let priority: number;
+    let classification: string;
+    
+    if (daysBuffer < 0) {
+      // Already late or will be late
+      priority = 1000 - daysBuffer; // Higher number = higher priority
+      classification = 'Critical';
+    } else if (daysBuffer <= 2) {
+      // Very tight timeline
+      priority = 800 + (2 - daysBuffer) * 50;
+      classification = 'High';  
+    } else if (daysBuffer <= 7) {
+      // Some urgency
+      priority = 500 + (7 - daysBuffer) * 20;
+      classification = 'Normal';
+    } else {
+      // Plenty of time
+      priority = Math.max(100, 400 - daysBuffer * 5);
+      classification = 'Low';
+    }
+    
+    console.log(`📊 Job ${job.jobNumber} priority: ${priority} (${classification}) - Days until promised: ${daysUntilPromised}, Work days needed: ${workDaysNeeded}, Buffer: ${daysBuffer}`);
+    
+    return { priority, classification };
+  }
+
+  // Update priorities for all unscheduled jobs
+  async updateAllJobPriorities(): Promise<void> {
+    const jobs = await this.getJobs();
+    const unscheduledJobs = jobs.filter(job => job.status === 'Unscheduled' || job.status === 'Open');
+    
+    console.log(`📊 Updating priorities for ${unscheduledJobs.length} unscheduled jobs...`);
+    
+    for (const job of unscheduledJobs) {
+      const { classification } = this.calculateJobPriority(job);
+      if (job.priority !== classification) {
+        await this.updateJob(job.id, { priority: classification });
+      }
+    }
+  }
+
+  // Schedule multiple jobs in priority order
+  async scheduleJobsByPriority(maxJobs: number = 50): Promise<{ scheduled: number, failed: number, results: any[] }> {
+    await this.updateAllJobPriorities();
+    
+    const jobs = await this.getJobs();
+    const unscheduledJobs = jobs.filter(job => job.status === 'Unscheduled' || job.status === 'Open');
+    
+    // Sort jobs by priority (Critical > High > Normal > Low), then by promised date
+    const priorityOrder = { 'Critical': 4, 'High': 3, 'Normal': 2, 'Low': 1 };
+    const sortedJobs = unscheduledJobs
+      .map(job => ({
+        ...job,
+        priorityScore: this.calculateJobPriority(job).priority
+      }))
+      .sort((a, b) => {
+        // First by priority classification
+        const priorityDiff = (priorityOrder[b.priority as keyof typeof priorityOrder] || 0) - (priorityOrder[a.priority as keyof typeof priorityOrder] || 0);
+        if (priorityDiff !== 0) return priorityDiff;
+        
+        // Then by priority score (higher score = more urgent)
+        const scoreDiff = b.priorityScore - a.priorityScore;
+        if (scoreDiff !== 0) return scoreDiff;
+        
+        // Finally by promised date (earlier first)
+        return new Date(a.promisedDate).getTime() - new Date(b.promisedDate).getTime();
+      })
+      .slice(0, maxJobs);
+    
+    console.log(`🎯 Scheduling ${sortedJobs.length} jobs in priority order...`);
+    
+    let scheduled = 0;
+    let failed = 0;
+    const results = [];
+    
+    for (const job of sortedJobs) {
+      try {
+        console.log(`📋 Scheduling job ${job.jobNumber} (${job.priority} priority)`);
+        const scheduleEntries = await this.autoScheduleJobWithOptimalStart(job.id);
+        
+        if (scheduleEntries && scheduleEntries.length > 0) {
+          scheduled++;
+          results.push({ jobNumber: job.jobNumber, status: 'scheduled', priority: job.priority });
+        } else {
+          failed++;
+          results.push({ jobNumber: job.jobNumber, status: 'failed', priority: job.priority, reason: 'No available machines' });
+        }
+      } catch (error) {
+        failed++;
+        results.push({ 
+          jobNumber: job.jobNumber, 
+          status: 'error', 
+          priority: job.priority, 
+          error: error instanceof Error ? error.message : 'Unknown error' 
+        });
+      }
+    }
+    
+    console.log(`✅ Priority scheduling complete: ${scheduled} scheduled, ${failed} failed`);
+    return { scheduled, failed, results };
+  }
+
+  // New scheduling method with priority-based logic and no past scheduling
   async autoScheduleJobWithOptimalStart(
     jobId: string, 
     onProgress?: (progress: {
@@ -1602,24 +1719,52 @@ export class DatabaseStorage implements IStorage {
     const scheduleEntries: ScheduleEntry[] = [];
     const totalOperations = job.routing.length;
     
+    // Calculate job priority and update job priority field
+    const { priority, classification } = this.calculateJobPriority(job);
+    await this.updateJob(jobId, { priority: classification });
+    
     // Initial progress
     onProgress?.({
       percentage: 5,
-      status: 'Preparing schedule dates...',
+      status: 'Calculating job priority and preparing schedule dates...',
       stage: 'preparing',
       totalOperations
     });
     
-    // Start at day 0 (immediate scheduling)
+    // Never schedule in the past - start at earliest tomorrow
     let currentDate = new Date();
-    currentDate.setHours(0, 0, 0, 0); // Start of today
+    currentDate.setHours(0, 0, 0, 0);
+    currentDate.setDate(currentDate.getDate() + 1); // Start tomorrow at earliest
     
-    // Calculate optimal start (day 7 for material buffer)
-    const optimalStartDate = new Date(currentDate);
-    optimalStartDate.setDate(optimalStartDate.getDate() + 7);
-    
-    // Use optimal start date as actual start date, but ensure it's a working day (Mon-Thu)
-    currentDate = new Date(optimalStartDate);
+    // For high priority jobs, start immediately (tomorrow)
+    // For normal/low priority jobs, allow material buffer time
+    if (classification === 'Critical' || classification === 'High') {
+      console.log(`🚨 High priority job ${job.jobNumber} - scheduling to start tomorrow`);
+      // Keep current date as tomorrow
+    } else {
+      // Calculate optimal start (day 7 for material buffer) but don't go past promised date
+      const optimalStartDate = new Date(currentDate);
+      optimalStartDate.setDate(optimalStartDate.getDate() + 6); // 7 total days from now
+      
+      const promisedDate = new Date(job.promisedDate);
+      const totalHours = parseFloat(job.estimatedHours) || 0;
+      const workDaysNeeded = Math.ceil(totalHours / 8);
+      const latestStartDate = new Date(promisedDate);
+      latestStartDate.setDate(latestStartDate.getDate() - workDaysNeeded - 2); // Leave 2-day buffer
+      
+      // Use the earlier of optimal start or latest feasible start
+      currentDate = optimalStartDate < latestStartDate ? optimalStartDate : latestStartDate;
+      
+      // But never go before tomorrow
+      const tomorrow = new Date();
+      tomorrow.setHours(0, 0, 0, 0);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      if (currentDate < tomorrow) {
+        currentDate = new Date(tomorrow);
+      }
+      
+      console.log(`📅 Job ${job.jobNumber} scheduled to start ${currentDate.toDateString()}`);
+    }
     
     // Adjust to next working day if needed (Monday-Thursday only)
     while (currentDate.getDay() < 1 || currentDate.getDay() > 4) {
@@ -1645,7 +1790,7 @@ export class DatabaseStorage implements IStorage {
         percentage: baseProgress,
         status: `Scheduling operation ${opIndex + 1} of ${totalOperations}...`,
         stage: 'scheduling',
-        operationName: operation.operationName || operation.name,
+        operationName: operation.name,
         currentOperation: opIndex + 1,
         totalOperations
       });
@@ -1657,14 +1802,14 @@ export class DatabaseStorage implements IStorage {
         const attemptProgress = baseProgress + ((attemptDays / maxDaysOut) * (80 / totalOperations));
         onProgress?.({
           percentage: attemptProgress,
-          status: `Finding machine for ${operation.operationName || operation.name} (attempt ${attemptDays + 1})...`,
+          status: `Finding machine for ${operation.name} (attempt ${attemptDays + 1})...`,
           stage: 'finding_machine',
-          operationName: operation.operationName || operation.name,
+          operationName: operation.name,
           currentOperation: opIndex + 1,
           totalOperations
         });
         
-        console.log(`🎯 Trying to find machine for operation ${operation.operationName || operation.name} on attempt ${attemptDays}`);
+        console.log(`🎯 Trying to find machine for operation ${operation.name} on attempt ${attemptDays}`);
         const machineResult = await this.findBestMachineForOperation(operation, currentDate, 1);
         console.log(`🎯 Machine result:`, machineResult);
         const machineResults = machineResult ? [machineResult] : [];
@@ -1726,7 +1871,7 @@ export class DatabaseStorage implements IStorage {
                 percentage: completedProgress,
                 status: `Operation ${opIndex + 1} scheduled successfully on ${result.machine.machineId}`,
                 stage: 'scheduled',
-                operationName: operation.operationName || operation.name,
+                operationName: operation.name,
                 currentOperation: opIndex + 1,
                 totalOperations
               });
@@ -1757,7 +1902,7 @@ export class DatabaseStorage implements IStorage {
     // Update job status to scheduled
     await this.updateJob(jobId, { status: "Scheduled" });
     
-    return { success: true, scheduleEntries };
+    return scheduleEntries;
   }
 
   // Resources implementation

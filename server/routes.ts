@@ -152,29 +152,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/jobs/schedule-all", async (req, res) => {
     try {
-      // Note: scheduleAllJobs method is not in interface, implementing basic version
-      const jobs = await storage.getJobs();
-      const unscheduledJobs = jobs.filter(j => j.status === 'Unscheduled' || j.status === 'Scheduled').filter(j => j.status !== 'Complete');
-      let scheduled = 0;
+      console.log("🎯 Starting priority-based scheduling for all jobs...");
+      const maxJobs = parseInt(req.query.maxJobs as string) || 50;
       
-      for (const job of unscheduledJobs) {
-        try {
-          const scheduleResult = await storage.autoScheduleJob(job.id);
-          if (scheduleResult && Array.isArray(scheduleResult) && scheduleResult.length > 0) {
-            await storage.updateJob(job.id, { status: 'Scheduled' });
-            scheduled++;
-          }
-        } catch (error) {
-          console.warn(`Failed to schedule job ${job.jobNumber}:`, error);
-        }
-      }
+      const result = await storage.scheduleJobsByPriority(maxJobs);
       
-      const result = { success: true, scheduled, total: unscheduledJobs.length };
       broadcast({ type: 'all_jobs_scheduled', data: result });
-      res.json(result);
+      res.json({
+        success: true,
+        scheduled: result.scheduled,
+        failed: result.failed,
+        total: result.scheduled + result.failed,
+        results: result.results
+      });
     } catch (error) {
       console.error('Error scheduling all jobs:', error);
       res.status(500).json({ message: "Failed to schedule all jobs" });
+    }
+  });
+
+  // Update job priorities endpoint
+  app.post("/api/jobs/update-priorities", async (req, res) => {
+    try {
+      console.log("📊 Updating priorities for all unscheduled jobs...");
+      await storage.updateAllJobPriorities();
+      
+      const jobs = await storage.getJobs();
+      const priorityCounts = jobs.reduce((acc, job) => {
+        acc[job.priority] = (acc[job.priority] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      
+      broadcast({ type: 'priorities_updated', data: priorityCounts });
+      res.json({ 
+        success: true, 
+        message: "Job priorities updated",
+        priorityCounts 
+      });
+    } catch (error) {
+      console.error('Error updating job priorities:', error);
+      res.status(500).json({ message: "Failed to update job priorities" });
     }
   });
 

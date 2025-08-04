@@ -73,6 +73,8 @@ export interface IStorage {
 
   // Auto-scheduling methods
   findBestMachineForOperation(operation: RoutingOperation, targetDate: Date, shift: number): Promise<{ machine: Machine; adjustedHours: number; score: number; efficiencyImpact?: number } | null>;
+  updateAllJobPriorities(): Promise<void>;
+  scheduleJobsByPriority(maxJobs?: number): Promise<{ scheduled: number, failed: number, results: any[] }>;
   autoScheduleJob(jobId: string): Promise<ScheduleEntry[] | null>;
   getMachinesBySubstitutionGroup(substitutionGroup: string): Promise<Machine[]>;
   

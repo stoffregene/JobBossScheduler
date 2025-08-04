@@ -272,15 +272,49 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
       queryClient.invalidateQueries({ queryKey: ['/api/schedule'] });
       queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
+      
+      // Show priority breakdown if available
+      const priorityBreakdown = data.results ? data.results.reduce((acc: any, r: any) => {
+        if (r.status === 'scheduled') {
+          acc[r.priority] = (acc[r.priority] || 0) + 1;
+        }
+        return acc;
+      }, {}) : {};
+      
+      const breakdown = Object.keys(priorityBreakdown).length > 0 
+        ? ` (${Object.entries(priorityBreakdown).map(([p, c]) => `${p}: ${c}`).join(', ')})`
+        : '';
+      
       toast({
-        title: "Scheduling Complete",
-        description: `Scheduled ${data.scheduled} jobs successfully. ${data.failed} jobs failed to schedule.`,
+        title: "Priority-Based Scheduling Complete",
+        description: `Scheduled ${data.scheduled} jobs, ${data.failed} failed${breakdown}`,
       });
     },
     onError: () => {
       toast({
         title: "Error",
         description: "Failed to schedule all jobs. Please try again.",
+        variant: "destructive",
+      });
+    }
+  });
+
+  const updatePrioritiesMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest('/api/jobs/update-priorities', 'POST');
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      const counts = data.priorityCounts;
+      toast({
+        title: "Job Priorities Updated",
+        description: `Critical: ${counts.Critical || 0}, High: ${counts.High || 0}, Normal: ${counts.Normal || 0}, Low: ${counts.Low || 0}`,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Update Failed",
+        description: "Failed to update job priorities. Please try again.",
         variant: "destructive",
       });
     }
@@ -731,6 +765,16 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
                 >
                   <PlayCircle className="h-4 w-4 mr-1" />
                   Schedule All
+                </Button>
+                <Button 
+                  variant="secondary" 
+                  size="sm"
+                  onClick={() => updatePrioritiesMutation.mutate()}
+                  disabled={updatePrioritiesMutation.isPending}
+                  data-testid="button-update-priorities"
+                >
+                  <ArrowUpDown className="h-4 w-4 mr-1" />
+                  {updatePrioritiesMutation.isPending ? 'Updating...' : 'Update Priorities'}
                 </Button>
                 <Button 
                   variant="outline" 
