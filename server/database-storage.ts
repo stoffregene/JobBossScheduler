@@ -966,7 +966,7 @@ export class DatabaseStorage implements IStorage {
     const allMachines = await this.getMachines();
     const allScheduleEntries = await this.getScheduleEntries();
     
-    const activeJobs = allJobs.filter(job => job.status !== "Completed" && job.status !== "Cancelled").length;
+    const activeJobs = allJobs.filter(job => job.status !== "Completed" && job.status !== "Cancelled" && job.status !== "Complete").length;
     const lateJobs = allJobs.filter(job => job.status === "Customer Late" || job.status === "Company Late").length;
     const customerLateJobs = allJobs.filter(job => job.status === "Customer Late").length;
     const companyLateJobs = allJobs.filter(job => job.status === "Company Late").length;

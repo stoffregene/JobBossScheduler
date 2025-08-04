@@ -40,6 +40,7 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
 
   const { data: jobs, isLoading } = useQuery<Job[]>({
     queryKey: ['/api/jobs'],
+    queryFn: () => fetch('/api/jobs?includeCompleted=false').then(res => res.json()),
   });
 
   const { data: machines } = useQuery<any[]>({

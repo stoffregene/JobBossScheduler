@@ -47,9 +47,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/jobs", async (req, res) => {
     try {
       const jobs = await storage.getJobs();
-      res.json(jobs);
+      const includeCompleted = req.query.includeCompleted === 'true';
+      
+      // Filter out completed jobs unless specifically requested
+      const filteredJobs = includeCompleted ? jobs : jobs.filter(job => job.status !== 'Complete');
+      
+      res.json(filteredJobs);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch jobs" });
+    }
+  });
+
+  // Get jobs for scheduling (excludes completed jobs)
+  app.get("/api/jobs/for-scheduling", async (req, res) => {
+    try {
+      const jobs = await storage.getJobs();
+      const schedulableJobs = jobs.filter(job => job.status !== 'Complete');
+      res.json(schedulableJobs);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch schedulable jobs" });
     }
   });
 
@@ -143,7 +159,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // Note: scheduleAllJobs method is not in interface, implementing basic version
       const jobs = await storage.getJobs();
-      const unscheduledJobs = jobs.filter(j => j.status === 'Unscheduled');
+      const unscheduledJobs = jobs.filter(j => j.status === 'Unscheduled' || j.status === 'Scheduled').filter(j => j.status !== 'Complete');
       let scheduled = 0;
       
       for (const job of unscheduledJobs) {
