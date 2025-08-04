@@ -287,16 +287,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
             jobNumber: row.Job?.trim() || `JOB-${Date.now()}-${processed}`,
             customer: row.Customer?.trim() || 'Unknown',
             quantity: parseInt(row.Est_Required_Qty) || 1,
-            partNumber: row.Material?.trim() || row.Job?.trim() || `PART-${Date.now()}-${processed}`, // Use Material column as part number
-            description: `Job ${row.Job?.trim() || 'N/A'} - ${row.Material?.trim() || 'Unknown Material'} for ${row.Customer?.trim() || 'Unknown'}`,
+            partNumber: `PART-${row.Job?.trim() || Date.now()}-${processed}`, // Generate part number based on job number
+            description: `Job ${row.Job?.trim() || 'N/A'} for ${row.Customer?.trim() || 'Unknown'}`,
             orderDate: new Date(row.Order_Date || Date.now()),
             promisedDate: new Date(row.Promised_Date || Date.now()),
             dueDate: new Date(row.Promised_Date || Date.now()), // Use promised date as due date
             estimatedHours: String(parseFloat(row['Est Total Hours']) || 0),
             outsourcedVendor: isOutsourced ? vendor : null,
             leadDays: parseInt(row.Lead_Days) || null,
-            linkMaterial: row.Link_Material?.toUpperCase() === 'TRUE',
-            material: row.Material?.trim() || null,
+            linkMaterial: row.Link_Material?.trim() !== '' && row.Link_Material?.trim() !== null, // Has material order if Link_Material has any value
+            material: row.Material?.trim() || null, // Raw material specification, not part number
             status: row.Status?.trim() === 'Active' ? 'Unscheduled' : 
                    row.Status?.trim() === 'Closed' ? 'Complete' :
                    row.Status?.trim() === 'Canceled' ? 'Complete' : 'Unscheduled',
@@ -314,7 +314,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             linkMaterial: Boolean(jobData.linkMaterial)
           };
           
-          console.log(`📋 Job ${validatedJob.jobNumber} - WorkCenter: ${workCenter}, Vendor: ${vendor}, isOutsourced: ${isOutsourced}, routing:`, JSON.stringify(validatedJob.routing, null, 2));
+          console.log(`📋 Job ${validatedJob.jobNumber} - PartNumber: ${validatedJob.partNumber}, Material: ${validatedJob.material}, WorkCenter: ${workCenter}, Vendor: ${vendor}, isOutsourced: ${isOutsourced}`);
 
           // Check if job already exists
           const existingJobs = await storage.getJobs();
