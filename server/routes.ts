@@ -543,7 +543,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Unschedule all jobs - must come BEFORE the parameterized route
+  app.delete("/api/schedule/all", async (req, res) => {
+    console.log("🔄 ROUTE HIT: DELETE /api/schedule/all");
+    try {
+      console.log("🗑️ Unscheduling all jobs...");
+      
+      // Get all schedule entries to know which jobs were affected
+      const allSchedules = await storage.getScheduleEntries();
+      console.log(`📊 Found ${allSchedules.length} schedule entries to clear`);
+      const affectedJobIds = new Set(allSchedules.map(entry => entry.jobId));
+      
+      // Clear all schedule entries
+      console.log("🗑️ Clearing all schedule entries...");
+      await storage.clearAllScheduleEntries();
+      
+      // Verify entries were cleared
+      const remainingSchedules = await storage.getScheduleEntries();
+      console.log(`📊 Remaining schedule entries after clear: ${remainingSchedules.length}`);
+      
+      // Reset all job statuses back to "Open" 
+      console.log(`🔄 Resetting ${affectedJobIds.size} job statuses to Open...`);
+      for (const jobId of Array.from(affectedJobIds)) {
+        await storage.updateJob(jobId, { status: "Open" });
+      }
+      
+      // Reset machine utilization to 0
+      const machines = await storage.getMachines();
+      console.log(`🔄 Resetting ${machines.length} machine utilizations...`);
+      for (const machine of machines) {
+        await storage.updateMachine(machine.id, { utilization: "0" });
+      }
+      
+      console.log(`✅ Unscheduled ${allSchedules.length} schedule entries for ${affectedJobIds.size} jobs`);
+      
+      // Broadcast updates
+      broadcast({ type: 'schedule_cleared', data: { 
+        clearedEntries: allSchedules.length,
+        affectedJobs: affectedJobIds.size 
+      } });
+      
+      return res.status(200).json({ 
+        message: `Successfully unscheduled ${allSchedules.length} entries for ${affectedJobIds.size} jobs`,
+        clearedEntries: allSchedules.length,
+        affectedJobs: affectedJobIds.size,
+        remainingEntries: remainingSchedules.length
+      });
+    } catch (error) {
+      console.error("❌ Failed to unschedule all jobs:", error);
+      return res.status(500).json({ message: "Failed to unschedule all jobs", error: error.message });
+    }
+  });
+
   app.delete("/api/schedule/:id", async (req, res) => {
+    console.log(`🔄 ROUTE HIT: DELETE /api/schedule/${req.params.id}`);
     try {
       const success = await storage.deleteScheduleEntry(req.params.id);
       if (!success) {
@@ -675,47 +728,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Unschedule all jobs - useful for testing scheduling logic changes
-  app.delete("/api/schedule/all", async (req, res) => {
-    try {
-      console.log("🗑️ Unscheduling all jobs...");
-      
-      // Get all schedule entries to know which jobs were affected
-      const allSchedules = await storage.getScheduleEntries();
-      const affectedJobIds = new Set(allSchedules.map(entry => entry.jobId));
-      
-      // Clear all schedule entries
-      await storage.clearAllScheduleEntries();
-      
-      // Reset all job statuses back to "Open" 
-      for (const jobId of Array.from(affectedJobIds)) {
-        await storage.updateJob(jobId, { status: "Open" });
-      }
-      
-      // Reset machine utilization to 0
-      const machines = await storage.getMachines();
-      for (const machine of machines) {
-        await storage.updateMachine(machine.id, { utilization: "0" });
-      }
-      
-      console.log(`✅ Unscheduled ${allSchedules.length} schedule entries for ${affectedJobIds.size} jobs`);
-      
-      // Broadcast updates
-      broadcast({ type: 'schedule_cleared', data: { 
-        clearedEntries: allSchedules.length,
-        affectedJobs: affectedJobIds.size 
-      } });
-      
-      res.json({ 
-        message: `Successfully unscheduled ${allSchedules.length} entries for ${affectedJobIds.size} jobs`,
-        clearedEntries: allSchedules.length,
-        affectedJobs: affectedJobIds.size
-      });
-    } catch (error) {
-      console.error("❌ Failed to unschedule all jobs:", error);
-      res.status(500).json({ message: "Failed to unschedule all jobs" });
-    }
-  });
+
 
   app.get("/api/machines/substitution-groups/:group", async (req, res) => {
     try {

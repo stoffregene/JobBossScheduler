@@ -8,6 +8,14 @@ This is a comprehensive Manufacturing Resource Planning (MRP) system built with 
 
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes
+
+**August 4, 2025** - Fixed critical "unschedule all" function bug:
+- Identified route matching issue where `/api/schedule/:id` was intercepting `/api/schedule/all` requests
+- Moved specific route above parameterized route to ensure proper matching
+- Function now successfully clears all schedule entries and resets job statuses
+- Application running stably with all core features operational
+
 ## System Architecture
 
 ### Frontend Architecture

@@ -34,6 +34,7 @@ export interface IStorage {
   createScheduleEntry(entry: InsertScheduleEntry): Promise<ScheduleEntry>;
   updateScheduleEntry(id: string, entry: Partial<ScheduleEntry>): Promise<ScheduleEntry | undefined>;
   deleteScheduleEntry(id: string): Promise<boolean>;
+  clearAllScheduleEntries(): Promise<void>;
 
   // Alerts
   getAlerts(): Promise<Alert[]>;
