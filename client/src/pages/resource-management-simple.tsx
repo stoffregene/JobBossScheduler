@@ -27,6 +27,9 @@ export default function ResourceManagement() {
     resourceIds: [] as string[],
     startDate: "",
     endDate: "",
+    startTime: "",
+    endTime: "",
+    isPartialDay: false,
     reason: "",
     shifts: [1, 2] as number[],
     notes: "",
@@ -200,6 +203,9 @@ export default function ResourceManagement() {
         resourceIds: [],
         startDate: "",
         endDate: "",
+        startTime: "",
+        endTime: "",
+        isPartialDay: false,
         reason: "",
         shifts: [1, 2],
         notes: "",
@@ -614,12 +620,17 @@ export default function ResourceManagement() {
                 ) : unavailabilityData && unavailabilityData.length > 0 ? (
                   unavailabilityData.map(item => {
                     const resource = resources?.find(r => item.resourceIds?.includes(r.id));
-                    const today = new Date();
-                    today.setHours(0, 0, 0, 0); // Reset to start of day for proper comparison
+                    // Use Central Time for proper comparison
+                    const now = new Date();
+                    const today = new Date(now.toLocaleString('en-US', { timeZone: 'America/Chicago' }));
+                    today.setHours(0, 0, 0, 0);
+                    
                     const startDate = new Date(item.startDate);
                     const endDate = new Date(item.endDate);
-                    const isActive = startDate <= today && endDate >= today;
-                    const isUpcoming = startDate > today;
+                    endDate.setHours(23, 59, 59, 999); // End of day for comparison
+                    
+                    const isActive = startDate <= now && endDate >= now;
+                    const isUpcoming = startDate > now;
                     
                     return (
                       <div key={item.id} className="flex items-center justify-between p-3 border rounded-lg">
@@ -929,6 +940,50 @@ export default function ResourceManagement() {
                 />
               </div>
             </div>
+
+            {/* Partial Day Toggle */}
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="isPartialDay"
+                checked={unavailabilityForm.isPartialDay}
+                onCheckedChange={(checked) => 
+                  setUnavailabilityForm(prev => ({ 
+                    ...prev, 
+                    isPartialDay: !!checked,
+                    startTime: checked ? "08:00" : "",
+                    endTime: checked ? "17:00" : ""
+                  }))
+                }
+                data-testid="checkbox-partial-day"
+              />
+              <Label htmlFor="isPartialDay">Partial Day (specify hours)</Label>
+            </div>
+
+            {/* Time Range - only shown for partial day */}
+            {unavailabilityForm.isPartialDay && (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="startTime">Start Time</Label>
+                  <Input
+                    id="startTime"
+                    type="time"
+                    value={unavailabilityForm.startTime}
+                    onChange={(e) => setUnavailabilityForm(prev => ({ ...prev, startTime: e.target.value }))}
+                    data-testid="input-start-time"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="endTime">End Time</Label>
+                  <Input
+                    id="endTime"
+                    type="time"
+                    value={unavailabilityForm.endTime}
+                    onChange={(e) => setUnavailabilityForm(prev => ({ ...prev, endTime: e.target.value }))}
+                    data-testid="input-end-time"
+                  />
+                </div>
+              </div>
+            )}
 
             {/* Reason */}
             <div>

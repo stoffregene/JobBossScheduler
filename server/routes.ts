@@ -588,7 +588,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/resource-unavailability", async (req, res) => {
     try {
-      const { resourceIds, startDate, endDate, reason, shifts, notes } = req.body;
+      const { resourceIds, startDate, endDate, startTime, endTime, isPartialDay, reason, shifts, notes } = req.body;
       
       // Validate required fields
       if (!resourceIds || resourceIds.length === 0) {
@@ -601,10 +601,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Reason is required" });
       }
 
-      // Fix timezone issues by parsing dates as local dates
+      // Fix timezone issues by parsing dates as Central Time
       const parseLocalDate = (dateStr: string) => {
         const [year, month, day] = dateStr.split('-').map(Number);
-        return new Date(year, month - 1, day); // month is 0-indexed in JS Date
+        // Create date in Central Time by using a specific time on that date
+        const centralDate = new Date();
+        centralDate.setFullYear(year, month - 1, day);
+        centralDate.setHours(12, 0, 0, 0); // Set to noon Central to avoid DST edge cases
+        return centralDate;
       };
 
       const parsedStartDate = parseLocalDate(startDate);
@@ -617,6 +621,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           resourceId: resourceId,
           startDate: parsedStartDate,
           endDate: parsedEndDate,
+          startTime: startTime || null,
+          endTime: endTime || null,
+          isPartialDay: isPartialDay || false,
           reason,
           shifts: shifts || [1, 2],
           notes: notes || "",
