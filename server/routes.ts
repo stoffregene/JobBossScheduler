@@ -604,13 +604,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auto-scheduling endpoints
   app.post("/api/jobs/:id/auto-schedule", async (req, res) => {
     try {
-      const scheduleEntries = await storage.autoScheduleJob(req.params.id);
+      // Start progress tracking
+      broadcast({ 
+        type: 'schedule_progress', 
+        data: { 
+          jobId: req.params.id, 
+          progress: 0, 
+          status: 'Starting auto-schedule...',
+          stage: 'initializing'
+        } 
+      });
+
+      const scheduleEntries = await storage.autoScheduleJob(req.params.id, (progress) => {
+        // Broadcast progress updates via WebSocket
+        broadcast({ 
+          type: 'schedule_progress', 
+          data: { 
+            jobId: req.params.id, 
+            progress: Math.round(progress.percentage),
+            status: progress.status,
+            stage: progress.stage,
+            operationName: progress.operationName,
+            currentOperation: progress.currentOperation,
+            totalOperations: progress.totalOperations
+          } 
+        });
+      });
+
       if (!scheduleEntries) {
+        broadcast({ 
+          type: 'schedule_progress', 
+          data: { 
+            jobId: req.params.id, 
+            progress: 100, 
+            status: 'Failed to schedule job',
+            stage: 'error'
+          } 
+        });
         return res.status(400).json({ message: "Unable to auto-schedule job" });
       }
+
+      // Complete progress
+      broadcast({ 
+        type: 'schedule_progress', 
+        data: { 
+          jobId: req.params.id, 
+          progress: 100, 
+          status: 'Job successfully scheduled!',
+          stage: 'completed'
+        } 
+      });
+
       broadcast({ type: 'job_auto_scheduled', data: { jobId: req.params.id, scheduleEntries } });
       res.json({ scheduleEntries, message: "Job successfully auto-scheduled" });
     } catch (error) {
+      broadcast({ 
+        type: 'schedule_progress', 
+        data: { 
+          jobId: req.params.id, 
+          progress: 100, 
+          status: 'Error occurred during scheduling',
+          stage: 'error'
+        } 
+      });
       res.status(500).json({ message: "Failed to auto-schedule job" });
     }
   });

@@ -14,6 +14,7 @@ import { Filter, Plus, Calendar, Edit, Zap, Trash2, Settings, Upload, PlayCircle
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Job } from "@shared/schema";
+import ScheduleProgressToast from "./schedule-progress-toast";
 
 interface JobQueueProps {
   onJobSelect: (jobId: string) => void;
@@ -50,6 +51,7 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
     customer: '',
     operations: [] as string[]
   });
+  const [isScheduleProgressVisible, setIsScheduleProgressVisible] = useState(false);
 
   const { data: rawJobs, isLoading } = useQuery<Job[]>({
     queryKey: ['/api/jobs'],
@@ -175,6 +177,7 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
 
   const autoScheduleMutation = useMutation({
     mutationFn: async (jobId: string) => {
+      setIsScheduleProgressVisible(true);
       return apiRequest(`/api/jobs/${jobId}/auto-schedule`, 'POST');
     },
     onSuccess: (data, jobId) => {
@@ -187,6 +190,7 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
       });
     },
     onError: () => {
+      setIsScheduleProgressVisible(false);
       toast({
         title: "Auto-Schedule Failed",
         description: "Unable to automatically schedule this job. Please try manual scheduling.",
@@ -1232,6 +1236,12 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
       </Dialog>
         </CollapsibleContent>
       </Card>
+      
+      {/* Progress tracking for auto-scheduling */}
+      <ScheduleProgressToast
+        isVisible={isScheduleProgressVisible}
+        onClose={() => setIsScheduleProgressVisible(false)}
+      />
     </Collapsible>
   );
 }

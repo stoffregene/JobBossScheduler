@@ -1177,7 +1177,17 @@ export class DatabaseStorage implements IStorage {
     return true;
   }
 
-  async autoScheduleJob(jobId: string): Promise<ScheduleEntry[] | null> {
+  async autoScheduleJob(
+    jobId: string, 
+    onProgress?: (progress: {
+      percentage: number;
+      status: string;
+      stage: string;
+      operationName?: string;
+      currentOperation?: number;
+      totalOperations?: number;
+    }) => void
+  ): Promise<ScheduleEntry[] | null> {
     const job = await this.getJob(jobId);
     if (!job || !job.routing || job.routing.length === 0) return null;
 
@@ -1399,7 +1409,7 @@ export class DatabaseStorage implements IStorage {
     }
 
     // Schedule at day 0 regardless of material status
-    const scheduleEntries = await this.autoScheduleJobWithOptimalStart(jobId);
+    const scheduleEntries = await this.autoScheduleJobWithOptimalStart(jobId, onProgress);
     
     if (scheduleEntries) {
       // Create alert if materials need review
@@ -1424,11 +1434,30 @@ export class DatabaseStorage implements IStorage {
   }
 
   // New scheduling method with optimal start date logic
-  async autoScheduleJobWithOptimalStart(jobId: string): Promise<ScheduleEntry[] | null> {
+  async autoScheduleJobWithOptimalStart(
+    jobId: string, 
+    onProgress?: (progress: {
+      percentage: number;
+      status: string;
+      stage: string;
+      operationName?: string;
+      currentOperation?: number;
+      totalOperations?: number;
+    }) => void
+  ): Promise<ScheduleEntry[] | null> {
     const job = await this.getJob(jobId);
     if (!job) return null;
 
     const scheduleEntries: ScheduleEntry[] = [];
+    const totalOperations = job.routing.length;
+    
+    // Initial progress
+    onProgress?.({
+      percentage: 5,
+      status: 'Preparing schedule dates...',
+      stage: 'preparing',
+      totalOperations
+    });
     
     // Start at day 0 (immediate scheduling)
     let currentDate = new Date();
@@ -1446,15 +1475,45 @@ export class DatabaseStorage implements IStorage {
       currentDate.setDate(currentDate.getDate() + 1);
     }
     
+    onProgress?.({
+      percentage: 10,
+      status: 'Starting operation scheduling...',
+      stage: 'scheduling',
+      totalOperations
+    });
+    
     const dayInMs = 24 * 60 * 60 * 1000;
     const maxDaysOut = 30; // Manufacturing window
 
-    for (const operation of job.routing) {
+    for (let opIndex = 0; opIndex < job.routing.length; opIndex++) {
+      const operation = job.routing[opIndex];
+      
+      // Progress update for each operation
+      const baseProgress = 10 + ((opIndex / totalOperations) * 80);
+      onProgress?.({
+        percentage: baseProgress,
+        status: `Scheduling operation ${opIndex + 1} of ${totalOperations}...`,
+        stage: 'scheduling',
+        operationName: operation.operationName || operation.name,
+        currentOperation: opIndex + 1,
+        totalOperations
+      });
       let scheduled = false;
       let attemptDays = 0;
       
       while (!scheduled && attemptDays < maxDaysOut) {
-        console.log(`🎯 Trying to find machine for operation ${operation.name} on attempt ${attemptDays}`);
+        // Progress update for machine finding attempts
+        const attemptProgress = baseProgress + ((attemptDays / maxDaysOut) * (80 / totalOperations));
+        onProgress?.({
+          percentage: attemptProgress,
+          status: `Finding machine for ${operation.operationName || operation.name} (attempt ${attemptDays + 1})...`,
+          stage: 'finding_machine',
+          operationName: operation.operationName || operation.name,
+          currentOperation: opIndex + 1,
+          totalOperations
+        });
+        
+        console.log(`🎯 Trying to find machine for operation ${operation.operationName || operation.name} on attempt ${attemptDays}`);
         const machineResult = await this.findBestMachineForOperation(operation, currentDate, 1);
         console.log(`🎯 Machine result:`, machineResult);
         const machineResults = machineResult ? [machineResult] : [];
@@ -1509,6 +1568,18 @@ export class DatabaseStorage implements IStorage {
               // Move to next day for next operation
               currentDate = new Date(endTime.getTime() + dayInMs);
               scheduled = true;
+              
+              // Progress update for successful scheduling
+              const completedProgress = 10 + (((opIndex + 1) / totalOperations) * 80);
+              onProgress?.({
+                percentage: completedProgress,
+                status: `Operation ${opIndex + 1} scheduled successfully on ${result.machine.machineId}`,
+                stage: 'scheduled',
+                operationName: operation.operationName || operation.name,
+                currentOperation: opIndex + 1,
+                totalOperations
+              });
+              
               break;
             }
           }
