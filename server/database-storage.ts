@@ -1300,8 +1300,9 @@ export class DatabaseStorage implements IStorage {
           continue;
         }
 
-        // For regular operations: Try shifts with load balancing (prefer less loaded shifts)
-        const shifts = await this.getShiftsOrderedByLoad(currentDate);
+        // For regular operations: Always prioritize shift 1 for machines that don't run on shift 2
+        // This ensures bottleneck machines like HCN5000 Neo get scheduled on shift 1
+        const shifts = [1, 2]; // Always try shift 1 first
         let operationFailureReasons: string[] = [];
         
         for (const shift of shifts) {

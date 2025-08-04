@@ -35,6 +35,8 @@ Preferred communication style: Simple, everyday language.
 - **VISUAL FIX**: Fixed schedule view week calendar to start from Sunday (standard calendar layout) - jobs now display in correct day columns
 - **MULTI-DAY FIX**: Fixed schedule view to properly display multi-day jobs across multiple columns - long operations (like 44+ hour HMC jobs) now span correctly across days
 - **DISPLAY FIX**: Updated job display to show operation sequence instead of total hours for better clarity in multi-operation jobs
+- **TIMEZONE FIX**: Fixed UTC date comparison in schedule view to prevent jobs from appearing on wrong days due to timezone differences
+- **SHIFT PRIORITY FIX**: Changed scheduler to always prioritize shift 1 first instead of load balancing - ensures machines that only run on shift 1 get scheduled properly
 
 ## System Architecture
 

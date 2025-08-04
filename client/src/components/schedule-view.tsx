@@ -267,14 +267,16 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
                       const startDate = new Date(entry.startTime);
                       const endDate = new Date(entry.endTime);
                       
-                      // Check if this day falls within the job's time span
-                      const dayStart = new Date(day);
-                      dayStart.setHours(0, 0, 0, 0);
-                      const dayEnd = new Date(day);
-                      dayEnd.setHours(23, 59, 59, 999);
+                      // Use UTC dates for consistent comparison across timezones
+                      const dayStartUTC = new Date(Date.UTC(day.getFullYear(), day.getMonth(), day.getDate(), 0, 0, 0));
+                      const dayEndUTC = new Date(Date.UTC(day.getFullYear(), day.getMonth(), day.getDate(), 23, 59, 59));
                       
-                      // Job spans this day if it starts before or on this day AND ends after or on this day
-                      return startDate <= dayEnd && endDate >= dayStart;
+                      // Convert schedule times to UTC midnight boundaries for comparison
+                      const scheduleStartDay = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), startDate.getUTCDate()));
+                      const scheduleEndDay = new Date(Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth(), endDate.getUTCDate()));
+                      
+                      // Job spans this day if it overlaps with the day's UTC range
+                      return scheduleStartDay <= dayEndUTC && scheduleEndDay >= dayStartUTC;
                     });
 
                     return (
