@@ -10,7 +10,10 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
-**August 4, 2025** - Fixed CSV import sequence duplication and job queue delete performance bugs:
+**August 4, 2025** - Optimized CSV import performance and fixed sequence duplication bugs:
+- **ACTIVE JOBS FILTER**: Import now processes only "Active" jobs, skipping Closed/Canceled jobs for major performance boost
+- **BATCH PROCESSING**: Eliminated individual database calls during import - jobs are now created in batches
+- **REDUCED LOGGING**: Minimized console output to only show multi-operation jobs and important status updates
 - **CSV SEQUENCE FIX**: Fixed duplicate operation creation where jobs like 58923 were getting 6 operations instead of 3
 - **DEDUPLICATION LOGIC**: Added unique operation detection based on sequence, work center, and hours combination
 - **SEQUENCE MAPPING**: Properly maps CSV Sequence column (0-10) to correct operation ordering (saw→mill→inspect workflow)

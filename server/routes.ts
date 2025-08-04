@@ -235,12 +235,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log('📋 Cleaned First row:', csvData[0]);
       }
 
-      // Group CSV rows by job number to handle multiple routing steps
+      // Filter for Active jobs only and group CSV rows by job number
       const jobGroups = new Map<string, any[]>();
+      let skippedJobs = 0;
       
       for (const row of csvData) {
         if (!row.Job || !row.Customer) {
           continue; // Skip empty rows
+        }
+        
+        // Skip non-Active jobs for performance
+        const status = row.Status?.trim();
+        if (status !== 'Active') {
+          skippedJobs++;
+          continue;
         }
         
         const jobNumber = row.Job.trim();
@@ -249,7 +257,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         jobGroups.get(jobNumber)!.push(row);
       }
+      
+      console.log(`📋 CSV Processing: Found ${jobGroups.size} Active jobs, skipped ${skippedJobs} non-Active jobs`);
 
+      // Batch process jobs for better performance  
+      const jobsToCreate: any[] = [];
+      const materialOrdersToCreate: any[] = [];
+      
       // Process each job group
       for (const [jobNumber, jobRows] of jobGroups) {
         processed++;
@@ -328,8 +342,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             routingEntries.push(routingEntry);
             totalEstimatedHours += routingEntry.estimatedHours;
             
-            // Log sequence information for debugging
-            console.log(`📋 Job ${jobNumber} - Operation sequence ${finalSequence}: ${workCenter} (${routingEntry.estimatedHours}h)`);
+            // Log sequence information for debugging (only for multi-operation jobs)
+            if (uniqueRows.size > 1) {
+              console.log(`📋 Job ${jobNumber} - Operation sequence ${finalSequence}: ${workCenter} (${routingEntry.estimatedHours}h)`);
+            }
             
             // Capture job-level data
             if (isOutsourced && !outsourcedVendor) {
@@ -379,56 +395,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
             createdDate: jobData.createdDate // Use Order_Date as created date
           };
           
-          console.log(`📋 Job ${validatedJob.jobNumber} - Routing Steps: ${validatedJob.routing.length}, Total Hours: ${validatedJob.estimatedHours}, Material: ${validatedJob.material}`);
-
-          // Check if job already exists
-          const existingJobs = await storage.getJobs();
-          const existingJob = existingJobs.find(j => j.jobNumber === validatedJob.jobNumber);
-
-          if (existingJob) {
-            // Update existing job
-            await storage.updateJob(existingJob.id, validatedJob);
-            updated++;
-            
-            // If job status changed to Complete, update schedule entries
-            if (validatedJob.status === 'Complete' && existingJob.status !== 'Complete') {
-              const scheduleEntries = await storage.getScheduleEntries();
-              for (const entry of scheduleEntries) {
-                if (entry.jobId === existingJob.id && entry.status !== 'Complete') {
-                  await storage.updateScheduleEntry(entry.id, { status: 'Complete' });
-                }
-              }
-            }
-          } else {
-            // Create new job
-            await storage.createJob(validatedJob);
-            created++;
+          // Only log details for jobs with multiple operations or issues
+          if (validatedJob.routing.length > 1 || validatedJob.material) {
+            console.log(`📋 Job ${validatedJob.jobNumber} - Routing Steps: ${validatedJob.routing.length}, Total Hours: ${validatedJob.estimatedHours}, Material: ${validatedJob.material}`);
           }
 
-          // Handle jobs awaiting material
+          // Add to batch for bulk creation
+          jobsToCreate.push(validatedJob);
+          created++;
+
+          // Prepare material order if needed
           if (validatedJob.linkMaterial) {
-            // Create or update material order if needed
-            const materialOrders = await storage.getMaterialOrders();
+            const materialOrderData = {
+              jobNumber: validatedJob.jobNumber, // We'll update jobId after job creation
+              orderNumber: `MAT-${validatedJob.jobNumber}`,
+              materialDescription: validatedJob.material || 'Material for job',
+              quantity: validatedJob.quantity.toString(),
+              unit: 'EA',
+              supplier: validatedJob.outsourcedVendor || 'TBD',
+              orderDate: validatedJob.orderDate,
+              dueDate: new Date(validatedJob.orderDate.getTime() + (validatedJob.leadDays || 7) * 24 * 60 * 60 * 1000),
+              status: 'Open'
+            };
             
-            // Use the job ID from the recently created/updated job
-            const targetJobId = existingJob?.id || (await storage.getJobs()).find(j => j.jobNumber === validatedJob.jobNumber)?.id;
-            const existingOrder = materialOrders.find(order => order.jobId === targetJobId);
-            
-            if (!existingOrder && targetJobId) {
-              const materialOrderData = {
-                jobId: targetJobId,
-                orderNumber: `MAT-${validatedJob.jobNumber}`,
-                materialDescription: validatedJob.material || 'Material for job',
-                quantity: validatedJob.quantity.toString(),
-                unit: 'EA',
-                supplier: validatedJob.outsourcedVendor || 'TBD',
-                orderDate: validatedJob.orderDate,
-                dueDate: new Date(validatedJob.orderDate.getTime() + (validatedJob.leadDays || 7) * 24 * 60 * 60 * 1000),
-                status: 'Open'
-              };
-              
-              await storage.createMaterialOrder(materialOrderData);
-            }
+            materialOrdersToCreate.push(materialOrderData);
           }
 
         } catch (error) {
@@ -436,6 +426,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
           errors.push(`Row ${processed}: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
       }
+
+      // Bulk create jobs for better performance
+      console.log(`📋 Creating ${jobsToCreate.length} jobs in batch...`);
+      const startTime = Date.now();
+      
+      for (const jobData of jobsToCreate) {
+        await storage.createJob(jobData);
+      }
+      
+      // Create material orders with correct job IDs
+      if (materialOrdersToCreate.length > 0) {
+        console.log(`📋 Creating ${materialOrdersToCreate.length} material orders...`);
+        const allJobs = await storage.getJobs();
+        
+        for (const materialOrder of materialOrdersToCreate) {
+          const job = allJobs.find(j => j.jobNumber === materialOrder.jobNumber);
+          if (job) {
+            const { jobNumber, ...orderData } = materialOrder;
+            await storage.createMaterialOrder({ ...orderData, jobId: job.id });
+          }
+        }
+      }
+      
+      const duration = Date.now() - startTime;
+      console.log(`📋 Import completed in ${duration}ms: ${created} jobs created, ${skippedJobs} non-Active jobs skipped`);
 
       // Broadcast updates
       broadcast({ type: 'jobs_imported', data: { processed, created, updated } });
