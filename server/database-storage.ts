@@ -1047,12 +1047,28 @@ export class DatabaseStorage implements IStorage {
     
     console.log(`🔍 Finding machine for operation: ${operation.operationName || operation.name}, machineType: ${operation.machineType}`);
     console.log(`   Compatible machines required: [${operation.compatibleMachines.join(', ')}]`);
-    console.log(`   Available machines: ${allMachines.length}`);
+    
+    // OPTIMIZATION: Pre-filter machines by type and compatible machines to avoid checking irrelevant machines
+    const preFilteredMachines = allMachines.filter(machine => {
+      // Check if machine is directly compatible
+      const isDirectlyCompatible = operation.compatibleMachines.includes(machine.machineId);
+      
+      // Check if machine could potentially substitute (same type or substitution group)
+      const sameType = machine.type === operation.machineType;
+      const hasSubstitutionGroup = machine.substitutionGroup && operation.compatibleMachines.some(compatId => {
+        const compatMachine = allMachines.find(m => m.machineId === compatId);
+        return compatMachine && compatMachine.substitutionGroup === machine.substitutionGroup;
+      });
+      
+      return isDirectlyCompatible || sameType || hasSubstitutionGroup;
+    });
+    
+    console.log(`   Pre-filtered from ${allMachines.length} to ${preFilteredMachines.length} relevant machines`);
     console.log(`   Target date: ${targetDate.toDateString()} (${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dayOfWeek]}), shift: ${shift}`);
     
     // Find machines that can handle this operation
     const compatibleMachines = [];
-    for (const machine of allMachines) {
+    for (const machine of preFilteredMachines) {
       console.log(`   Checking machine: ${machine.machineId} (${machine.type})`);
       console.log(`     Status: ${machine.status}, availableShifts: ${machine.availableShifts}, shift needed: ${shift}`);
       console.log(`     Compatible check: ${operation.compatibleMachines.includes(machine.machineId)}`);
