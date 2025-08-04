@@ -501,7 +501,7 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
                       <Input
                         id="csvFile"
                         type="file"
-                        accept=".csv"
+                        accept=".csv,text/csv,application/csv,text/plain"
                         onChange={handleCSVImport}
                       />
                     </div>
@@ -804,7 +804,7 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
                     <Input
                       id="csvFileMain2"
                       type="file"
-                      accept=".csv"
+                      accept=".csv,text/csv,application/csv,text/plain"
                       onChange={handleCSVImport}
                     />
                   </div>

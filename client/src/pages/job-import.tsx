@@ -1,256 +1,258 @@
-import { useState } from 'react';
-import { useLocation } from 'wouter';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Progress } from '@/components/ui/progress';
-import { Badge } from '@/components/ui/badge';
-import { Upload, FileText, CheckCircle, AlertCircle, ArrowLeft } from 'lucide-react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiRequest } from '@/lib/queryClient';
-import { useToast } from '@/hooks/use-toast';
-
-interface ImportResult {
-  success: boolean;
-  processed: number;
-  created: number;
-  updated: number;
-  errors: string[];
-  preview?: any[];
-}
+import { useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Upload, CheckCircle, AlertCircle, FileText, ArrowLeft } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { queryClient } from "@/lib/queryClient";
+import { Link } from "wouter";
 
 export default function JobImport() {
-  const [file, setFile] = useState<File | null>(null);
-  const [importResult, setImportResult] = useState<ImportResult | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const queryClient = useQueryClient();
+  const [isImporting, setIsImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{
+    success: boolean;
+    processed: number;
+    created: number;  
+    updated: number;
+    message: string;
+  } | null>(null);
 
-  const importMutation = useMutation({
-    mutationFn: async (formData: FormData) => {
+  const handleCSVImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsImporting(true);
+    setImportResult(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('csv', file);
+
       const response = await fetch('/api/jobs/import', {
         method: 'POST',
         body: formData,
       });
-      
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Import failed');
+
+      const result = await response.json();
+
+      if (response.ok) {
+        // Invalidate queries to refresh the UI
+        queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/material-orders'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
+        
+        setImportResult({
+          success: true,
+          processed: result.processed,
+          created: result.created,
+          updated: result.updated,
+          message: `Successfully processed ${result.processed} rows. Created ${result.created} jobs, updated ${result.updated} jobs.`
+        });
+
+        toast({
+          title: "CSV Import Complete",
+          description: `Successfully processed ${result.processed} rows. Created ${result.created} jobs, updated ${result.updated} jobs.`,
+        });
+      } else {
+        setImportResult({
+          success: false,
+          processed: 0,
+          created: 0,
+          updated: 0,
+          message: result.message || "Failed to import CSV file."
+        });
+
+        toast({
+          title: "Import Failed",
+          description: result.message || "Failed to import CSV file.",
+          variant: "destructive",
+        });
       }
-      
-      return response.json();
-    },
-    onSuccess: (result: ImportResult) => {
-      setImportResult(result);
-      setIsProcessing(false);
-      setProgress(100);
-      
-      // Invalidate jobs queries to refresh the data
-      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
-      
-      toast({
-        title: "Import Complete",
-        description: `Processed ${result.processed} jobs - ${result.created} created, ${result.updated} updated`,
+    } catch (error) {
+      setImportResult({
+        success: false,
+        processed: 0,
+        created: 0,
+        updated: 0,
+        message: "An error occurred while importing the CSV file."
       });
-    },
-    onError: (error: any) => {
-      setIsProcessing(false);
-      setProgress(0);
+
       toast({
-        title: "Import Failed",
-        description: error.message,
-        variant: "destructive"
+        title: "Import Error",
+        description: "An error occurred while importing the CSV file.",
+        variant: "destructive",
       });
+    } finally {
+      setIsImporting(false);
+      event.target.value = ''; // Reset file input
     }
-  });
-
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = event.target.files?.[0];
-    if (selectedFile && selectedFile.type === 'text/csv') {
-      setFile(selectedFile);
-      setImportResult(null);
-    } else {
-      toast({
-        title: "Invalid File",
-        description: "Please select a CSV file",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const handleImport = () => {
-    if (!file) return;
-
-    setIsProcessing(true);
-    setProgress(0);
-    setImportResult(null);
-
-    const formData = new FormData();
-    formData.append('csv', file);
-
-    // Simulate progress for better UX
-    const progressInterval = setInterval(() => {
-      setProgress(prev => {
-        if (prev >= 90) {
-          clearInterval(progressInterval);
-          return prev;
-        }
-        return prev + 10;
-      });
-    }, 200);
-
-    importMutation.mutate(formData);
-  };
-
-  const handleReset = () => {
-    setFile(null);
-    setImportResult(null);
-    setProgress(0);
-    setIsProcessing(false);
   };
 
   return (
-    <div className="container mx-auto py-6 space-y-6">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setLocation('/dashboard')}
-          data-testid="button-back-dashboard"
-        >
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Dashboard
-        </Button>
-        <div>
-          <h1 className="text-3xl font-bold">Job Import</h1>
-          <p className="text-muted-foreground">Import jobs from CSV file</p>
-        </div>
-      </div>
-
-      {/* Import Instructions */}
-      <Alert>
-        <FileText className="h-4 w-4" />
-        <AlertDescription>
-          <strong>CSV Format Requirements:</strong> Your CSV file should contain the following columns:
-          Job, Customer, Est_Required_Qty, WC_Vendor, Lead_Days, Order_Date, Promised_Date, Est Total Hours, Link_Material, Status, Material
-        </AlertDescription>
-      </Alert>
-
-      {/* File Upload Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Upload className="h-5 w-5" />
-            Upload CSV File
-          </CardTitle>
-          <CardDescription>
-            Select a CSV file containing job data to import
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Input
-              type="file"
-              accept=".csv"
-              onChange={handleFileSelect}
-              disabled={isProcessing}
-              data-testid="input-csv-file"
-            />
-            {file && (
-              <div className="text-sm text-muted-foreground">
-                Selected: {file.name} ({(file.size / 1024).toFixed(1)} KB)
-              </div>
-            )}
-          </div>
-
-          {isProcessing && (
-            <div className="space-y-2">
-              <div className="text-sm font-medium">Processing...</div>
-              <Progress value={progress} className="w-full" />
-            </div>
-          )}
-
-          <div className="flex gap-2">
-            <Button
-              onClick={handleImport}
-              disabled={!file || isProcessing}
-              data-testid="button-import-csv"
-            >
-              {isProcessing ? 'Processing...' : 'Import Jobs'}
-            </Button>
-            {file && (
-              <Button
-                variant="outline"
-                onClick={handleReset}
-                disabled={isProcessing}
-                data-testid="button-reset-import"
-              >
-                Reset
+      <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center h-16">
+            <Link href="/">
+              <Button variant="ghost" size="sm" className="flex items-center gap-2 mr-4">
+                <ArrowLeft className="w-4 h-4" />
+                Back to Dashboard
               </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Import Results */}
-      {importResult && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              {importResult.success ? (
-                <CheckCircle className="h-5 w-5 text-green-600" />
-              ) : (
-                <AlertCircle className="h-5 w-5 text-red-600" />
-              )}
-              Import Results
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="text-center p-3 bg-muted rounded-lg">
-                <div className="text-2xl font-bold">{importResult.processed}</div>
-                <div className="text-sm text-muted-foreground">Total Processed</div>
-              </div>
-              <div className="text-center p-3 bg-green-50 rounded-lg">
-                <div className="text-2xl font-bold text-green-600">{importResult.created}</div>
-                <div className="text-sm text-muted-foreground">Created</div>
-              </div>
-              <div className="text-center p-3 bg-blue-50 rounded-lg">
-                <div className="text-2xl font-bold text-blue-600">{importResult.updated}</div>
-                <div className="text-sm text-muted-foreground">Updated</div>
-              </div>
-              <div className="text-center p-3 bg-red-50 rounded-lg">
-                <div className="text-2xl font-bold text-red-600">{importResult.errors.length}</div>
-                <div className="text-sm text-muted-foreground">Errors</div>
-              </div>
+            </Link>
+            <div className="flex items-center space-x-2">
+              <Upload className="text-primary-500 text-xl" />
+              <span className="text-xl font-bold text-gray-900 dark:text-white">Job Import</span>
             </div>
+          </div>
+        </div>
+      </header>
 
-            {importResult.errors.length > 0 && (
-              <div className="space-y-2">
-                <h4 className="font-medium text-red-600">Errors:</h4>
-                <div className="space-y-1">
-                  {importResult.errors.map((error, index) => (
-                    <div key={index} className="text-sm p-2 bg-red-50 rounded border-l-4 border-red-200">
-                      {error}
-                    </div>
-                  ))}
+      {/* Main Content */}
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="space-y-6">
+          {/* Import Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="w-5 h-5" />
+                Import Jobs from CSV
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Instructions */}
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                <h3 className="font-medium text-blue-900 dark:text-blue-100 mb-2">File Format Requirements</h3>
+                <div className="text-sm text-blue-800 dark:text-blue-200 space-y-2">
+                  <p>Upload a JobBoss scheduling report CSV file with the following requirements:</p>
+                  <ul className="list-disc list-inside space-y-1 ml-4">
+                    <li>JobBoss Scheduling Report format</li>
+                    <li>Contains Job Number, Customer, Work Center, Hours, Materials columns</li>
+                    <li>Multi-step routing supported (multiple rows per job)</li>
+                    <li>System will automatically parse and group routing steps</li>
+                  </ul>
                 </div>
               </div>
-            )}
 
-            <div className="flex justify-center">
-              <Button onClick={() => setLocation('/dashboard')} data-testid="button-continue-dashboard">
-                Continue to Dashboard
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+              {/* File Upload */}
+              <div className="space-y-4">
+                <div className="grid w-full max-w-sm items-center gap-1.5">
+                  <Label htmlFor="csvImport">CSV File</Label>
+                  <Input
+                    id="csvImport"
+                    type="file"
+                    accept=".csv,text/csv,application/csv,text/plain"
+                    onChange={handleCSVImport}
+                    disabled={isImporting}
+                    data-testid="input-csv-import"
+                  />
+                </div>
+                
+                {isImporting && (
+                  <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
+                    <span className="text-sm">Processing CSV file...</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Results */}
+              {importResult && (
+                <div className={`border rounded-lg p-4 ${
+                  importResult.success 
+                    ? 'border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20' 
+                    : 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20'
+                }`}>
+                  <div className="flex items-start gap-3">
+                    {importResult.success ? (
+                      <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 mt-0.5" />
+                    ) : (
+                      <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5" />
+                    )}
+                    <div className="flex-1">
+                      <h4 className={`font-medium ${
+                        importResult.success 
+                          ? 'text-green-900 dark:text-green-100' 
+                          : 'text-red-900 dark:text-red-100'
+                      }`}>
+                        {importResult.success ? 'Import Successful' : 'Import Failed'}
+                      </h4>
+                      <p className={`text-sm mt-1 ${
+                        importResult.success 
+                          ? 'text-green-800 dark:text-green-200' 
+                          : 'text-red-800 dark:text-red-200'
+                      }`}>
+                        {importResult.message}
+                      </p>
+                      {importResult.success && (
+                        <div className="mt-2 text-sm text-green-700 dark:text-green-300">
+                          <div className="grid grid-cols-3 gap-4">
+                            <div>
+                              <span className="font-medium">Processed:</span> {importResult.processed} rows
+                            </div>
+                            <div>
+                              <span className="font-medium">Created:</span> {importResult.created} jobs
+                            </div>
+                            <div>
+                              <span className="font-medium">Updated:</span> {importResult.updated} jobs
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              {importResult?.success && (
+                <div className="flex gap-2 pt-4">
+                  <Link href="/">
+                    <Button>
+                      View Dashboard
+                    </Button>
+                  </Link>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setImportResult(null)}
+                  >
+                    Import Another File
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Tips Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Import Tips</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3 text-sm text-gray-600 dark:text-gray-300">
+                <div className="flex items-start gap-2">
+                  <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                  <span>Jobs with identical job numbers will be updated with new routing information</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                  <span>Multi-step routing is automatically parsed and combined by job number</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                  <span>Material orders are created automatically for jobs requiring materials</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                  <span>Work center assignments are validated against available machines</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </main>
     </div>
   );
 }
