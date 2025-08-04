@@ -262,10 +262,19 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
                     const isWeekendOrFriday = isWeekend || isFriday;
                     const isUnavailable = isWeekendOrFriday; // All machines should be unavailable on Fri-Sun
                     
-                    // Find jobs scheduled for this day
+                    // Find jobs scheduled for this day (including multi-day jobs)
                     const dayJobs = machineJobs.filter(entry => {
-                      const entryDate = new Date(entry.startTime);
-                      return entryDate.toDateString() === day.toDateString();
+                      const startDate = new Date(entry.startTime);
+                      const endDate = new Date(entry.endTime);
+                      
+                      // Check if this day falls within the job's time span
+                      const dayStart = new Date(day);
+                      dayStart.setHours(0, 0, 0, 0);
+                      const dayEnd = new Date(day);
+                      dayEnd.setHours(23, 59, 59, 999);
+                      
+                      // Job spans this day if it starts before or on this day AND ends after or on this day
+                      return startDate <= dayEnd && endDate >= dayStart;
                     });
 
                     return (
@@ -286,7 +295,7 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
                             data-testid={`schedule-job-${dayJobs[0].job?.jobNumber}`}
                           >
                             <span className="truncate">
-                              {dayJobs[0].job?.jobNumber} ({Math.round(parseFloat(dayJobs[0].job?.estimatedHours || '0'))}h)
+                              {dayJobs[0].job?.jobNumber} (Op{dayJobs[0].operationSequence})
                             </span>
                           </button>
                         )}

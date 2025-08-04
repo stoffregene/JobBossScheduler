@@ -33,6 +33,8 @@ Preferred communication style: Simple, everyday language.
 - Enhanced month view in production schedule with sticky machine labels and better column sizing
 - **CRITICAL FIX**: Fixed backend scheduling logic to properly skip Friday-Sunday (days 5,6,0) - jobs will no longer be scheduled on weekends
 - **VISUAL FIX**: Fixed schedule view week calendar to start from Sunday (standard calendar layout) - jobs now display in correct day columns
+- **MULTI-DAY FIX**: Fixed schedule view to properly display multi-day jobs across multiple columns - long operations (like 44+ hour HMC jobs) now span correctly across days
+- **DISPLAY FIX**: Updated job display to show operation sequence instead of total hours for better clarity in multi-operation jobs
 
 ## System Architecture
 
