@@ -43,12 +43,34 @@ export function SchedulingFailuresWidget() {
       }
     };
 
-    const ws = new WebSocket(`ws://${window.location.host}`);
-    ws.addEventListener('message', handleMessage);
+    let ws: WebSocket | null = null;
+    
+    try {
+      // Use appropriate protocol based on current location
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}`;
+      
+      ws = new WebSocket(wsUrl);
+      
+      ws.addEventListener('message', handleMessage);
+      ws.addEventListener('error', (error) => {
+        console.log('WebSocket error:', error);
+      });
+      ws.addEventListener('open', () => {
+        console.log('WebSocket connected');
+      });
+      ws.addEventListener('close', () => {
+        console.log('WebSocket disconnected');
+      });
+    } catch (error) {
+      console.log('Failed to create WebSocket connection:', error);
+    }
 
     return () => {
-      ws.removeEventListener('message', handleMessage);
-      ws.close();
+      if (ws) {
+        ws.removeEventListener('message', handleMessage);
+        ws.close();
+      }
     };
   }, []);
 
