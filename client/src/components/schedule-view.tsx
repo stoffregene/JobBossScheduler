@@ -117,14 +117,15 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
       .filter(entry => entry.job);
   };
 
-  const getJobColor = (priority: string) => {
+  const getJobColor = (priority: string, shift: number = 1) => {
+    // Base colors by priority, with shift pattern variations
     switch (priority) {
       case 'Critical':
-        return 'bg-red-600';
+        return shift === 1 ? 'bg-red-600' : 'bg-red-600 bg-opacity-80 border-2 border-red-400';
       case 'High':
-        return 'bg-orange-500';
+        return shift === 1 ? 'bg-orange-500' : 'bg-orange-500 bg-opacity-80 border-2 border-orange-300';
       default:
-        return 'bg-blue-600';
+        return shift === 1 ? 'bg-blue-600' : 'bg-blue-600 bg-opacity-80 border-2 border-blue-400';
     }
   };
 
@@ -291,13 +292,14 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
                         {dayJobs.length > 0 && (
                           <button
                             className={`absolute inset-1 rounded text-white text-xs px-2 flex items-center justify-center font-medium cursor-pointer hover:opacity-80 transition-opacity ${
-                              getJobColor(dayJobs[0].job?.priority || 'Normal')
+                              getJobColor(dayJobs[0].job?.priority || 'Normal', dayJobs[0].shift)
                             }`}
                             onClick={() => setSelectedJobId(dayJobs[0].job?.id || null)}
                             data-testid={`schedule-job-${dayJobs[0].job?.jobNumber}`}
+                            title={`Shift ${dayJobs[0].shift} - ${dayJobs[0].job?.jobNumber} (Op${dayJobs[0].operationSequence})`}
                           >
                             <span className="truncate">
-                              {dayJobs[0].job?.jobNumber} (Op{dayJobs[0].operationSequence})
+                              {dayJobs[0].job?.jobNumber} (Op{dayJobs[0].operationSequence}) - S{dayJobs[0].shift}
                             </span>
                           </button>
                         )}
@@ -313,15 +315,27 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
           <div className="mt-6 pt-4 border-t border-border flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
             <div className="flex items-center">
               <div className="w-4 h-4 bg-blue-600 rounded mr-2"></div>
-              <span>Normal Priority</span>
+              <span>Normal Priority (1st Shift)</span>
+            </div>
+            <div className="flex items-center">
+              <div className="w-4 h-4 bg-blue-600 bg-opacity-80 border-2 border-blue-400 rounded mr-2"></div>
+              <span>Normal Priority (2nd Shift)</span>
             </div>
             <div className="flex items-center">
               <div className="w-4 h-4 bg-orange-500 rounded mr-2"></div>
-              <span>High Priority</span>
+              <span>High Priority (1st Shift)</span>
+            </div>
+            <div className="flex items-center">
+              <div className="w-4 h-4 bg-orange-500 bg-opacity-80 border-2 border-orange-300 rounded mr-2"></div>
+              <span>High Priority (2nd Shift)</span>
             </div>
             <div className="flex items-center">
               <div className="w-4 h-4 bg-red-600 rounded mr-2"></div>
-              <span>Critical</span>
+              <span>Critical (1st Shift)</span>
+            </div>
+            <div className="flex items-center">
+              <div className="w-4 h-4 bg-red-600 bg-opacity-80 border-2 border-red-400 rounded mr-2"></div>
+              <span>Critical (2nd Shift)</span>
             </div>
             <div className="flex items-center">
               <div className="w-4 h-4 bg-muted rounded mr-2 opacity-50"></div>
