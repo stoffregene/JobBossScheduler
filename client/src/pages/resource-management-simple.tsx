@@ -78,9 +78,12 @@ export default function ResourceManagement() {
   });
 
   const createResourceMutation = useMutation({
-    mutationFn: (resource: Partial<Resource>) =>
-      apiRequest('/api/resources', 'POST', resource),
-    onSuccess: () => {
+    mutationFn: (resource: Partial<Resource>) => {
+      console.log('Making API request with:', resource);
+      return apiRequest('/api/resources', 'POST', resource);
+    },
+    onSuccess: (data) => {
+      console.log('Resource created successfully:', data);
       queryClient.invalidateQueries({ queryKey: ['/api/resources'] });
       setShowAddDialog(false);
       setEditForm({
@@ -96,6 +99,7 @@ export default function ResourceManagement() {
       toast({ title: "Resource created successfully" });
     },
     onError: (error) => {
+      console.error('Error creating resource:', error);
       toast({ 
         title: "Error creating resource", 
         description: error.message,
@@ -148,6 +152,7 @@ export default function ResourceManagement() {
   };
 
   const handleCreateResource = () => {
+    console.log('Creating resource with data:', editForm);
     createResourceMutation.mutate(editForm);
   };
 
