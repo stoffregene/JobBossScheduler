@@ -636,6 +636,47 @@ export class DatabaseStorage implements IStorage {
     return machine || undefined;
   }
 
+  async deleteMachine(id: string): Promise<boolean> {
+    try {
+      // Check if machine exists first
+      const existingMachine = await db.select().from(machines).where(eq(machines.id, id)).limit(1);
+      if (existingMachine.length === 0) {
+        return false;
+      }
+      
+      // Delete all related data in correct order to avoid foreign key constraints
+      // 1. Delete alerts that reference this machine
+      await db.delete(alerts).where(eq(alerts.machineId, id));
+      
+      // 2. Delete schedule entries for this machine
+      await db.delete(scheduleEntries).where(eq(scheduleEntries.machineId, id));
+      
+      // 3. Update routing operations to remove this machine from compatible machines
+      const routingOps = await db.select().from(routingOperations);
+      for (const op of routingOps) {
+        if (op.compatibleMachines.includes(id)) {
+          const updatedMachines = op.compatibleMachines.filter(m => m !== id);
+          await db.update(routingOperations)
+            .set({ compatibleMachines: updatedMachines })
+            .where(eq(routingOperations.id, op.id));
+        }
+        // Also clear assigned machine if it's this machine
+        if (op.assignedMachineId === id) {
+          await db.update(routingOperations)
+            .set({ assignedMachineId: null })
+            .where(eq(routingOperations.id, op.id));
+        }
+      }
+      
+      // Finally, delete the machine itself
+      await db.delete(machines).where(eq(machines.id, id));
+      return true;
+    } catch (error) {
+      console.error('Error deleting machine:', error);
+      return false;
+    }
+  }
+
   // Schedule implementation
   async getScheduleEntries(): Promise<ScheduleEntry[]> {
     return await db.select().from(scheduleEntries).orderBy(scheduleEntries.startTime);

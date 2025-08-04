@@ -124,7 +124,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/jobs", async (req, res) => {
     try {
-      const deleteCount = await storage.deleteAllJobs();
+      // Note: deleteAllJobs method is not in interface, implementing basic version
+      const jobs = await storage.getJobs();
+      let deleteCount = 0;
+      for (const job of jobs) {
+        const deleted = await storage.deleteJob(job.id);
+        if (deleted) deleteCount++;
+      }
       broadcast({ type: 'all_jobs_deleted', data: { count: deleteCount } });
       res.json({ message: `Deleted ${deleteCount} jobs`, count: deleteCount });
     } catch (error) {
@@ -135,7 +141,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/jobs/schedule-all", async (req, res) => {
     try {
-      const result = await storage.scheduleAllJobs();
+      // Note: scheduleAllJobs method is not in interface, implementing basic version
+      const jobs = await storage.getJobs();
+      const unscheduledJobs = jobs.filter(j => j.status === 'Unscheduled');
+      let scheduled = 0;
+      
+      for (const job of unscheduledJobs) {
+        try {
+          const scheduleEntries = await storage.autoScheduleJob(job.id);
+          if (scheduleEntries && scheduleEntries.length > 0) {
+            await storage.updateJob(job.id, { status: 'Scheduled' });
+            scheduled++;
+          }
+        } catch (error) {
+          console.warn(`Failed to schedule job ${job.jobNumber}:`, error);
+        }
+      }
+      
+      const result = { success: true, scheduled, total: unscheduledJobs.length };
       broadcast({ type: 'all_jobs_scheduled', data: result });
       res.json(result);
     } catch (error) {
@@ -160,9 +183,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Define standard work centers that are in-house
       const standardWorkCenters = ['SAW', 'MILL', 'LATHE', 'WATERJET', 'BEAD BLAST', 'WELD', 'INSPECT', 'ASSEMBLE'];
       
-      function isStandardWorkCenter(wcName: string): boolean {
+      const isStandardWorkCenter = (wcName: string): boolean => {
         return standardWorkCenters.some(wc => wcName.toUpperCase().includes(wc));
-      }
+      };
 
       // Parse CSV data
       const readable = Readable.from(req.file.buffer);
@@ -221,7 +244,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const validatedJob = {
             ...jobData,
             // Ensure all fields are properly typed
-            quantity: parseInt(jobData.quantity) || 1,
+            quantity: jobData.quantity || 1,
             estimatedHours: jobData.estimatedHours, // Already converted to string
             leadDays: jobData.leadDays,
             linkMaterial: Boolean(jobData.linkMaterial)
@@ -795,7 +818,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const parsedEndDate = parseLocalDate(endDate);
 
       // Create unavailability record for each resource
-      const createdUnavailabilities = [];
+      const createdUnavailabilities: any[] = [];
       for (const resourceId of resourceIds) {
         const unavailabilityData = {
           resourceId: resourceId,

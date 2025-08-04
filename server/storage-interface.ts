@@ -24,6 +24,7 @@ export interface IStorage {
   getMachine(id: string): Promise<Machine | undefined>;
   createMachine(machine: InsertMachine): Promise<Machine>;
   updateMachine(id: string, machine: Partial<Machine>): Promise<Machine | undefined>;
+  deleteMachine(id: string): Promise<boolean>;
 
   // Schedule
   getScheduleEntries(): Promise<ScheduleEntry[]>;

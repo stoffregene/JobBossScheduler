@@ -208,12 +208,12 @@ export default function WorkCenterManagement() {
   });
 
   // Get unique substitution groups from existing machines
-  const existingSubstitutionGroups = [...new Set(
+  const existingSubstitutionGroups = Array.from(new Set(
     machines
       .map(m => m.substitutionGroup)
       .filter(Boolean)
       .sort()
-  )] as string[];
+  )) as string[];
 
   const form = useForm<WorkCenterFormData>({
     resolver: zodResolver(workCenterSchema),
@@ -544,7 +544,7 @@ export default function WorkCenterManagement() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {WORK_CENTER_HIERARCHY[selectedType as keyof typeof WORK_CENTER_HIERARCHY]?.categories[selectedCategory]?.subcategories.map((subcategory: string) => (
+                            {(WORK_CENTER_HIERARCHY[selectedType as keyof typeof WORK_CENTER_HIERARCHY]?.categories as any)?.[selectedCategory]?.subcategories?.map((subcategory: string) => (
                               <SelectItem key={subcategory} value={subcategory}>
                                 {subcategory}
                               </SelectItem>
