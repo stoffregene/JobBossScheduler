@@ -200,6 +200,7 @@ export default function WorkCenterManagement() {
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const [isFormCollapsed, setIsFormCollapsed] = useState(false);
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
+  const [newGroupName, setNewGroupName] = useState<string>("");
   const { toast } = useToast();
 
   const { data: machines = [], isLoading } = useQuery<Machine[]>({
@@ -255,6 +256,7 @@ export default function WorkCenterManagement() {
       queryClient.invalidateQueries({ queryKey: ["/api/machines"] });
       toast({ title: "Work center created successfully" });
       setIsDialogOpen(false);
+      setNewGroupName("");
       form.reset();
     },
     onError: (error: any) => {
@@ -277,6 +279,7 @@ export default function WorkCenterManagement() {
       toast({ title: "Work center updated successfully" });
       setIsDialogOpen(false);
       setIsEditing(false);
+      setNewGroupName("");
       form.reset();
     },
     onError: (error: any) => {
@@ -331,6 +334,7 @@ export default function WorkCenterManagement() {
     setSelectedMachine(null);
     setIsEditing(false);
     setIsDialogOpen(true);
+    setNewGroupName("");
     form.reset();
   };
 
@@ -684,7 +688,17 @@ export default function WorkCenterManagement() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Substitution Group</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
+                        <Select 
+                          onValueChange={(value) => {
+                            if (value === "new_group") {
+                              setNewGroupName("");
+                            } else {
+                              field.onChange(value);
+                              setNewGroupName("");
+                            }
+                          }} 
+                          value={field.value === newGroupName && newGroupName ? "new_group" : field.value}
+                        >
                           <FormControl>
                             <SelectTrigger data-testid="select-substitution-group">
                               <SelectValue placeholder="Select or create substitution group" />
@@ -700,15 +714,19 @@ export default function WorkCenterManagement() {
                           </SelectContent>
                         </Select>
                         <FormMessage />
-                        {field.value === "new_group" && (
+                        {field.value === "new_group" || (newGroupName && !existingSubstitutionGroups.includes(newGroupName)) ? (
                           <FormControl>
                             <Input 
-                              placeholder="Enter new group name (e.g., my_machine_group)" 
-                              onChange={(e) => field.onChange(e.target.value)}
+                              placeholder="Enter new group name (e.g., precision_lathes)" 
+                              value={newGroupName}
+                              onChange={(e) => {
+                                setNewGroupName(e.target.value);
+                                field.onChange(e.target.value);
+                              }}
                               data-testid="input-new-substitution-group"
                             />
                           </FormControl>
-                        )}
+                        ) : null}
                       </FormItem>
                     )}
                   />
