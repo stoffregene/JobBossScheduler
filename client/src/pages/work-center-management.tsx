@@ -110,9 +110,18 @@ const WORK_CENTER_HIERARCHY = {
       },
       "Specialty Welding": {
         subcategories: ["Plasma", "Laser", "Electron Beam"]
+      },
+      "Tapping": {
+        subcategories: ["Manual Tapping", "CNC Tapping", "Power Tapping"]
+      },
+      "Broaching": {
+        subcategories: ["Vertical Broaching", "Horizontal Broaching", "Surface Broaching"]
+      },
+      "Bending": {
+        subcategories: ["Press Brake", "Roll Forming", "Tube Bending"]
       }
     },
-    capabilities: ["welding", "fabrication", "joining", "repair"]
+    capabilities: ["welding", "fabrication", "joining", "repair", "tapping", "broaching", "bending"]
   },
   INSPECT: {
     label: "Quality & Inspection",
@@ -146,9 +155,15 @@ const WORK_CENTER_HIERARCHY = {
       },
       "Chemical Finishing": {
         subcategories: ["Anodizing", "Passivation", "Chemical Polish"]
+      },
+      "Deburr": {
+        subcategories: ["Manual Deburr", "Vibratory Deburr", "Tumble Deburr"]
+      },
+      "Tumble": {
+        subcategories: ["Vibratory Tumble", "Rotary Tumble", "Centrifugal Tumble"]
       }
     },
-    capabilities: ["finishing", "surface_prep", "deburring", "cleaning"]
+    capabilities: ["finishing", "surface_prep", "deburring", "cleaning", "tumbling", "polishing"]
   },
   OUTSOURCE: {
     label: "Outsourced Operations",
@@ -190,6 +205,14 @@ export default function WorkCenterManagement() {
       return response.json();
     },
   });
+
+  // Get unique substitution groups from existing machines
+  const existingSubstitutionGroups = [...new Set(
+    machines
+      .map(m => m.substitutionGroup)
+      .filter(Boolean)
+      .sort()
+  )] as string[];
 
   const form = useForm<WorkCenterFormData>({
     resolver: zodResolver(workCenterSchema),
@@ -363,11 +386,14 @@ export default function WorkCenterManagement() {
               Add Work Center
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" aria-describedby="work-center-form-description">
             <DialogHeader>
               <DialogTitle>
                 {isEditing ? "Edit Work Center" : "Add New Work Center"}
               </DialogTitle>
+              <div id="work-center-form-description" className="sr-only">
+                Configure work center details including type, category, capabilities, and machine-specific settings
+              </div>
             </DialogHeader>
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -550,10 +576,31 @@ export default function WorkCenterManagement() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Substitution Group</FormLabel>
-                        <FormControl>
-                          <Input {...field} placeholder="vmc_3axis_group" data-testid="input-substitution-group" />
-                        </FormControl>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger data-testid="select-substitution-group">
+                              <SelectValue placeholder="Select or create substitution group" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {existingSubstitutionGroups.map((group) => (
+                              <SelectItem key={group} value={group}>
+                                {group}
+                              </SelectItem>
+                            ))}
+                            <SelectItem value="new_group">+ Create New Group</SelectItem>
+                          </SelectContent>
+                        </Select>
                         <FormMessage />
+                        {field.value === "new_group" && (
+                          <FormControl>
+                            <Input 
+                              placeholder="Enter new group name (e.g., my_machine_group)" 
+                              onChange={(e) => field.onChange(e.target.value)}
+                              data-testid="input-new-substitution-group"
+                            />
+                          </FormControl>
+                        )}
                       </FormItem>
                     )}
                   />
