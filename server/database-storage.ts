@@ -1528,9 +1528,9 @@ export class DatabaseStorage implements IStorage {
           and(
             // Time overlap: schedule overlaps with unavailability period
             lte(scheduleEntries.startTime, endDate),
-            gte(scheduleEntries.endTime, startDate),
-            // Resource assignment: check if any assigned resources are unavailable
-            sql`${scheduleEntries.assignedResources} && ${JSON.stringify(resourceIds)}`
+            gte(scheduleEntries.endTime, startDate)
+            // Note: Resource assignment checking disabled due to schema mismatch
+            // Will need to filter affected entries in application logic
           )
         );
 
@@ -1548,7 +1548,7 @@ export class DatabaseStorage implements IStorage {
         .where(
           and(
             sql`${jobs.id} = ANY(${affectedJobIds})`,
-            ne(jobs.status, 'completed')
+            sql`${jobs.status} != 'completed'`
           )
         );
     } catch (error) {

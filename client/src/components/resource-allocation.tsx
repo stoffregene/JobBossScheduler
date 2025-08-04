@@ -160,17 +160,18 @@ export default function ResourceAllocation({ scheduleView }: ResourceAllocationP
     const shift2OperatorCapacity = Math.max(0, shift2BaseCapacity - shift2UnavailableEffectiveHours);
     const totalOperatorCapacity = shift1OperatorCapacity + shift2OperatorCapacity;
     
-    // Debug capacity calculation when unavailability exists
-    if (shift1UnavailableHours > 0 || shift2UnavailableHours > 0) {
-      console.log('Unavailability affecting capacity:', {
-        shift1UnavailableHours,
-        shift2UnavailableHours,
-        shift1BaseCapacity,
-        shift1UnavailableEffectiveHours,
-        shift1OperatorCapacity,
-        dateRange: { start: start.toDateString(), end: end.toDateString() }
-      });
-    }
+    // Always log capacity calculation for debugging
+    console.log('Resource allocation calculation:', {
+      dateRange: { start: start.toDateString(), end: end.toDateString() },
+      unavailabilityEntries: unavailabilityData?.length || 0,
+      shift1Resources: shift1Resources.length,
+      shift2Resources: shift2Resources.length,
+      shift1UnavailableHours,
+      shift2UnavailableHours,
+      shift1BaseCapacity,
+      shift1UnavailableEffectiveHours,
+      shift1OperatorCapacity
+    });
 
     // Calculate actual usage from schedule entries
     const relevantScheduleEntries = scheduleEntries.filter(entry => {
