@@ -116,7 +116,14 @@ export default function ResourceAllocation({ scheduleView }: ResourceAllocationP
         const unavailEnd = new Date(unavailability.endDate);
         
         // Check if unavailability overlaps with our date range
-        if (unavailStart <= end && unavailEnd >= start) {
+        // For same-day entries, check if the day falls within our range
+        const unavailDate = unavailStart.toDateString();
+        const startDate = start.toDateString();  
+        const endDate = end.toDateString();
+        
+        const isWithinRange = unavailDate >= startDate && unavailDate <= endDate;
+        
+        if (isWithinRange) {
           // Check if this resource is in our filtered resources
           const affectedResource = filteredResources.find(r => r.id === unavailability.resourceId);
           if (!affectedResource) return; // Skip if resource not in current filter
@@ -171,7 +178,12 @@ export default function ResourceAllocation({ scheduleView }: ResourceAllocationP
       shift1BaseCapacity,
       shift1UnavailableEffectiveHours,
       shift1OperatorCapacity,
-      chrisJohnsonFound: filteredResources.find(r => r.name === 'Chris Johnson') ? 'YES' : 'NO'
+      chrisJohnsonFound: filteredResources.find(r => r.name === 'Chris Johnson') ? 'YES' : 'NO',
+      unavailabilityDetails: unavailabilityData?.map(u => ({
+        resourceId: u.resourceId,
+        startDate: u.startDate,
+        isWithinRange: new Date(u.startDate).toDateString() >= start.toDateString() && new Date(u.startDate).toDateString() <= end.toDateString()
+      }))
     });
 
     // Calculate actual usage from schedule entries
