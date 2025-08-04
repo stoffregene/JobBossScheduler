@@ -1,0 +1,7 @@
+Job,Customer,Est_Required_Qty,AMT Workcenter & Vendor,Vendor,Lead_Days,Order_Date,Promised_Date,Est Total Hours,Link_Material,Status,Material,Sequence
+12345,TEST CUSTOMER,10,SAW,SAW,1,8/4/2025 0:00,8/15/2025 0:00,2.5,,Active,Steel Bar,0
+12345,TEST CUSTOMER,10,MILL,MILL,1,8/4/2025 0:00,8/15/2025 0:00,4.0,,Active,Steel Bar,1
+12345,TEST CUSTOMER,10,INSPECT,INSPECT,1,8/4/2025 0:00,8/15/2025 0:00,0.5,,Active,Steel Bar,2
+54321,ANOTHER CUSTOMER,5,MILL,MILL,1,8/4/2025 0:00,8/20/2025 0:00,3.0,,Active,Aluminum,1
+54321,ANOTHER CUSTOMER,5,SAW,SAW,1,8/4/2025 0:00,8/20/2025 0:00,1.5,,Active,Aluminum,0
+54321,ANOTHER CUSTOMER,5,LATHE,LATHE,1,8/4/2025 0:00,8/20/2025 0:00,2.0,,Active,Aluminum,2

@@ -275,10 +275,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Use the first row for job-level data, but collect routing from all rows
           const firstRow = jobRows[0];
           
-          // Process each routing step
-          jobRows.forEach((row: any, index: number) => {
+          // Sort rows by Sequence column if available (0-10 order), otherwise use row order
+          const sortedRows = jobRows.sort((a, b) => {
+            const seqA = parseInt(a.Sequence) || parseInt(a.sequence) || 0;
+            const seqB = parseInt(b.Sequence) || parseInt(b.sequence) || 0;
+            return seqA - seqB;
+          });
+          
+          // Log sequence sorting for multi-operation jobs
+          if (jobRows.length > 1) {
+            const hasSequenceColumn = jobRows.some(row => row.Sequence !== undefined || row.sequence !== undefined);
+            console.log(`🔄 Job ${jobNumber} - ${hasSequenceColumn ? 'Using CSV Sequence column' : 'Using row order'} for operation ordering`);
+          }
+          
+          // Process each routing step in proper sequence order
+          sortedRows.forEach((row: any, index: number) => {
             const amtWorkCenterVendor = row['AMT Workcenter & Vendor']?.trim();
             const vendor = row.Vendor?.trim();
+            
+            // Get sequence from CSV (0-10) or use processed index + 1
+            const csvSequence = parseInt(row.Sequence) || parseInt(row.sequence);
+            const finalSequence = csvSequence !== undefined && !isNaN(csvSequence) ? csvSequence : index + 1;
             
             // Determine if this is outsourced work
             const isOutsourced = amtWorkCenterVendor && vendor && amtWorkCenterVendor === vendor;
@@ -289,9 +306,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
               errors.push(`⚠️ Unknown internal work center: "${workCenter}" for job ${jobNumber} - please add this work center to the system`);
             }
             
-            // Create routing entry
+            // Create routing entry with proper sequence
             const routingEntry = {
-              sequence: index + 1,
+              sequence: finalSequence,
               name: isOutsourced ? 'OUTSOURCE' : (workCenter || 'GENERAL'),
               machineType: isOutsourced ? 'OUTSOURCE' : (workCenter || 'GENERAL'),
               compatibleMachines: isOutsourced ? ['OUTSOURCE-01'] : [workCenter || 'GENERAL'],
@@ -302,6 +319,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             
             routingEntries.push(routingEntry);
             totalEstimatedHours += routingEntry.estimatedHours;
+            
+            // Log sequence information for debugging
+            console.log(`📋 Job ${jobNumber} - Operation sequence ${finalSequence}: ${workCenter} (${routingEntry.estimatedHours}h)`);
             
             // Capture job-level data
             if (isOutsourced && !outsourcedVendor) {
