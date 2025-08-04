@@ -55,6 +55,7 @@ export interface IStorage {
   updateResourceUnavailability(id: string, updates: Partial<ResourceUnavailability>): Promise<ResourceUnavailability | undefined>;
   deleteResourceUnavailability(id: string): Promise<boolean>;
   getResourceUnavailabilitiesInDateRange(startDate: Date, endDate: Date): Promise<ResourceUnavailability[]>;
+  getJobsRequiringRescheduling(resourceIds: string[], startDate: Date, endDate: Date, shifts: number[]): Promise<Job[]>;
 
   // Routing Operations  
   getAllRoutingOperations(): Promise<RoutingOperation[]>;

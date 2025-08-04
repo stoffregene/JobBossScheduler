@@ -1512,6 +1512,51 @@ export class DatabaseStorage implements IStorage {
       .orderBy(scheduleEntries.startTime);
   }
 
+  async getJobsRequiringRescheduling(
+    resourceIds: string[], 
+    startDate: Date, 
+    endDate: Date, 
+    shifts: number[]
+  ): Promise<Job[]> {
+    try {
+      // Find schedule entries that overlap with the unavailability period
+      // and are assigned to any of the unavailable resources
+      const affectedScheduleEntries = await db
+        .select()
+        .from(scheduleEntries)
+        .where(
+          and(
+            // Time overlap: schedule overlaps with unavailability period
+            lte(scheduleEntries.startTime, endDate),
+            gte(scheduleEntries.endTime, startDate),
+            // Resource assignment: check if any assigned resources are unavailable
+            sql`${scheduleEntries.assignedResources} && ${JSON.stringify(resourceIds)}`
+          )
+        );
+
+      // Get unique job IDs from affected schedule entries
+      const affectedJobIds = [...new Set(affectedScheduleEntries.map(entry => entry.jobId))];
+      
+      // Return jobs that need rescheduling
+      if (affectedJobIds.length === 0) {
+        return [];
+      }
+
+      return await db
+        .select()
+        .from(jobs)
+        .where(
+          and(
+            sql`${jobs.id} = ANY(${affectedJobIds})`,
+            ne(jobs.status, 'completed')
+          )
+        );
+    } catch (error) {
+      console.error('Error finding jobs requiring rescheduling:', error);
+      return [];
+    }
+  }
+
   // Routing Operations implementation
   async getAllRoutingOperations(): Promise<RoutingOperation[]> {
     return await db.select().from(routingOperations).orderBy(routingOperations.jobId, routingOperations.sequence);

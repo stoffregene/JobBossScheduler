@@ -575,7 +575,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Resource unavailability endpoint
+  // Resource unavailability endpoints
   app.get("/api/resource-unavailability", async (req, res) => {
     try {
       const unavailabilityData = await storage.getResourceUnavailabilities();
@@ -583,6 +583,99 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Failed to fetch resource unavailability:', error);
       res.status(500).json({ message: "Failed to fetch resource unavailability data" });
+    }
+  });
+
+  app.post("/api/resource-unavailability", async (req, res) => {
+    try {
+      const { resourceIds, startDate, endDate, reason, shifts, notes } = req.body;
+      
+      // Validate required fields
+      if (!resourceIds || resourceIds.length === 0) {
+        return res.status(400).json({ message: "At least one resource must be selected" });
+      }
+      if (!startDate || !endDate) {
+        return res.status(400).json({ message: "Start and end dates are required" });
+      }
+      if (!reason) {
+        return res.status(400).json({ message: "Reason is required" });
+      }
+
+      // Create unavailability record for each resource
+      const createdUnavailabilities = [];
+      for (const resourceId of resourceIds) {
+        const unavailabilityData = {
+          resourceId: resourceId,
+          startDate: new Date(startDate),
+          endDate: new Date(endDate),
+          reason,
+          shifts: shifts || [1, 2],
+          notes: notes || "",
+          createdBy: "system", // TODO: Replace with actual user ID when auth is implemented
+        };
+        const created = await storage.createResourceUnavailability(unavailabilityData);
+        createdUnavailabilities.push(created);
+      }
+      
+      // Check for affected jobs and reschedule if necessary
+      const affectedJobs = await storage.getJobsRequiringRescheduling(
+        resourceIds,
+        new Date(startDate),
+        new Date(endDate),
+        shifts
+      );
+
+      if (affectedJobs.length > 0) {
+        console.log(`Found ${affectedJobs.length} jobs that may need rescheduling due to resource unavailability`);
+        // TODO: Implement automatic rescheduling logic here
+      }
+
+      // Broadcast changes via WebSocket
+      const clients = (req as any).app.locals.wsClients || [];
+      clients.forEach((client: any) => {
+        if (client.readyState === 1) {
+          client.send(JSON.stringify({
+            type: 'resource_unavailability_added',
+            data: createdUnavailabilities
+          }));
+        }
+      });
+
+      res.json({
+        message: "Employee unavailability recorded successfully",
+        unavailabilities: createdUnavailabilities,
+        affectedJobsCount: affectedJobs.length
+      });
+    } catch (error) {
+      console.error('Failed to create resource unavailability:', error);
+      res.status(500).json({ message: "Failed to record employee unavailability" });
+    }
+  });
+
+  app.delete("/api/resource-unavailability/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const success = await storage.deleteResourceUnavailability(id);
+      
+      if (success) {
+        // Broadcast changes via WebSocket
+        const clients = (req as any).app.locals.wsClients || [];
+        clients.forEach((client: any) => {
+          if (client.readyState === 1) {
+            client.send(JSON.stringify({
+              type: 'resource_unavailability_removed',
+              data: { id }
+            }));
+          }
+        });
+
+        res.json({ message: "Unavailability period removed successfully" });
+      } else {
+        res.status(404).json({ message: "Unavailability period not found" });
+      }
+    } catch (error) {
+      console.error('Failed to delete resource unavailability:', error);
+      res.status(500).json({ message: "Failed to remove unavailability period" });
     }
   });
 

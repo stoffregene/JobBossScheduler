@@ -10,17 +10,27 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Users, UserPlus, Edit, Trash2, Settings, Wrench, X, Plus, ArrowLeft, Package, Building2 } from "lucide-react";
+import { Users, UserPlus, Edit, Trash2, Settings, Wrench, X, Plus, ArrowLeft, Package, Building2, Calendar, Clock, AlertTriangle } from "lucide-react";
 import { Link } from "wouter";
-import type { Resource, Machine } from "@shared/schema";
+import type { Resource, Machine, ResourceUnavailability } from "@shared/schema";
 
 export default function ResourceManagement() {
   const [activeTab, setActiveTab] = useState("directory");
   const [editingResource, setEditingResource] = useState<Resource | null>(null);
   const [deletingResource, setDeletingResource] = useState<Resource | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showUnavailabilityDialog, setShowUnavailabilityDialog] = useState(false);
+  const [unavailabilityForm, setUnavailabilityForm] = useState({
+    resourceIds: [] as string[],
+    startDate: "",
+    endDate: "",
+    reason: "",
+    shifts: [1, 2] as number[],
+    notes: "",
+  });
   const [editForm, setEditForm] = useState({
     name: "",
     employeeId: "",
@@ -40,6 +50,10 @@ export default function ResourceManagement() {
 
   const { data: machines, isLoading: machinesLoading } = useQuery<Machine[]>({
     queryKey: ['/api/machines'],
+  });
+
+  const { data: unavailabilityData, isLoading: unavailabilityLoading } = useQuery<ResourceUnavailability[]>({
+    queryKey: ['/api/resource-unavailability'],
   });
 
   // Mutations
@@ -174,6 +188,79 @@ export default function ResourceManagement() {
     createResourceMutation.mutate(editForm);
   };
 
+  const markUnavailableMutation = useMutation({
+    mutationFn: (data: typeof unavailabilityForm) =>
+      apiRequest('/api/resource-unavailability', 'POST', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/resource-unavailability'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/schedule'] });
+      setShowUnavailabilityDialog(false);
+      setUnavailabilityForm({
+        resourceIds: [],
+        startDate: "",
+        endDate: "",
+        reason: "",
+        shifts: [1, 2],
+        notes: "",
+      });
+      toast({ title: "Employee unavailability recorded", description: "Jobs have been automatically rescheduled if needed." });
+    },
+    onError: (error) => {
+      toast({ 
+        title: "Error recording unavailability", 
+        description: error.message,
+        variant: "destructive" 
+      });
+    }
+  });
+
+  const deleteUnavailabilityMutation = useMutation({
+    mutationFn: (id: string) =>
+      apiRequest(`/api/resource-unavailability/${id}`, 'DELETE'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/resource-unavailability'] });
+      toast({ title: "Unavailability period removed" });
+    },
+    onError: (error) => {
+      toast({ 
+        title: "Error removing unavailability", 
+        description: error.message,
+        variant: "destructive" 
+      });
+    }
+  });
+
+  const handleMarkUnavailable = () => {
+    if (unavailabilityForm.resourceIds.length === 0) {
+      toast({ title: "Please select at least one employee", variant: "destructive" });
+      return;
+    }
+    if (!unavailabilityForm.startDate || !unavailabilityForm.endDate) {
+      toast({ title: "Please select start and end dates", variant: "destructive" });
+      return;
+    }
+    markUnavailableMutation.mutate(unavailabilityForm);
+  };
+
+  const toggleUnavailabilityResource = (resourceId: string) => {
+    setUnavailabilityForm(prev => ({
+      ...prev,
+      resourceIds: prev.resourceIds.includes(resourceId)
+        ? prev.resourceIds.filter(id => id !== resourceId)
+        : [...prev.resourceIds, resourceId]
+    }));
+  };
+
+  const toggleUnavailabilityShift = (shift: number) => {
+    setUnavailabilityForm(prev => ({
+      ...prev,
+      shifts: prev.shifts.includes(shift)
+        ? prev.shifts.filter(s => s !== shift)
+        : [...prev.shifts, shift]
+    }));
+  };
+
   const toggleShift = (shift: number) => {
     setEditForm(prev => ({
       ...prev,
@@ -297,6 +384,16 @@ export default function ResourceManagement() {
           }`}
         >
           Availability Tracking
+        </button>
+        <button
+          onClick={() => setActiveTab("unavailability")}
+          className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+            activeTab === "unavailability"
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Manage Unavailability
         </button>
       </div>
 
@@ -467,6 +564,91 @@ export default function ResourceManagement() {
                     <span>Monday - Thursday</span>
                   </div>
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Unavailability Management Tab */}
+      {activeTab === "unavailability" && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Mark Employee Unavailable */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Calendar className="h-5 w-5" />
+                Mark Employee Unavailable
+              </CardTitle>
+              <CardDescription>
+                Schedule employee time off and automatically reschedule affected jobs
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button 
+                onClick={() => setShowUnavailabilityDialog(true)}
+                className="w-full"
+                data-testid="button-mark-unavailable"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Unavailability Period
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Current Unavailability Periods */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="h-5 w-5" />
+                Current Unavailability
+              </CardTitle>
+              <CardDescription>
+                Active and scheduled employee unavailability periods
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {unavailabilityLoading ? (
+                  <div className="text-sm text-muted-foreground">Loading...</div>
+                ) : unavailabilityData && unavailabilityData.length > 0 ? (
+                  unavailabilityData.map(item => {
+                    const resource = resources?.find(r => item.resourceIds?.includes(r.id));
+                    const isActive = new Date(item.startDate) <= new Date() && new Date(item.endDate) >= new Date();
+                    const isUpcoming = new Date(item.startDate) > new Date();
+                    
+                    return (
+                      <div key={item.id} className="flex items-center justify-between p-3 border rounded-lg">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{resource?.name || 'Multiple Employees'}</span>
+                            <Badge variant={isActive ? "destructive" : isUpcoming ? "secondary" : "outline"}>
+                              {isActive ? "Active" : isUpcoming ? "Scheduled" : "Past"}
+                            </Badge>
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {item.reason} • {new Date(item.startDate).toLocaleDateString()} - {new Date(item.endDate).toLocaleDateString()}
+                          </div>
+                          {item.shifts && (
+                            <div className="text-xs text-muted-foreground">
+                              Shifts: {item.shifts.map(s => s === 1 ? "1st" : "2nd").join(", ")}
+                            </div>
+                          )}
+                        </div>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          onClick={() => deleteUnavailabilityMutation.mutate(item.id)}
+                          data-testid={`button-remove-unavailability-${item.id}`}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="text-sm text-muted-foreground">No unavailability periods scheduled</div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -689,6 +871,138 @@ export default function ResourceManagement() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Mark Unavailable Dialog */}
+      <Dialog open={showUnavailabilityDialog} onOpenChange={setShowUnavailabilityDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Mark Employee Unavailable</DialogTitle>
+            <DialogDescription>
+              Select employees, dates, and shifts for unavailability. Jobs will be automatically rescheduled.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Employee Selection */}
+            <div>
+              <Label className="text-sm font-medium">Select Employees</Label>
+              <div className="grid grid-cols-2 gap-2 mt-2 max-h-32 overflow-y-auto border rounded p-2">
+                {resources?.map(resource => (
+                  <div key={resource.id} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`resource-${resource.id}`}
+                      checked={unavailabilityForm.resourceIds.includes(resource.id)}
+                      onCheckedChange={() => toggleUnavailabilityResource(resource.id)}
+                      data-testid={`checkbox-employee-${resource.employeeId}`}
+                    />
+                    <Label htmlFor={`resource-${resource.id}`} className="text-sm">
+                      {resource.name} ({resource.employeeId})
+                    </Label>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Date Range */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="start-date">Start Date</Label>
+                <Input
+                  id="start-date"
+                  type="date"
+                  value={unavailabilityForm.startDate}
+                  onChange={(e) => setUnavailabilityForm(prev => ({ ...prev, startDate: e.target.value }))}
+                  data-testid="input-start-date"
+                />
+              </div>
+              <div>
+                <Label htmlFor="end-date">End Date</Label>
+                <Input
+                  id="end-date"
+                  type="date"
+                  value={unavailabilityForm.endDate}
+                  onChange={(e) => setUnavailabilityForm(prev => ({ ...prev, endDate: e.target.value }))}
+                  data-testid="input-end-date"
+                />
+              </div>
+            </div>
+
+            {/* Reason */}
+            <div>
+              <Label htmlFor="reason">Reason</Label>
+              <Select 
+                value={unavailabilityForm.reason} 
+                onValueChange={(value) => setUnavailabilityForm(prev => ({ ...prev, reason: value }))}
+              >
+                <SelectTrigger data-testid="select-reason">
+                  <SelectValue placeholder="Select reason for unavailability" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Vacation">Vacation</SelectItem>
+                  <SelectItem value="Sick Leave">Sick Leave</SelectItem>
+                  <SelectItem value="Training">Training</SelectItem>
+                  <SelectItem value="Meeting">Meeting</SelectItem>
+                  <SelectItem value="Personal Leave">Personal Leave</SelectItem>
+                  <SelectItem value="Emergency">Emergency</SelectItem>
+                  <SelectItem value="Other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Shift Selection */}
+            <div>
+              <Label className="text-sm font-medium">Affected Shifts</Label>
+              <div className="flex gap-4 mt-2">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="shift-1"
+                    checked={unavailabilityForm.shifts.includes(1)}
+                    onCheckedChange={() => toggleUnavailabilityShift(1)}
+                    data-testid="checkbox-shift-1"
+                  />
+                  <Label htmlFor="shift-1">1st Shift (3am-3pm)</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="shift-2"
+                    checked={unavailabilityForm.shifts.includes(2)}
+                    onCheckedChange={() => toggleUnavailabilityShift(2)}
+                    data-testid="checkbox-shift-2"
+                  />
+                  <Label htmlFor="shift-2">2nd Shift (3pm-3am)</Label>
+                </div>
+              </div>
+            </div>
+
+            {/* Notes */}
+            <div>
+              <Label htmlFor="notes">Additional Notes (Optional)</Label>
+              <Textarea
+                id="notes"
+                placeholder="Any additional details about this unavailability..."
+                value={unavailabilityForm.notes}
+                onChange={(e) => setUnavailabilityForm(prev => ({ ...prev, notes: e.target.value }))}
+                data-testid="textarea-notes"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setShowUnavailabilityDialog(false)}
+              data-testid="button-cancel-unavailability"
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleMarkUnavailable}
+              disabled={markUnavailableMutation.isPending}
+              data-testid="button-confirm-unavailability"
+            >
+              {markUnavailableMutation.isPending ? "Processing..." : "Mark Unavailable"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Add Resource Dialog */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
