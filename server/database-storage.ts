@@ -1133,7 +1133,15 @@ export class DatabaseStorage implements IStorage {
       compatibleMachines.push(machine);
     }
 
-    if (compatibleMachines.length === 0) return null;
+    if (compatibleMachines.length === 0) {
+      // Try multi-shift logic for large operations
+      const operationHours = parseFloat(operation.estimatedHours);
+      if (operationHours > 8) {
+        console.log(`🔀 No single-shift machines found, trying multi-shift approach for ${operationHours}h operation`);
+        return await this.findOptimalMachineForMultiShift(operation as any, targetDate, shift);
+      }
+      return null;
+    }
 
     // Score each machine based on multiple factors
     const scoredMachines = compatibleMachines.map(machine => {
@@ -1174,7 +1182,7 @@ export class DatabaseStorage implements IStorage {
       };
     });
 
-    // CRITICAL: Filter machines by individual machine capacity before sorting by score
+    // ENHANCED CAPACITY CHECK: Support multi-shift operations >8 hours
     const availableMachines = [];
     for (const result of scoredMachines) {
       const { machine, adjustedHours } = result;
@@ -1183,11 +1191,24 @@ export class DatabaseStorage implements IStorage {
       const machineHours = await this.getMachineHoursOnDate(machine.id, targetDate, shift);
       const maxMachineHours = 8; // Each machine can only run 8 hours per shift
       
-      if (machineHours + adjustedHours <= maxMachineHours) {
-        availableMachines.push(result);
-        console.log(`✅ Machine ${machine.machineId} available: ${machineHours.toFixed(1)}h + ${adjustedHours.toFixed(1)}h = ${(machineHours + adjustedHours).toFixed(1)}h / ${maxMachineHours}h`);
+      // For operations >8 hours, check if machine can accommodate at least SOME portion
+      if (adjustedHours > maxMachineHours) {
+        const availableHours = maxMachineHours - machineHours;
+        if (availableHours > 1) { // Need at least 1 hour available to start the operation
+          // Machine can accommodate partial operation - multi-shift logic will handle the rest
+          availableMachines.push(result);
+          console.log(`✅ Multi-shift machine ${machine.machineId} available: ${availableHours.toFixed(1)}h available of ${adjustedHours.toFixed(1)}h needed (will span multiple shifts)`);
+        } else {
+          console.log(`❌ Machine ${machine.machineId} no capacity: ${machineHours.toFixed(1)}h used / ${maxMachineHours}h max (need >1h for multi-shift start)`);
+        }
       } else {
-        console.log(`❌ Machine ${machine.machineId} overloaded: ${machineHours.toFixed(1)}h + ${adjustedHours.toFixed(1)}h = ${(machineHours + adjustedHours).toFixed(1)}h / ${maxMachineHours}h`);
+        // Standard single-shift check
+        if (machineHours + adjustedHours <= maxMachineHours) {
+          availableMachines.push(result);
+          console.log(`✅ Machine ${machine.machineId} available: ${machineHours.toFixed(1)}h + ${adjustedHours.toFixed(1)}h = ${(machineHours + adjustedHours).toFixed(1)}h / ${maxMachineHours}h`);
+        } else {
+          console.log(`❌ Machine ${machine.machineId} overloaded: ${machineHours.toFixed(1)}h + ${adjustedHours.toFixed(1)}h = ${(machineHours + adjustedHours).toFixed(1)}h / ${maxMachineHours}h`);
+        }
       }
     }
     
@@ -1471,6 +1492,93 @@ export class DatabaseStorage implements IStorage {
       console.error(`Failed to reschedule entry ${entryId}:`, error);
       return false;
     }
+  }
+
+  // NEW: Multi-shift machine finder for operations >8 hours
+  private async findOptimalMachineForMultiShift(
+    operation: RoutingOperationType,
+    targetDate: Date,
+    shift: number
+  ) {
+    console.log(`🔀 Multi-shift finder: ${operation.operationName || operation.name} (${operation.estimatedHours}h)`);
+    
+    // Get all machines and apply basic filtering
+    const allMachines = await this.getMachines();
+    const compatibleMachineIds = operation.compatibleMachines;
+    
+    // Filter machines that could potentially handle this operation
+    const candidateMachines = allMachines.filter(machine => {
+      const isCompatible = compatibleMachineIds.includes(machine.machineId);
+      const isAvailable = machine.status === 'Available';
+      const hasShift = machine.availableShifts?.includes(shift);
+      
+      return (isCompatible || this.canSubstituteSync(machine, operation)) && isAvailable && hasShift;
+    });
+    
+    if (candidateMachines.length === 0) {
+      console.log(`   ❌ No candidate machines found for multi-shift operation`);
+      return null;
+    }
+    
+    // Score machines and check if they can accommodate partial operation
+    for (const machine of candidateMachines) {
+      const efficiencyFactor = parseFloat(machine.efficiencyFactor);
+      const adjustedHours = parseFloat(operation.estimatedHours) / efficiencyFactor;
+      
+      // Check available capacity on this shift/date
+      const machineHours = await this.getMachineHoursOnDate(machine.id, targetDate, shift);
+      const maxShiftHours = 8;
+      const availableHours = maxShiftHours - machineHours;
+      
+      if (availableHours > 0) {
+        console.log(`   ✅ Multi-shift machine found: ${machine.machineId} (${availableHours}h available, will span multiple shifts)`);
+        
+        // Find and assign resources
+        const resources = await this.getResources();
+        let assignedResource = null;
+        
+        if (machine.type === 'OUTSOURCE') {
+          assignedResource = null; // External vendor
+        } else if (machine.type === 'INSPECT') {
+          const inspectors = resources.filter(r => 
+            r.isActive && r.shiftSchedule?.includes(shift) && 
+            r.workCenters?.includes(machine.id) && r.role === 'Quality Inspector'
+          );
+          assignedResource = inspectors[0] || null;
+        } else {
+          const operators = resources.filter(r => 
+            r.isActive && r.shiftSchedule?.includes(shift) && 
+            r.workCenters?.includes(machine.id) && 
+            (r.role === 'Operator' || r.role === 'Shift Lead')
+          );
+          assignedResource = operators[0] || null;
+        }
+        
+        return {
+          machine,
+          adjustedHours,
+          score: 100, // High score for multi-shift operations
+          efficiencyImpact: Math.abs(efficiencyFactor - 1) * 100,
+          shift,
+          assignedResource
+        };
+      }
+    }
+    
+    console.log(`   ❌ No machines have available capacity for multi-shift operation`);
+    return null;
+  }
+
+  // Quick substitution check without async calls for filtering
+  private canSubstituteSync(machine: Machine, operation: RoutingOperationType): boolean {
+    if (!machine.substitutionGroup) return false;
+    
+    // Basic substitution group check - detailed validation happens in canSubstitute
+    const compatibleMachineIds = operation.compatibleMachines;
+    return compatibleMachineIds.some(machineId => {
+      // This is a simplified check - the async version handles more complex validation
+      return machine.substitutionGroup && machineId.includes(machine.type);
+    });
   }
 
   // Enhanced substitution logic using the compatibility matrix
@@ -1863,36 +1971,83 @@ export class DatabaseStorage implements IStorage {
               }
             }
             
-            // MULTI-DAY JOB HANDLING: Split jobs that exceed shift capacity
+            // ENHANCED MULTI-SHIFT JOB HANDLING: Properly bridge operations across shifts/days
             const multiDayEntries: any[] = [];
             
             while (remainingHours > 0) {
-              const hoursThisShift = Math.min(remainingHours, shiftHoursPerDay);
+              // Skip weekends (Friday-Sunday) before scheduling any segment
+              while (operationStartTime.getDay() === 0 || operationStartTime.getDay() === 5 || operationStartTime.getDay() === 6) {
+                operationStartTime = new Date(operationStartTime.getTime() + dayInMs);
+                operationStartTime.setHours(7, 0, 0, 0); // Start at 7am on next business day
+                currentShift = 1;
+              }
+              
+              // Calculate available hours in current shift
+              const currentHour = operationStartTime.getHours();
+              let availableHoursInShift = 0;
+              
+              if (currentShift === 1) {
+                // Shift 1: 7am-3pm (8 hours)
+                if (currentHour < 7) {
+                  operationStartTime.setHours(7, 0, 0, 0);
+                  availableHoursInShift = 8;
+                } else if (currentHour < 15) {
+                  availableHoursInShift = 15 - currentHour;
+                } else {
+                  // Past shift 1, move to shift 2 if machine supports it
+                  if (result.machine.availableShifts?.includes(2)) {
+                    operationStartTime.setHours(15, 0, 0, 0);
+                    currentShift = 2;
+                    availableHoursInShift = 8;
+                  } else {
+                    // Move to next day
+                    operationStartTime = new Date(operationStartTime.getTime() + dayInMs);
+                    operationStartTime.setHours(7, 0, 0, 0);
+                    currentShift = 1;
+                    continue;
+                  }
+                }
+              } else {
+                // Shift 2: 3pm-11pm (8 hours), but treating as 3pm to 3am (12 hours over midnight)
+                if (currentHour < 15) {
+                  operationStartTime.setHours(15, 0, 0, 0);
+                  availableHoursInShift = 12; // 3pm to 3am next day
+                } else if (currentHour < 3) {
+                  availableHoursInShift = 3 - currentHour + 24; // Hours until 3am
+                } else {
+                  // Past shift 2, move to next day
+                  operationStartTime = new Date(operationStartTime.getTime() + dayInMs);
+                  operationStartTime.setHours(7, 0, 0, 0);
+                  currentShift = 1;
+                  continue;
+                }
+              }
+              
+              // Get existing machine hours to check capacity
+              const machineHours = await this.getMachineHoursOnDate(result.machine.id, operationStartTime, currentShift);
+              const maxShiftHours = currentShift === 1 ? 8 : 12;
+              const availableCapacity = Math.max(0, maxShiftHours - machineHours);
+              
+              const hoursThisShift = Math.min(remainingHours, availableHoursInShift, availableCapacity);
+              
+              if (hoursThisShift <= 0) {
+                console.log(`   ⏭️ No capacity in shift ${currentShift}, moving to next time slot`);
+                // Move to next available time
+                if (currentShift === 1 && result.machine.availableShifts?.includes(2)) {
+                  operationStartTime.setHours(15, 0, 0, 0);
+                  currentShift = 2;
+                } else {
+                  operationStartTime = new Date(operationStartTime.getTime() + dayInMs);
+                  operationStartTime.setHours(7, 0, 0, 0);
+                  currentShift = 1;
+                }
+                continue;
+              }
+              
               const segmentStartTime = new Date(operationStartTime);
               const segmentEndTime = new Date(segmentStartTime.getTime() + (hoursThisShift * 60 * 60 * 1000));
               
-              // Check for conflicts with existing schedule for this segment
-              const conflicts = await this.checkScheduleConflicts(result.machine.id, segmentStartTime, segmentEndTime);
-              
-              if (conflicts) {
-                // If there's a conflict, try next day
-                operationStartTime = new Date(operationStartTime.getTime() + dayInMs);
-                operationStartTime.setHours(currentShift === 1 ? 3 : 15, 0, 0, 0);
-                continue;
-              }
-              
-              // Check weekly capacity before scheduling this segment
-              const weeklyCheck = await this.validateWeeklyCapacity(segmentStartTime, currentShift, hoursThisShift);
-              if (!weeklyCheck.valid) {
-                console.log(`   ❌ Weekly capacity exceeded for segment, moving to next week`);
-                // Move to next Monday
-                const nextMonday = new Date(operationStartTime);
-                nextMonday.setDate(operationStartTime.getDate() + (8 - operationStartTime.getDay()));
-                operationStartTime = nextMonday;
-                operationStartTime.setHours(3, 0, 0, 0); // Reset to shift 1
-                currentShift = 1;
-                continue;
-              }
+              console.log(`   📅 Scheduling ${hoursThisShift.toFixed(1)}h segment from ${segmentStartTime.toLocaleString()} to ${segmentEndTime.toLocaleString()} (Shift ${currentShift})`);
               
               multiDayEntries.push({
                 jobId: job.id,
@@ -1908,25 +2063,19 @@ export class DatabaseStorage implements IStorage {
               remainingHours -= hoursThisShift;
               
               if (remainingHours > 0) {
-                // Move to next available time slot
-                // If machine supports both shifts and shift 2 is available, continue on shift 2 same day
+                // CRITICAL FIX: Handle machines that only work one shift (like HMCs)
                 if (currentShift === 1 && result.machine.availableShifts?.includes(2)) {
-                  const shift2Loads = await this.getShiftsOrderedByLoad(new Date(operationStartTime), operation);
-                  if (shift2Loads.includes(2)) {
-                    operationStartTime.setHours(15, 0, 0, 0); // Continue on shift 2
-                    currentShift = 2;
-                    continue;
-                  }
-                }
-                
-                // Otherwise move to next business day (skip weekends)
-                do {
+                  // Machine supports both shifts - continue on shift 2 same day
+                  operationStartTime.setHours(15, 0, 0, 0);
+                  currentShift = 2;
+                  console.log(`   ⏩ Continuing on shift 2 same day for machine ${result.machine.machineId}`);
+                } else {
+                  // Machine only works one shift OR already on shift 2 - move to next business day
                   operationStartTime = new Date(operationStartTime.getTime() + dayInMs);
-                } while (operationStartTime.getDay() === 0 || operationStartTime.getDay() === 6 || operationStartTime.getDay() === 5);
-                
-                // Reset to shift 1 for new day
-                currentShift = 1;
-                operationStartTime.setHours(3, 0, 0, 0);
+                  operationStartTime.setHours(7, 0, 0, 0);
+                  currentShift = 1; // Reset to shift 1 (many machines only work shift 1)
+                  console.log(`   ⏩ Moving to next business day shift 1 (machine ${result.machine.machineId} only works shift ${result.machine.availableShifts?.join(',')})`);
+                }
               }
             }
             
