@@ -22,7 +22,7 @@ export default function JobDetailsModal({ jobId, onClose }: JobDetailsModalProps
   // Fetch schedule entries for this job to show assigned resources
   const { data: scheduleEntries } = useQuery<any[]>({
     queryKey: ['/api/schedule', 'job', jobId],
-    queryFn: () => apiRequest(`/api/schedule?jobId=${jobId}`),
+    queryFn: () => apiRequest(`/api/schedule?jobId=${jobId}`, 'GET'),
   });
 
   // Fetch resources to get resource names
@@ -185,6 +185,17 @@ export default function JobDetailsModal({ jobId, onClose }: JobDetailsModalProps
                   );
                   const assignedResource = scheduledEntry?.assignedResourceId && resources ? 
                     resources.find((r: any) => r.id === scheduledEntry.assignedResourceId) : null;
+                  
+                  // Debug logging for job 59902
+                  if (job?.jobNumber === '59902') {
+                    console.log(`Job 59902 Debug - Operation ${operation.sequence}:`, {
+                      operationName: operation.name,
+                      machineType: operation.machineType,
+                      scheduledEntry,
+                      assignedResourceId: scheduledEntry?.assignedResourceId,
+                      assignedResource: assignedResource ? {name: assignedResource.name, role: assignedResource.role} : null
+                    });
+                  }
                   
                   // Find compatible resources for this operation
                   const compatibleResources = resources?.filter((resource: any) => {
