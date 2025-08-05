@@ -1473,12 +1473,16 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  // Enhanced substitution logic using the compatibility matrix
   private async canSubstitute(machine: Machine, operation: RoutingOperationType): Promise<boolean> {
     // Check if machine is in same substitution group as any compatible machine
     if (!machine.substitutionGroup) return false;
     
     const compatibleMachineIds = operation.compatibleMachines;
     const allMachines = await this.getMachines();
+    
+    // Find the primary machines that this operation requires
+    const requiredMachines = allMachines.filter(m => compatibleMachineIds.includes(m.machineId));
     
     const basicSubstitutionValid = allMachines.some(compatMachine => 
       compatibleMachineIds.includes(compatMachine.machineId) &&
@@ -1487,9 +1491,28 @@ export class DatabaseStorage implements IStorage {
 
     if (!basicSubstitutionValid) return false;
 
-    // Additional validation for bar fed lathes
-    if (machine.type === "LATHE") {
-      // Find the original compatible machine
+    // Apply compatibility matrix rules for specific substitutions
+    
+    // 4th axis rule: 4th axis machines can do 3-axis work, but not vice versa
+    const requiredHas4thAxis = requiredMachines.some(m => m.fourthAxis === true);
+    const machineHas4thAxis = machine.fourthAxis === true;
+    
+    if (requiredHas4thAxis && !machineHas4thAxis) {
+      console.log(`     🚫 Substitution blocked: ${machine.machineId} (no 4th axis) cannot do 4th axis work`);
+      return false;
+    }
+    
+    // Live tooling rule: Live tooling lathes can do simple turning, but not vice versa
+    if (machine.type === 'LATHE') {
+      const requiredHasLiveTooling = requiredMachines.some(m => m.liveTooling === true);
+      const machineHasLiveTooling = machine.liveTooling === true;
+      
+      if (requiredHasLiveTooling && !machineHasLiveTooling) {
+        console.log(`     🚫 Substitution blocked: ${machine.machineId} (no live tooling) cannot do live tooling work`);
+        return false;
+      }
+      
+      // Additional validation for bar fed lathes
       const originalMachine = allMachines.find(m => 
         compatibleMachineIds.includes(m.machineId) && 
         m.substitutionGroup === machine.substitutionGroup
@@ -1504,10 +1527,24 @@ export class DatabaseStorage implements IStorage {
           jobRouting
         );
         
-        return validation.isValid;
+        if (!validation.isValid) {
+          console.log(`     🚫 Substitution blocked: Bar feeder validation failed for ${machine.machineId}`);
+          return false;
+        }
       }
     }
     
+    // Tier rule: Lower tier machines can substitute for higher tier, but with efficiency impact
+    const requiredMaxTier = Math.max(...requiredMachines.map(m => 
+      m.tier === 'Premium' ? 3 : m.tier === 'Tier 1' ? 2 : m.tier === 'Standard' ? 1 : 0
+    ));
+    const machineTier = machine.tier === 'Premium' ? 3 : machine.tier === 'Tier 1' ? 2 : machine.tier === 'Standard' ? 1 : 0;
+    
+    if (machineTier < requiredMaxTier - 1) {
+      console.log(`     ⚠️ Substitution allowed but with efficiency impact: ${machine.machineId} (${machine.tier}) for ${requiredMachines[0]?.tier} work`);
+    }
+    
+    console.log(`     ✅ Substitution allowed: ${machine.machineId} can substitute for ${requiredMachines.map(m => m.machineId).join(', ')}`);
     return true;
   }
 
