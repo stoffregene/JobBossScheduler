@@ -1556,12 +1556,11 @@ export class DatabaseStorage implements IStorage {
       if (availableHours > 0) {
         console.log(`   ✅ Multi-shift machine found: ${machine.machineId} (${availableHours}h available, will span multiple shifts)`);
         
-        // Find and assign resources
-        const resources = await this.getResources();
+        // CRITICAL: Apply same strict resource assignment rules everywhere
         let assignedResource = null;
         
         if (machine.type === 'OUTSOURCE') {
-          assignedResource = null; // External vendor
+          assignedResource = null; // RULE 1: External vendor, no internal resources
         } else if (machine.type === 'INSPECT') {
           const inspectors = resources.filter(r => 
             r.isActive && r.shiftSchedule?.includes(shift) && 
@@ -2000,11 +1999,24 @@ export class DatabaseStorage implements IStorage {
             const displacementResult = await this.attemptPriorityDisplacement(job, operation, currentDate);
             if (displacementResult.success) {
               console.log(`🔄 PRIORITY DISPLACEMENT: ${job.priority} job ${job.jobNumber} displaced lower priority job`);
+              
+              // CRITICAL: Apply strict resource assignment rules even for displacement
+              const machine = await this.getMachine(displacementResult.machineId!);
+              if (!machine) {
+                console.log(`❌ DISPLACEMENT ERROR: Machine not found for displacement`);
+                continue;
+              }
+              
+              const operationType = machine.type === 'OUTSOURCE' ? 'OUTSOURCE' : 
+                                   machine.type === 'INSPECT' ? 'INSPECT' : 'PRODUCTION';
+              const assignedResource = operationType === 'OUTSOURCE' ? null : 
+                                     await this.assignOptimalResource(machine, displacementResult.shift!, operationType);
+              
               // Schedule this operation in the freed slot
               const scheduleEntry = await this.createScheduleEntry({
                 jobId: job.id,
                 machineId: displacementResult.machineId!,
-                assignedResourceId: null, // Displacement doesn't assign resources automatically
+                assignedResourceId: assignedResource?.id || null, // STRICT RESOURCE ASSIGNMENT
                 operationSequence: operation.sequence,
                 startTime: displacementResult.startTime!,
                 endTime: displacementResult.endTime!,
