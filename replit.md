@@ -8,6 +8,17 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+**August 5, 2025** - CRITICAL TIMEZONE BUG FIXED: Resolved past scheduling issue by implementing proper US Central time handling and ensuring all jobs schedule from TODAY or later, never in the past:
+
+**🕐 TIMEZONE AND PAST SCHEDULING FIX**:
+- **CRITICAL BUG RESOLVED**: Fixed scheduling logic that was creating entries in the past by using job creation date + 7 days
+- **US CENTRAL TIME**: Implemented proper timezone conversion to US Central Standard Time (UTC-6) for all scheduling operations
+- **MINIMUM DATE ENFORCEMENT**: All jobs now schedule from tomorrow at earliest, never in the past regardless of creation date
+- **COMPREHENSIVE COVERAGE**: Applied timezone fixes to ALL 6+ scheduling locations including OUTSOURCE/INSPECT, multi-day segments, priority displacement, and standard operations
+- **SHIFT TIME ACCURACY**: Ensured all operations schedule at proper 3:00 AM Central (Shift 1) and 3:00 PM Central (Shift 2) times
+- **VERIFICATION TESTED**: Job S60062 now correctly schedules in July 2025 instead of attempting past dates
+- **BUSINESS RULE COMPLIANCE**: Enforced fundamental manufacturing rule that NO operations can be scheduled before current date
+
 **August 5, 2025** - SYSTEMATIC RESOURCE ASSIGNMENT VERIFICATION COMPLETE: Applied strict compatibility matrix rules across ALL scheduling locations:
 
 **🔒 SYSTEMATIC RESOURCE ASSIGNMENT VERIFICATION**:

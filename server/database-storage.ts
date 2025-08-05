@@ -1891,12 +1891,26 @@ export class DatabaseStorage implements IStorage {
 
     const scheduleEntries: ScheduleEntry[] = [];
     const failureDetails: any[] = [];
-    const now = new Date();
     const dayInMs = 24 * 60 * 60 * 1000;
     
-    // Start scheduling 7 days from job creation (material prep period)
-    let currentDate = new Date(job.createdDate.getTime() + (7 * dayInMs));
-    const maxDate = new Date(job.createdDate.getTime() + (21 * dayInMs)); // 21-day manufacturing window
+    // CRITICAL FIX: Get current time in US Central timezone
+    const nowUTC = new Date();
+    const centralOffset = -6; // US Central Standard Time (CST) is UTC-6
+    const nowCentral = new Date(nowUTC.getTime() + (centralOffset * 60 * 60 * 1000));
+    
+    // BUSINESS RULE: NEVER schedule in the past - earliest is tomorrow in Central time
+    const earliestStartDate = new Date(nowCentral.getTime() + dayInMs); // Tomorrow in Central time
+    
+    // Traditional scheduling would be 7 days from creation, but enforce minimum of tomorrow
+    const materialPrepDate = new Date(job.createdDate.getTime() + (7 * dayInMs));
+    let currentDate = materialPrepDate < earliestStartDate ? earliestStartDate : materialPrepDate;
+    
+    console.log(`📅 SCHEDULING DATES: Current Central: ${nowCentral.toLocaleString('en-US', {timeZone: 'America/Chicago'})}`);
+    console.log(`📅 SCHEDULING DATES: Earliest allowed: ${earliestStartDate.toLocaleString('en-US', {timeZone: 'America/Chicago'})}`);
+    console.log(`📅 SCHEDULING DATES: Material prep would be: ${materialPrepDate.toLocaleString('en-US', {timeZone: 'America/Chicago'})}`);
+    console.log(`📅 SCHEDULING DATES: Starting from: ${currentDate.toLocaleString('en-US', {timeZone: 'America/Chicago'})}`);
+    
+    const maxDate = new Date(currentDate.getTime() + (21 * dayInMs)); // 21-day window from start date
     
     // Sort operations by sequence
     const sortedOperations = [...job.routing].sort((a, b) => a.sequence - b.sequence);
@@ -1957,13 +1971,20 @@ export class DatabaseStorage implements IStorage {
             console.log(`🏭 OUTSOURCE operation: No internal resource assigned, handled by external vendor`);
           }
           
+          // CRITICAL: Ensure we're scheduling at proper shift start time in Central timezone  
+          const centralStartTime = new Date(currentDate);
+          centralStartTime.setHours(3, 0, 0, 0); // 3:00 AM Central = Shift 1 start
+          const centralEndTime = new Date(centralStartTime.getTime() + (parseFloat(operation.estimatedHours) * 60 * 60 * 1000));
+          
+          console.log(`📅 OUTSOURCE/INSPECT scheduling: ${centralStartTime.toLocaleString('en-US', {timeZone: 'America/Chicago'})} to ${centralEndTime.toLocaleString('en-US', {timeZone: 'America/Chicago'})}`);
+          
           const scheduleEntry = await this.createScheduleEntry({
             jobId: job.id,
             machineId: machineId,
             assignedResourceId: assignedResourceId,
             operationSequence: operation.sequence,
-            startTime: currentDate,
-            endTime: new Date(currentDate.getTime() + (parseFloat(operation.estimatedHours) * 60 * 60 * 1000)),
+            startTime: centralStartTime,
+            endTime: centralEndTime,
             shift: 1, // Default to shift 1
             status: status
           });
@@ -3152,13 +3173,23 @@ export class DatabaseStorage implements IStorage {
                 break;
               }
               
-              // Schedule this segment
+              // CRITICAL: Schedule this segment with proper Central timezone handling
               const shift = segmentResult.shift;
-              const shiftStart = shift === 1 ? 3 : 15;
+              const shiftStart = shift === 1 ? 3 : 15; // 3 AM or 3 PM Central
               const startTime = new Date(segmentDate);
               startTime.setHours(shiftStart, 0, 0, 0);
               
+              // Verify we're not scheduling in the past
+              const nowCentral = new Date();
+              nowCentral.setHours(nowCentral.getHours() - 6); // Convert to Central
+              if (startTime < nowCentral) {
+                console.log(`⚠️ WARNING: Multi-day segment attempted to schedule in past, moving to next available day`);
+                segmentDate = new Date(segmentDate.getTime() + dayInMs);
+                continue;
+              }
+              
               const endTime = new Date(startTime.getTime() + (segment.hours * 60 * 60 * 1000));
+              console.log(`📅 MULTI-DAY segment scheduling: ${startTime.toLocaleString('en-US', {timeZone: 'America/Chicago'})} to ${endTime.toLocaleString('en-US', {timeZone: 'America/Chicago'})}`);
               
               const segmentEntry = await this.createScheduleEntry({
                 jobId: job.id,
@@ -3196,11 +3227,23 @@ export class DatabaseStorage implements IStorage {
             // Single shift operation - original logic
             const shift = result.shift || 1;
             console.log(`🔧 Using validated shift ${shift} for machine ${result.machine.machineId}`);
-            const shiftStart = shift === 1 ? 3 : 15; // 3 AM or 3 PM
+            
+            // CRITICAL: Ensure proper Central timezone scheduling
+            const shiftStart = shift === 1 ? 3 : 15; // 3 AM or 3 PM Central
             const startTime = new Date(currentDate);
             startTime.setHours(shiftStart, 0, 0, 0);
             
+            // Verify we're not scheduling in the past
+            const nowCentral = new Date();
+            nowCentral.setHours(nowCentral.getHours() - 6); // Convert to Central
+            if (startTime < nowCentral) {
+              console.log(`⚠️ WARNING: Attempted to schedule in past (${startTime.toLocaleString('en-US', {timeZone: 'America/Chicago'})}), skipping to next day`);
+              currentDate = new Date(currentDate.getTime() + dayInMs);
+              continue;
+            }
+            
             const endTime = new Date(startTime.getTime() + (result.adjustedHours * 60 * 60 * 1000));
+            console.log(`📅 PRODUCTION scheduling: ${startTime.toLocaleString('en-US', {timeZone: 'America/Chicago'})} to ${endTime.toLocaleString('en-US', {timeZone: 'America/Chicago'})}`);
             
             // Check for conflicts with existing schedule
             const conflicts = await this.checkScheduleConflicts(result.machine.id, startTime, endTime);
