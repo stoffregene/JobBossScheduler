@@ -7,7 +7,7 @@ import type { Machine, ScheduleEntry, Job, ResourceUnavailability, Resource } fr
 
 interface ResourceAllocationProps {
   scheduleView: {
-    type: "week" | "month";
+    type: "hour" | "day" | "week" | "month";
     date: Date;
   };
 }

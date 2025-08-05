@@ -6,6 +6,27 @@ This is a comprehensive Manufacturing Resource Planning (MRP) system designed fo
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes
+
+**August 5, 2025** - CALENDAR VIEWS ENHANCED: Added hourly, daily, weekly, and monthly calendar perspectives for comprehensive schedule management:
+
+**📅 MULTIPLE CALENDAR VIEWS**:
+- **HOURLY VIEW**: 24-hour breakdown of single day with precise job timing
+- **DAILY VIEW**: Single day focus with detailed job information  
+- **WEEKLY VIEW**: Traditional 7-day view with optimized layout
+- **MONTHLY VIEW**: 35-day calendar grid for long-term planning
+- **SMART NAVIGATION**: View-specific time navigation (hour→day, day→day, week→week, month→month)
+- **ADAPTIVE HEADERS**: Time displays adjust per view type (12 AM/PM for hourly, full dates for daily)
+
+**August 5, 2025** - MULTI-DAY JOB VISUALIZATION ENHANCED: Improved schedule display with staggered job blocks, US Central timezone, and expandable day functionality:
+
+**📅 ADVANCED SCHEDULE VISUALIZATION**:
+- **MULTI-DAY BLOCKS**: Jobs spanning multiple days now show blocks on ALL affected days with visual start/continuation/end indicators (▶ ◆ ◀)
+- **STAGGERED POSITIONING**: Job blocks show actual start/end times within each day using calculated positioning and partial widths
+- **EXPANDABLE DAYS**: Added clickable "+X more" functionality to expand crowded days and view all scheduled jobs
+- **US CENTRAL TIMEZONE**: Fixed job details modal to display all dates/times in America/Chicago timezone consistently
+- **VISUAL INDICATORS**: Clear border styles distinguish multi-day job segments (rounded start, straight continuation, rounded end)
+
 ## System Architecture
 
 ### Frontend Architecture
@@ -15,7 +36,7 @@ Preferred communication style: Simple, everyday language.
 - **State Management**: TanStack Query for server state.
 - **Routing**: Wouter.
 - **Real-time Updates**: WebSocket integration for live data synchronization.
-- **UI/UX Decisions**: Clear visual indicators for scheduling, multi-day jobs, and capacity constraints. Color coding for shifts and accessibility. Fullscreen support with proper scrolling and sticky headers.
+- **UI/UX Decisions**: Clear visual indicators for scheduling, multi-day jobs, and capacity constraints. Color coding for shifts and accessibility. Fullscreen support with proper scrolling and sticky headers. Multiple calendar views (hourly, daily, weekly, monthly) for comprehensive schedule perspectives.
 
 ### Backend Architecture
 - **Runtime**: Node.js with Express.js.

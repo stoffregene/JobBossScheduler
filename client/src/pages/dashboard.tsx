@@ -22,7 +22,7 @@ import type { Job } from "@shared/schema";
 export default function Dashboard() {
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [scheduleView, setScheduleView] = useState<{ type: 'week' | 'month', date: Date }>({ 
+  const [scheduleView, setScheduleView] = useState<{ type: 'hour' | 'day' | 'week' | 'month', date: Date }>({ 
     type: 'week', 
     date: new Date() 
   });
@@ -161,7 +161,7 @@ export default function Dashboard() {
         <div className="mb-8">
           <ScheduleView 
             scheduleView={scheduleView}
-            onScheduleViewChange={setScheduleView}
+            onScheduleViewChange={(view) => setScheduleView(view)}
           />
         </div>
 
