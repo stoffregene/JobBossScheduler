@@ -28,6 +28,7 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [showUnscheduledJobs, setShowUnscheduledJobs] = useState(true);
   const [colorblindMode, setColorblindMode] = useState(false);
+  const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -334,29 +335,24 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
                       return scheduleStartDay <= dayEndUTC && scheduleEndDay >= dayStartUTC;
                     });
                     
-                    // Check if any job is multi-day (spans multiple days)
-                    const hasMultiDayJob = dayJobs.some(entry => {
-                      const startDate = new Date(entry.startTime);
-                      const endDate = new Date(entry.endTime);
-                      const duration = (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60); // hours
-                      return duration > 8 || startDate.toDateString() !== endDate.toDateString();
-                    });
+                    const dayKey = `${machine.id}-${day.toDateString()}`;
+                    const isExpanded = expandedDays.has(dayKey);
+                    const displayLimit = isExpanded ? dayJobs.length : 2;
                     
-                    // Check position of multi-day job
-                    const multiDayPosition = dayJobs.length > 0 ? (() => {
-                      const entry = dayJobs[0];
-                      const startDate = new Date(entry.startTime);
-                      const endDate = new Date(entry.endTime);
-                      const isStart = startDate.toDateString() === day.toDateString();
-                      const isEnd = endDate.toDateString() === day.toDateString();
-                      const isContinuation = !isStart && !isEnd;
-                      return { isStart, isEnd, isContinuation };
-                    })() : null;
+                    const toggleExpansion = () => {
+                      const newExpanded = new Set(expandedDays);
+                      if (isExpanded) {
+                        newExpanded.delete(dayKey);
+                      } else {
+                        newExpanded.add(dayKey);
+                      }
+                      setExpandedDays(newExpanded);
+                    };
 
                   return (
                     <div key={dayIndex}>
                       <div 
-                        className={`h-12 rounded relative flex items-center justify-center ${
+                        className={`${isExpanded ? 'h-auto min-h-12' : 'h-12'} rounded relative flex items-center justify-center ${
                           isUnavailable 
                             ? 'bg-gray-200 dark:bg-gray-700 opacity-60' 
                             : 'bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-600'
@@ -364,38 +360,80 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
                       >
                         {dayJobs.length > 0 && (
                           <div className="absolute inset-0 flex flex-col gap-0.5 p-0.5">
-                            {dayJobs.slice(0, 2).map((entry, idx) => (
+                            {dayJobs.slice(0, displayLimit).map((entry, idx) => {
+                              const startDate = new Date(entry.startTime);
+                              const endDate = new Date(entry.endTime);
+                              const isMultiDay = startDate.toDateString() !== endDate.toDateString();
+                              const isStart = startDate.toDateString() === day.toDateString();
+                              const isEnd = endDate.toDateString() === day.toDateString();
+                              const isContinuation = isMultiDay && !isStart && !isEnd;
+                              
+                              // Calculate position for staggered start visualization
+                              let leftOffset = 0;
+                              let rightOffset = 0;
+                              let borderRadius = 'rounded';
+                              
+                              if (isMultiDay) {
+                                if (isStart) {
+                                  // Start day - calculate partial width based on start time
+                                  const dayStartTime = new Date(startDate);
+                                  dayStartTime.setHours(0, 0, 0, 0);
+                                  const startMinutes = (startDate.getTime() - dayStartTime.getTime()) / (1000 * 60);
+                                  leftOffset = Math.max(0, (startMinutes / (24 * 60)) * 100);
+                                  borderRadius = 'rounded-l-md rounded-r-none';
+                                } else if (isEnd) {
+                                  // End day - calculate partial width based on end time
+                                  const dayStartTime = new Date(endDate);
+                                  dayStartTime.setHours(0, 0, 0, 0);
+                                  const endMinutes = (endDate.getTime() - dayStartTime.getTime()) / (1000 * 60);
+                                  rightOffset = Math.max(0, 100 - (endMinutes / (24 * 60)) * 100);
+                                  borderRadius = 'rounded-r-md rounded-l-none';
+                                } else if (isContinuation) {
+                                  // Continuation day - full width
+                                  borderRadius = 'rounded-none';
+                                }
+                              }
+                              
+                              return (
+                                <button
+                                  key={idx}
+                                  className={`${isExpanded ? 'h-6' : 'flex-1'} ${borderRadius} text-xs px-1 flex items-center justify-center font-medium cursor-pointer hover:opacity-80 transition-opacity relative overflow-hidden ${
+                                    getJobColor(entry.job?.priority || 'Normal', entry.shift)
+                                  } ${entry.job?.routingModified ? 'border-2 border-dashed border-yellow-400 dark:border-yellow-300' : ''}`}
+                                  style={{
+                                    marginLeft: `${leftOffset}%`,
+                                    marginRight: `${rightOffset}%`,
+                                    width: `${100 - leftOffset - rightOffset}%`
+                                  }}
+                                  onClick={() => setSelectedJobId(entry.job?.id || null)}
+                                  data-testid={`schedule-job-${entry.job?.jobNumber}`}
+                                  title={`Shift ${entry.shift} - ${entry.job?.jobNumber} (Op${entry.operationSequence})${isMultiDay ? ' - Multi-day job' : ''}${entry.job?.routingModified ? ' - Modified Routing' : ''}`}
+                                >
+                                  {/* Multi-day visual indicator */}
+                                  {isMultiDay && (
+                                    <div className={`absolute inset-y-0 ${
+                                      isStart ? 'right-0 w-2' :
+                                      isEnd ? 'left-0 w-2' :
+                                      'left-0 right-0'
+                                    } bg-black/20 dark:bg-white/20`} />
+                                  )}
+                                  <span className="truncate relative z-10 text-[10px]">
+                                    {entry.job?.jobNumber} (Op{entry.operationSequence})
+                                    {(dayJobs.length > 1 || isExpanded) && ` S${entry.shift}`}
+                                    {isStart && ' ▶'}
+                                    {isEnd && ' ◀'}
+                                    {isContinuation && ' ◆'}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                            {dayJobs.length > displayLimit && (
                               <button
-                                key={idx}
-                                className={`flex-1 rounded text-xs px-1 flex items-center justify-center font-medium cursor-pointer hover:opacity-80 transition-opacity relative overflow-hidden ${
-                                  getJobColor(entry.job?.priority || 'Normal', entry.shift)
-                                } ${hasMultiDayJob && multiDayPosition ? (
-                                  multiDayPosition.isStart ? 'rounded-l-md rounded-r-none' :
-                                  multiDayPosition.isEnd ? 'rounded-r-md rounded-l-none' :
-                                  multiDayPosition.isContinuation ? 'rounded-none' : ''
-                                ) : ''} ${entry.job?.routingModified ? 'border-2 border-dashed border-yellow-400 dark:border-yellow-300' : ''}`}
-                                onClick={() => setSelectedJobId(entry.job?.id || null)}
-                                data-testid={`schedule-job-${entry.job?.jobNumber}`}
-                                title={`Shift ${entry.shift} - ${entry.job?.jobNumber} (Op${entry.operationSequence})${hasMultiDayJob ? ' - Multi-day job' : ''}${entry.job?.routingModified ? ' - Modified Routing' : ''}`}
+                                onClick={toggleExpansion}
+                                className="text-[9px] text-center text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 cursor-pointer py-1"
                               >
-                                {/* Multi-day indicator */}
-                                {hasMultiDayJob && (
-                                  <div className={`absolute inset-y-0 ${
-                                    multiDayPosition?.isStart ? 'right-0' :
-                                    multiDayPosition?.isEnd ? 'left-0' :
-                                    'left-0 right-0'
-                                  } w-full bg-black/10 dark:bg-white/10`} />
-                                )}
-                                <span className="truncate relative z-10 text-[10px]">
-                                  {entry.job?.jobNumber} (Op{entry.operationSequence})
-                                  {dayJobs.length > 1 && ` S${entry.shift}`}
-                                </span>
+                                {isExpanded ? 'Show less' : `+${dayJobs.length - displayLimit} more`}
                               </button>
-                            ))}
-                            {dayJobs.length > 2 && (
-                              <div className="text-[9px] text-center text-gray-600 dark:text-gray-400">
-                                +{dayJobs.length - 2} more
-                              </div>
                             )}
                           </div>
                         )}

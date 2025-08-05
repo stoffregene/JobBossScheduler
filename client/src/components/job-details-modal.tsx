@@ -143,7 +143,8 @@ export default function JobDetailsModal({ jobId, onClose }: JobDetailsModalProps
                   {new Date(job.dueDate).toLocaleDateString('en-US', {
                     month: 'short',
                     day: 'numeric',
-                    year: 'numeric'
+                    year: 'numeric',
+                    timeZone: 'America/Chicago'
                   })}
                 </div>
               </div>

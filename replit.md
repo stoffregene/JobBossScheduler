@@ -8,6 +8,15 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+**August 5, 2025** - MULTI-DAY JOB VISUALIZATION ENHANCED: Improved schedule display with staggered job blocks, US Central timezone, and expandable day functionality:
+
+**📅 ADVANCED SCHEDULE VISUALIZATION**:
+- **MULTI-DAY BLOCKS**: Jobs spanning multiple days now show blocks on ALL affected days with visual start/continuation/end indicators (▶ ◆ ◀)
+- **STAGGERED POSITIONING**: Job blocks show actual start/end times within each day using calculated positioning and partial widths
+- **EXPANDABLE DAYS**: Added clickable "+X more" functionality to expand crowded days and view all scheduled jobs
+- **US CENTRAL TIMEZONE**: Fixed job details modal to display all dates/times in America/Chicago timezone consistently
+- **VISUAL INDICATORS**: Clear border styles distinguish multi-day job segments (rounded start, straight continuation, rounded end)
+
 **August 5, 2025** - SCHEDULE COLORS ENHANCED: Added distinct color schemes for different priorities/shifts and implemented colorblind-friendly mode with pattern-based visual indicators and accessibility toggle:
 
 **🎨 SCHEDULE COLOR SYSTEM ENHANCED**:
