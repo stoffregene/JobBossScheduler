@@ -17,6 +17,7 @@ Preferred communication style: Simple, everyday language.
 - **EXAMPLE SUCCESS**: 25.5h HMC operation split into Mon(8h) + Tue(8h) + Wed(5.25h) segments
 - **RESOURCE CONTINUITY**: Same operator (Drew Darling) assigned across all segments
 - **CAPACITY LOGIC**: Enhanced to allow large operations to start with partial capacity
+- **SHIFT TIMING FIX**: Corrected all scheduling to use proper 3am-3pm Shift 1 timing (was incorrectly using 7am-3pm)
 
 **COMPATIBILITY MATRIX ANALYSIS**: Created comprehensive resource-work center compatibility matrix revealing critical scheduling constraints:
 - **RESOURCE-MACHINE COMPATIBILITY FIX**: Fixed critical bug where resources were assigned to incompatible machines (e.g., Lindsay Jackson to lathe ops, Aaron Chastain to inspect ops)

@@ -1944,8 +1944,9 @@ export class DatabaseStorage implements IStorage {
             const shiftHoursPerDay = 8;
             let remainingHours = result.adjustedHours;
             let operationStartTime = new Date(currentDate);
-            // Set to shift start time and adjust for proper hour-by-hour scheduling
+            // Set to shift start time - FIXED: 3am-3pm for shift 1
             operationStartTime.setHours(currentShift === 1 ? 3 : 15, 0, 0, 0);
+            console.log(`🕐 Initial operation start time set to: ${operationStartTime.toLocaleString()} (Shift ${currentShift})`);
             
             // If this is not the first operation and not a saw/waterjet, start immediately after previous
             if (i > 0 && !this.isSawOrWaterjetOperation(operation)) {
@@ -1959,14 +1960,20 @@ export class DatabaseStorage implements IStorage {
                 if (hour < 3) {
                   operationStartTime.setHours(3, 0, 0, 0); // Start of shift 1
                   currentShift = 1;
-                } else if (hour >= 11 && hour < 15) {
+                } else if (hour >= 15 && hour < 15) {
                   operationStartTime.setHours(15, 0, 0, 0); // Start of shift 2  
                   currentShift = 2;
-                } else if (hour >= 23) {
-                  // Move to next day shift 1
-                  operationStartTime = new Date(operationStartTime.getTime() + dayInMs);
-                  operationStartTime.setHours(3, 0, 0, 0);
-                  currentShift = 1;
+                } else if (hour >= 15) {
+                  // Past shift 1, check if machine supports shift 2
+                  if (result.machine.availableShifts?.includes(2)) {
+                    operationStartTime.setHours(15, 0, 0, 0); // Start of shift 2
+                    currentShift = 2;
+                  } else {
+                    // Move to next day shift 1
+                    operationStartTime = new Date(operationStartTime.getTime() + dayInMs);
+                    operationStartTime.setHours(3, 0, 0, 0);
+                    currentShift = 1;
+                  }
                 }
               }
             }
@@ -1978,7 +1985,7 @@ export class DatabaseStorage implements IStorage {
               // Skip weekends (Friday-Sunday) before scheduling any segment
               while (operationStartTime.getDay() === 0 || operationStartTime.getDay() === 5 || operationStartTime.getDay() === 6) {
                 operationStartTime = new Date(operationStartTime.getTime() + dayInMs);
-                operationStartTime.setHours(7, 0, 0, 0); // Start at 7am on next business day
+                operationStartTime.setHours(3, 0, 0, 0); // Start at 3am on next business day
                 currentShift = 1;
               }
               
@@ -1987,10 +1994,10 @@ export class DatabaseStorage implements IStorage {
               let availableHoursInShift = 0;
               
               if (currentShift === 1) {
-                // Shift 1: 7am-3pm (8 hours)
-                if (currentHour < 7) {
-                  operationStartTime.setHours(7, 0, 0, 0);
-                  availableHoursInShift = 8;
+                // Shift 1: 3am-3pm (12 hours)
+                if (currentHour < 3) {
+                  operationStartTime.setHours(3, 0, 0, 0);
+                  availableHoursInShift = 12;
                 } else if (currentHour < 15) {
                   availableHoursInShift = 15 - currentHour;
                 } else {
@@ -2002,7 +2009,7 @@ export class DatabaseStorage implements IStorage {
                   } else {
                     // Move to next day
                     operationStartTime = new Date(operationStartTime.getTime() + dayInMs);
-                    operationStartTime.setHours(7, 0, 0, 0);
+                    operationStartTime.setHours(3, 0, 0, 0);
                     currentShift = 1;
                     continue;
                   }
@@ -2017,7 +2024,7 @@ export class DatabaseStorage implements IStorage {
                 } else {
                   // Past shift 2, move to next day
                   operationStartTime = new Date(operationStartTime.getTime() + dayInMs);
-                  operationStartTime.setHours(7, 0, 0, 0);
+                  operationStartTime.setHours(3, 0, 0, 0);
                   currentShift = 1;
                   continue;
                 }
@@ -2025,7 +2032,7 @@ export class DatabaseStorage implements IStorage {
               
               // Get existing machine hours to check capacity
               const machineHours = await this.getMachineHoursOnDate(result.machine.id, operationStartTime, currentShift);
-              const maxShiftHours = currentShift === 1 ? 8 : 12;
+              const maxShiftHours = currentShift === 1 ? 12 : 12; // Shift 1: 3am-3pm (12h), Shift 2: 3pm-3am (12h)
               const availableCapacity = Math.max(0, maxShiftHours - machineHours);
               
               const hoursThisShift = Math.min(remainingHours, availableHoursInShift, availableCapacity);
@@ -2038,7 +2045,7 @@ export class DatabaseStorage implements IStorage {
                   currentShift = 2;
                 } else {
                   operationStartTime = new Date(operationStartTime.getTime() + dayInMs);
-                  operationStartTime.setHours(7, 0, 0, 0);
+                  operationStartTime.setHours(3, 0, 0, 0);
                   currentShift = 1;
                 }
                 continue;
@@ -2072,7 +2079,7 @@ export class DatabaseStorage implements IStorage {
                 } else {
                   // Machine only works one shift OR already on shift 2 - move to next business day
                   operationStartTime = new Date(operationStartTime.getTime() + dayInMs);
-                  operationStartTime.setHours(7, 0, 0, 0);
+                  operationStartTime.setHours(3, 0, 0, 0);
                   currentShift = 1; // Reset to shift 1 (many machines only work shift 1)
                   console.log(`   ⏩ Moving to next business day shift 1 (machine ${result.machine.machineId} only works shift ${result.machine.availableShifts?.join(',')})`);
                 }
