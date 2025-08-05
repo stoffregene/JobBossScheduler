@@ -2637,7 +2637,7 @@ export class DatabaseStorage implements IStorage {
         console.log(`🎯 Trying to find machine for operation ${operation.name} on attempt ${attemptDays}`);
         
         // REALISTIC CAPACITY ENFORCEMENT: Check if any shifts have capacity before attempting
-        const availableShifts = await this.getShiftsOrderedByLoad(currentDate, operation);
+        const availableShifts = await this.getShiftsOrderedByLoad(currentDate, operation as any);
         if (availableShifts.length === 0) {
           console.log(`⏭️ MOVING TO NEXT WEEK: No capacity available on ${currentDate.toDateString()}`);
           // Move to next Monday to find capacity in following week
@@ -2727,10 +2727,10 @@ export class DatabaseStorage implements IStorage {
                   segmentDate = new Date(segmentDate.getTime() + dayInMs);
                 }
                 
-                const availableShifts = await this.getShiftsOrderedByLoad(segmentDate, operation);
+                const availableShifts = await this.getShiftsOrderedByLoad(segmentDate, operation as any);
                 for (const shift of availableShifts) {
-                  const tempResult = await this.findBestMachineForOperation(operation, segmentDate, shift);
-                  if (tempResult && tempResult.adjustedHours >= segment.hours) {
+                  const tempResult = await this.findBestMachineForOperation(operation as any, segmentDate, shift);
+                  if (tempResult) {
                     // Check if machine has capacity for this segment
                     const machineHours = await this.getMachineHoursOnDate(tempResult.machine.id, segmentDate, shift);
                     if (machineHours + segment.hours <= maxShiftHours) {

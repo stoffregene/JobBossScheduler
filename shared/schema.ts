@@ -171,6 +171,29 @@ export type RoutingOperationType = {
   barLength?: number; // Required bar length in feet for bar fed operations
 };
 
+// Database-compatible operation type for internal storage functions
+export type DbRoutingOperation = {
+  id: string;
+  status: string;
+  estimatedHours: string;
+  sequence: number;
+  machineType: string;
+  compatibleMachines: string[];
+  notes: string | null;
+  jobId: string;
+  assignedResourceId: string | null;
+  operationName: string;
+  operationType: string | null;
+  barLength: number | null;
+  startTime: Date | null;
+  endTime: Date | null;
+  shift: number | null;
+  machineId: string | null;
+  resourceId: string | null;
+  utilizationImpact: string | null;
+  efficiencyImpact: string | null;
+};
+
 export const insertJobSchema = createInsertSchema(jobs).omit({
   id: true,
   createdDate: true,
