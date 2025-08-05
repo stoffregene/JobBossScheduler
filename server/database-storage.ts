@@ -1822,13 +1822,35 @@ export class DatabaseStorage implements IStorage {
       totalOperations?: number;
     }) => void
   ): Promise<{ success: boolean; scheduleEntries?: ScheduleEntry[]; failureReason?: string; failureDetails?: any[] }> {
+    console.log(`🚀 DEBUG: Starting autoScheduleJob for ${jobId}`);
+    
     const job = await this.getJob(jobId);
     if (!job || !job.routing || job.routing.length === 0) {
+      console.log(`❌ DEBUG: Job validation failed - job: ${!!job}, routing: ${job?.routing?.length || 0}`);
       return { 
         success: false, 
         failureReason: "Job not found or has no routing operations",
         failureDetails: []
       };
+    }
+    
+    console.log(`📋 DEBUG: Job ${job.jobNumber} has ${job.routing.length} operations`);
+    
+    // DEBUG: Check machine and resource availability
+    const allMachines = await this.getMachines();
+    const allResources = await this.getResources();
+    console.log(`🏭 DEBUG: Available machines: ${allMachines.length}, resources: ${allResources.length}`);
+    console.log(`🔧 DEBUG: Machine types: ${[...new Set(allMachines.map(m => m.type))].join(', ')}`);
+    console.log(`👥 DEBUG: Resource roles: ${[...new Set(allResources.map(r => r.role))].join(', ')}`);
+    
+    // DEBUG: Check first operation compatibility
+    const firstOp = job.routing[0];
+    console.log(`🎯 DEBUG: First operation - Type: ${firstOp.machineType}, Compatible: [${firstOp.compatibleMachines.join(', ')}], Hours: ${firstOp.estimatedHours}`);
+    
+    const compatibleMachines = allMachines.filter(m => firstOp.compatibleMachines.includes(m.machineId));
+    console.log(`✅ DEBUG: Found ${compatibleMachines.length} directly compatible machines for first operation`);
+    if (compatibleMachines.length > 0) {
+      console.log(`🔧 DEBUG: Compatible machines: ${compatibleMachines.map(m => `${m.machineId}(${m.status})`).join(', ')}`);
     }
 
     const scheduleEntries: ScheduleEntry[] = [];
@@ -1989,9 +2011,12 @@ export class DatabaseStorage implements IStorage {
         
         // Use only shifts that have available capacity
         for (const shift of availableShifts) {
+          console.log(`🔍 DEBUG: Trying shift ${shift} for operation ${operation.sequence} (${operation.name || operation.machineType})`);
+          
           const result = await this.findBestMachineForOperation(operation, currentDate, shift);
           
           if (!result) {
+            console.log(`❌ DEBUG: findBestMachineForOperation returned null for shift ${shift}`);
             // Collect detailed failure reason for this shift attempt
             const availableMachines = await this.getMachines();
             const directlyCompatible = availableMachines.filter(m => 
@@ -3172,7 +3197,14 @@ export class DatabaseStorage implements IStorage {
       
       if (!scheduled) {
         // Failed to schedule this operation - rollback all schedule entries for this job
-        console.log(`❌ Failed to schedule operation ${operation.sequence} for job ${job.jobNumber}`);
+        console.log(`❌ DEBUG: Failed to schedule operation ${operation.sequence} (${operation.name || operation.machineType}) for job ${job.jobNumber}`);
+        console.log(`❌ DEBUG: Operation details:`, {
+          sequence: operation.sequence,
+          name: operation.name,
+          machineType: operation.machineType,
+          compatibleMachines: operation.compatibleMachines,
+          estimatedHours: operation.estimatedHours
+        });
         
         // Delete any schedule entries we created for this job
         for (const entry of scheduleEntries) {
