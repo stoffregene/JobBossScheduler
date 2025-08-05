@@ -1517,6 +1517,21 @@ export class DatabaseStorage implements IStorage {
     return { valid, currentHours: weekHours, maxHours };
   }
 
+  // Check if an operation is a saw or waterjet operation (requires 24hr lag time)
+  private isSawOrWaterjetOperation(operation: RoutingOperationType): boolean {
+    const sawWaterjetKeywords = ['saw', 'cut', 'cutoff', 'part off', 'sawing', 'waterjet', 'water jet', 'plasma'];
+    const operationName = operation.name.toLowerCase();
+    const machineType = operation.machineType.toLowerCase();
+    
+    // Check machine type first
+    if (machineType.includes('saw') || machineType.includes('waterjet') || machineType.includes('plasma')) {
+      return true;
+    }
+
+    // Check operation name for saw/waterjet keywords
+    return sawWaterjetKeywords.some(keyword => operationName.includes(keyword));
+  }
+
   // Get total hours scheduled for a specific machine on a specific date and shift
   private async getMachineHoursOnDate(machineId: string, targetDate: Date, shift: number): Promise<number> {
     const allScheduleEntries = await this.getScheduleEntries();
@@ -1604,8 +1619,15 @@ export class DatabaseStorage implements IStorage {
             totalOperations: sortedOperations.length
           });
           
-          // Move to next day
-          currentDate = new Date(currentDate.getTime() + dayInMs);
+          // Check if this is a saw/waterjet operation - add 24hr lag to next operation
+          const isSawOrWaterjet = this.isSawOrWaterjetOperation(operation);
+          if (isSawOrWaterjet) {
+            currentDate = new Date(currentDate.getTime() + dayInMs); // Add 24hr lag for saw/waterjet
+          } else {
+            // For other operations, schedule next operation immediately after (by hours, not days)
+            const operationHours = parseFloat(operation.estimatedHours);
+            currentDate = new Date(currentDate.getTime() + (operationHours * 60 * 60 * 1000));
+          }
           scheduled = true;
           continue;
         }
@@ -1640,8 +1662,15 @@ export class DatabaseStorage implements IStorage {
                 totalOperations: sortedOperations.length
               });
               
-              // Move to next day
-              currentDate = new Date(currentDate.getTime() + dayInMs);
+              // Check if this is a saw/waterjet operation - add 24hr lag to next operation
+              const isSawOrWaterjet = this.isSawOrWaterjetOperation(operation);
+              if (isSawOrWaterjet) {
+                currentDate = new Date(currentDate.getTime() + dayInMs); // Add 24hr lag for saw/waterjet
+              } else {
+                // For other operations, schedule next operation immediately after (by hours, not days)
+                const operationHours = parseFloat(operation.estimatedHours);
+                currentDate = new Date(currentDate.getTime() + (operationHours * 60 * 60 * 1000));
+              }
               scheduled = true;
               break;
             }
@@ -1698,7 +1727,32 @@ export class DatabaseStorage implements IStorage {
             const shiftHoursPerDay = 8;
             let remainingHours = result.adjustedHours;
             let operationStartTime = new Date(currentDate);
+            // Set to shift start time and adjust for proper hour-by-hour scheduling
             operationStartTime.setHours(currentShift === 1 ? 3 : 15, 0, 0, 0);
+            
+            // If this is not the first operation and not a saw/waterjet, start immediately after previous
+            if (i > 0 && !this.isSawOrWaterjetOperation(operation)) {
+              // Get the last scheduled entry to continue from its end time
+              const lastScheduled = scheduleEntries[scheduleEntries.length - 1];
+              if (lastScheduled) {
+                operationStartTime = new Date(lastScheduled.endTime);
+                
+                // Adjust to next available shift time if needed
+                const hour = operationStartTime.getHours();
+                if (hour < 3) {
+                  operationStartTime.setHours(3, 0, 0, 0); // Start of shift 1
+                  currentShift = 1;
+                } else if (hour >= 11 && hour < 15) {
+                  operationStartTime.setHours(15, 0, 0, 0); // Start of shift 2  
+                  currentShift = 2;
+                } else if (hour >= 23) {
+                  // Move to next day shift 1
+                  operationStartTime = new Date(operationStartTime.getTime() + dayInMs);
+                  operationStartTime.setHours(3, 0, 0, 0);
+                  currentShift = 1;
+                }
+              }
+            }
             
             // MULTI-DAY JOB HANDLING: Split jobs that exceed shift capacity
             const multiDayEntries: any[] = [];
@@ -1779,9 +1833,18 @@ export class DatabaseStorage implements IStorage {
               const newUtil = Math.min(100, currentUtil + (result.adjustedHours / 8) * 100);
               await this.updateMachine(result.machine.id, { utilization: newUtil.toString() });
               
-              // Move to next day after the last segment for next operation
+              // Move to next operation start time based on operation type
               const lastEntry = multiDayEntries[multiDayEntries.length - 1];
-              currentDate = new Date(lastEntry.endTime.getTime() + dayInMs);
+              const isSawOrWaterjet = this.isSawOrWaterjetOperation(operation);
+              
+              if (isSawOrWaterjet) {
+                // Add 24hr lag for saw/waterjet operations
+                currentDate = new Date(lastEntry.endTime.getTime() + dayInMs);
+              } else {
+                // Schedule next operation immediately after this one (continuous flow)
+                currentDate = new Date(lastEntry.endTime);
+              }
+              
               scheduled = true;
               break;
             }
