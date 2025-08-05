@@ -1108,6 +1108,12 @@ export class DatabaseStorage implements IStorage {
       return isDirectlyCompatible || sameType || hasSubstitutionGroup;
     });
     
+    // ERROR HANDLING: Check if work center exists
+    if (preFilteredMachines.length === 0) {
+      console.log(`❌ WORK CENTER NOT FOUND: ${operation.machineType} - no machines of this type exist`);
+      throw new Error(`${operation.machineType} WORKCENTER NOT FOUND`);
+    }
+    
     console.log(`   Pre-filtered from ${allMachines.length} to ${preFilteredMachines.length} relevant machines`);
     console.log(`   Target date: ${targetDate.toDateString()} (${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dayOfWeek]}), shift: ${shift}`);
     
@@ -2983,6 +2989,12 @@ export class DatabaseStorage implements IStorage {
         });
         
         console.log(`🎯 Trying to find machine for operation ${operation.name} on attempt ${attemptDays}`);
+        
+        // ANTI-LOOP: Stop infinite loops after reasonable attempts
+        if (attemptDays >= 20) {
+          console.log(`❌ SCHEDULING FAILED: Operation ${operation.machineType} failed after 20 attempts`);
+          throw new Error(`${operation.machineType} SCHEDULING FAILED - EXCEEDED MAX ATTEMPTS`);
+        }
         
         // REALISTIC CAPACITY ENFORCEMENT: Check if any shifts have capacity before attempting
         const availableShifts = await this.getShiftsOrderedByLoad(currentDate, operation as any);
