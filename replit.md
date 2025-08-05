@@ -8,6 +8,15 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+**August 5, 2025** - CRITICAL RESOURCE ALLOCATION BUG FIXED: Eliminated resource double-booking in auto-scheduler to enforce fundamental manufacturing constraint:
+
+**🔧 RESOURCE CONFLICT RESOLUTION**:
+- **ONE RESOURCE = ONE MACHINE**: Fixed critical bug where same employee was assigned to multiple machines simultaneously
+- **TIME-BASED AVAILABILITY**: Added `isResourceAvailableAtTime()` method to check for scheduling conflicts before resource assignment
+- **ENHANCED ASSIGNOPTIMALRESOURCE**: Updated resource assignment logic to validate availability during target time periods
+- **SCHEDULE REBUILD**: Cleared existing conflicted schedule and rebuilt with new conflict checking logic
+- **ZERO CONFLICTS VERIFIED**: Confirmed no resource double-booking exists in current schedule
+
 **August 5, 2025** - CALENDAR VIEWS ENHANCED: Added hourly, daily, weekly, and monthly calendar perspectives for comprehensive schedule management:
 
 **📅 MULTIPLE CALENDAR VIEWS**:

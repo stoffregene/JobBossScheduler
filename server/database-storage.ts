@@ -1290,13 +1290,8 @@ export class DatabaseStorage implements IStorage {
       console.log(`⚠️ Efficiency Impact: ${bestMatch.efficiencyImpact.toFixed(1)}% for ${(operation as any).operationName || (operation as any).name || operation.machineType} (${bestMatch.machine.machineId})`);
     }
     
-    // OPTIMIZATION: Use consolidated resource assignment function
-    const operationType = bestMatch.machine.type === 'OUTSOURCE' ? 'OUTSOURCE' : 
-                         bestMatch.machine.type === 'INSPECT' ? 'INSPECT' : 'PRODUCTION';
-    const assignedResource = operationType === 'OUTSOURCE' ? null : await this.assignOptimalResource(bestMatch.machine, shift, operationType);
-    
-    // Add shift and resource information to the result
-    return { ...bestMatch, shift, assignedResource };
+    // Return machine without resource assignment - resource will be assigned later with proper timing
+    return { ...bestMatch, shift, assignedResource: null };
   }
 
   // OPTIMIZATION: Centralized duration calculation function to eliminate redundant code
@@ -1787,7 +1782,9 @@ export class DatabaseStorage implements IStorage {
   private async assignOptimalResource(
     machine: Machine, 
     shift: number, 
-    operationType: 'PRODUCTION' | 'INSPECT' | 'OUTSOURCE'
+    operationType: 'PRODUCTION' | 'INSPECT' | 'OUTSOURCE',
+    startTime?: Date,
+    endTime?: Date
   ): Promise<Resource | null> {
     console.log(`🔍 Resource Assignment for ${machine.machineId} (${operationType}) on Shift ${shift}`);
     
@@ -1800,19 +1797,45 @@ export class DatabaseStorage implements IStorage {
     
     if (operationType === 'INSPECT') {
       // INSPECT operations: Only assign Quality Inspectors
-      const inspectors = allResources.filter(resource => {
+      const inspectors = allResources.filter(async (resource) => {
         const isActive = resource.isActive;
         const hasShift = resource.shiftSchedule?.includes(shift);
         const canOperateMachine = resource.workCenters?.includes(machine.id);
         const isInspector = resource.role === 'Quality Inspector';
         
-        console.log(`🔍 INSPECT check ${resource.name}: active=${isActive}, shift=${hasShift}, machine=${canOperateMachine}, inspector=${isInspector}`);
-        return isActive && hasShift && canOperateMachine && isInspector;
+        // CRITICAL: Check if resource is already busy during the target time period
+        let isAvailable = true;
+        if (startTime && endTime) {
+          isAvailable = await this.isResourceAvailableAtTime(resource.id, startTime, endTime);
+        }
+        
+        console.log(`🔍 INSPECT check ${resource.name}: active=${isActive}, shift=${hasShift}, machine=${canOperateMachine}, inspector=${isInspector}, available=${isAvailable}`);
+        return isActive && hasShift && canOperateMachine && isInspector && isAvailable;
       });
       
-      if (inspectors.length > 0) {
-        console.log(`✅ Assigned inspector: ${inspectors[0].name} to ${machine.machineId}`);
-        return inspectors[0];
+      // Wait for all async filters to resolve
+      const availableInspectors = [];
+      for (const resource of allResources) {
+        const isActive = resource.isActive;
+        const hasShift = resource.shiftSchedule?.includes(shift);
+        const canOperateMachine = resource.workCenters?.includes(machine.id);
+        const isInspector = resource.role === 'Quality Inspector';
+        
+        let isAvailable = true;
+        if (startTime && endTime) {
+          isAvailable = await this.isResourceAvailableAtTime(resource.id, startTime, endTime);
+        }
+        
+        console.log(`🔍 INSPECT check ${resource.name}: active=${isActive}, shift=${hasShift}, machine=${canOperateMachine}, inspector=${isInspector}, available=${isAvailable}`);
+        
+        if (isActive && hasShift && canOperateMachine && isInspector && isAvailable) {
+          availableInspectors.push(resource);
+        }
+      }
+      
+      if (availableInspectors.length > 0) {
+        console.log(`✅ Assigned inspector: ${availableInspectors[0].name} to ${machine.machineId}`);
+        return availableInspectors[0];
       } else {
         console.log(`❌ No qualified inspectors available for ${machine.machineId}`);
         return null;
@@ -1820,29 +1843,68 @@ export class DatabaseStorage implements IStorage {
     }
     
     // PRODUCTION operations: Assign Operators or Shift Leads
-    const operators = allResources.filter(resource => {
+    const availableOperators = [];
+    for (const resource of allResources) {
       const isActive = resource.isActive;
       const hasShift = resource.shiftSchedule?.includes(shift);
       const canOperateMachine = resource.workCenters?.includes(machine.id);
       const isOperator = resource.role === 'Operator' || resource.role === 'Shift Lead';
       
-      console.log(`⚙️ PRODUCTION check ${resource.name}: active=${isActive}, shift=${hasShift}, machine=${canOperateMachine}, operator=${isOperator}`);
+      // CRITICAL: Check if resource is already busy during the target time period
+      let isAvailable = true;
+      if (startTime && endTime) {
+        isAvailable = await this.isResourceAvailableAtTime(resource.id, startTime, endTime);
+      }
+      
+      console.log(`⚙️ PRODUCTION check ${resource.name}: active=${isActive}, shift=${hasShift}, machine=${canOperateMachine}, operator=${isOperator}, available=${isAvailable}`);
       console.log(`   Resource work centers: ${resource.workCenters?.join(', ')}`);
       console.log(`   Target machine ID: ${machine.id}, Machine: ${machine.machineId}`);
       
-      return isActive && hasShift && canOperateMachine && isOperator;
-    });
+      if (isActive && hasShift && canOperateMachine && isOperator && isAvailable) {
+        availableOperators.push(resource);
+      }
+    }
     
-    if (operators.length > 0) {
+    if (availableOperators.length > 0) {
       // Prefer Shift Leads over regular Operators
-      const shiftLeads = operators.filter(r => r.role === 'Shift Lead');
-      const selectedResource = shiftLeads.length > 0 ? shiftLeads[0] : operators[0];
+      const shiftLeads = availableOperators.filter(r => r.role === 'Shift Lead');
+      const selectedResource = shiftLeads.length > 0 ? shiftLeads[0] : availableOperators[0];
       console.log(`⚙️ Assigned operator: ${selectedResource.name} to machine ${machine.machineId}`);
       return selectedResource;
     } else {
       console.log(`❌ No qualified operators available for machine ${machine.machineId}`);
       return null;
     }
+  }
+
+  // CRITICAL: Check if a resource is available at a specific time (no conflicts with other assignments)
+  private async isResourceAvailableAtTime(resourceId: string, startTime: Date, endTime: Date): Promise<boolean> {
+    const scheduleEntries = await this.getCachedScheduleEntries();
+    
+    // Check for any overlapping assignments for this resource
+    const conflicts = scheduleEntries.filter(entry => {
+      if (entry.assignedResourceId !== resourceId) {
+        return false; // Different resource, no conflict
+      }
+      
+      const entryStart = new Date(entry.startTime);
+      const entryEnd = new Date(entry.endTime);
+      
+      // Check for time overlap: (start1 < end2) && (start2 < end1)
+      const hasOverlap = startTime < entryEnd && entryStart < endTime;
+      
+      if (hasOverlap) {
+        console.log(`⚠️ RESOURCE CONFLICT: ${resourceId} busy on machine ${entry.machineId} from ${entryStart.toLocaleString()} to ${entryEnd.toLocaleString()}`);
+        console.log(`   Requested time: ${startTime.toLocaleString()} to ${endTime.toLocaleString()}`);
+      }
+      
+      return hasOverlap;
+    });
+    
+    const isAvailable = conflicts.length === 0;
+    console.log(`🔍 Resource ${resourceId} availability check: ${isAvailable ? 'AVAILABLE' : 'BUSY'} (${conflicts.length} conflicts)`);
+    
+    return isAvailable;
   }
 
   // DEPRECATED: Use getMachineCapacityInfo instead
@@ -2035,7 +2097,7 @@ export class DatabaseStorage implements IStorage {
               const operationType = machine.type === 'OUTSOURCE' ? 'OUTSOURCE' : 
                                    machine.type === 'INSPECT' ? 'INSPECT' : 'PRODUCTION';
               const assignedResource = operationType === 'OUTSOURCE' ? null : 
-                                     await this.assignOptimalResource(machine, displacementResult.shift!, operationType);
+                                     await this.assignOptimalResource(machine, displacementResult.shift!, operationType, displacementResult.startTime!, displacementResult.endTime!);
               
               // Schedule this operation in the freed slot
               const scheduleEntry = await this.createScheduleEntry({
@@ -2238,10 +2300,16 @@ export class DatabaseStorage implements IStorage {
               
               console.log(`   📅 Scheduling ${hoursThisShift.toFixed(1)}h segment from ${segmentStartTime.toLocaleString()} to ${segmentEndTime.toLocaleString()} (Shift ${currentShift})`);
               
+              // CRITICAL: Assign resource with proper timing to avoid conflicts
+              const operationType = result.machine.type === 'OUTSOURCE' ? 'OUTSOURCE' : 
+                                   result.machine.type === 'INSPECT' ? 'INSPECT' : 'PRODUCTION';
+              const assignedResource = operationType === 'OUTSOURCE' ? null : 
+                                     await this.assignOptimalResource(result.machine, currentShift, operationType, segmentStartTime, segmentEndTime);
+              
               multiDayEntries.push({
                 jobId: job.id,
                 machineId: result.machine.id,
-                assignedResourceId: result.assignedResource?.id || null,
+                assignedResourceId: assignedResource?.id || null,
                 operationSequence: operation.sequence,
                 startTime: segmentStartTime,
                 endTime: segmentEndTime,
