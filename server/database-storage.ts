@@ -695,6 +695,10 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(scheduleEntries).where(eq(scheduleEntries.jobId, jobId));
   }
 
+  async getScheduleEntriesByJobId(jobId: string): Promise<ScheduleEntry[]> {
+    return await db.select().from(scheduleEntries).where(eq(scheduleEntries.jobId, jobId));
+  }
+
   async getScheduleEntriesForMachine(machineId: string): Promise<ScheduleEntry[]> {
     return await db.select().from(scheduleEntries).where(eq(scheduleEntries.machineId, machineId));
   }
@@ -1200,8 +1204,30 @@ export class DatabaseStorage implements IStorage {
       console.log(`⚠️ Efficiency Impact: ${bestMatch.efficiencyImpact.toFixed(1)}% for ${(operation as any).operationName || (operation as any).name || operation.machineType} (${bestMatch.machine.machineId})`);
     }
     
-    // Add shift information to the result
-    return { ...bestMatch, shift };
+    // Find and assign an available resource for this machine/shift combination
+    const machineResources = await this.getResources();
+    let assignedResource = null;
+    
+    if (bestMatch.machine.type === 'OUTSOURCE') {
+      // Outsource machines use virtual external vendor resource
+      assignedResource = { id: 'outsource-virtual', name: 'External Vendor' };
+    } else {
+      // Find available resources for this machine on this shift
+      const availableResources = machineResources.filter(resource => 
+        resource.isActive &&
+        resource.shiftSchedule?.includes(shift) &&
+        resource.workCenters?.includes(bestMatch.machine.id)
+      );
+      
+      if (availableResources.length > 0) {
+        // For now, assign the first available resource (could be enhanced with load balancing)
+        assignedResource = availableResources[0];
+        console.log(`👤 Assigned resource: ${assignedResource.name} to machine ${bestMatch.machine.machineId}`);
+      }
+    }
+    
+    // Add shift and resource information to the result
+    return { ...bestMatch, shift, assignedResource };
   }
 
   // Get shifts ordered by current load (least loaded first) for better load balancing
@@ -1560,6 +1586,7 @@ export class DatabaseStorage implements IStorage {
           const scheduleEntry = await this.createScheduleEntry({
             jobId: job.id,
             machineId: (await this.getMachines()).find(m => m.machineId === 'OUTSOURCE-01')?.id || 'outsource-placeholder', // Use actual outsource machine ID
+            assignedResourceId: null, // Outsource operations managed externally
             operationSequence: operation.sequence,
             startTime: currentDate,
             endTime: new Date(currentDate.getTime() + (parseFloat(operation.estimatedHours) * 60 * 60 * 1000)),
@@ -1595,6 +1622,7 @@ export class DatabaseStorage implements IStorage {
               const scheduleEntry = await this.createScheduleEntry({
                 jobId: job.id,
                 machineId: displacementResult.machineId!,
+                assignedResourceId: null, // Displacement doesn't assign resources automatically
                 operationSequence: operation.sequence,
                 startTime: displacementResult.startTime!,
                 endTime: displacementResult.endTime!,
@@ -1706,6 +1734,7 @@ export class DatabaseStorage implements IStorage {
               multiDayEntries.push({
                 jobId: job.id,
                 machineId: result.machine.id,
+                assignedResourceId: result.assignedResource?.id || null,
                 operationSequence: operation.sequence,
                 startTime: segmentStartTime,
                 endTime: segmentEndTime,

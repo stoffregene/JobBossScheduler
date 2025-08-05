@@ -50,6 +50,7 @@ export const scheduleEntries = pgTable("schedule_entries", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   jobId: varchar("job_id").notNull().references(() => jobs.id),
   machineId: varchar("machine_id").notNull().references(() => machines.id),
+  assignedResourceId: varchar("assigned_resource_id").references(() => resources.id), // Which operator/resource is assigned
   operationSequence: integer("operation_sequence").notNull(),
   startTime: timestamp("start_time").notNull(),
   endTime: timestamp("end_time").notNull(),

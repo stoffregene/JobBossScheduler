@@ -30,6 +30,7 @@ export interface IStorage {
   // Schedule
   getScheduleEntries(): Promise<ScheduleEntry[]>;
   getScheduleEntriesForJob(jobId: string): Promise<ScheduleEntry[]>;
+  getScheduleEntriesByJobId(jobId: string): Promise<ScheduleEntry[]>;
   getScheduleEntriesForMachine(machineId: string): Promise<ScheduleEntry[]>;
   getScheduleEntriesInDateRange(startDate: Date, endDate: Date): Promise<ScheduleEntry[]>;
   createScheduleEntry(entry: InsertScheduleEntry): Promise<ScheduleEntry>;

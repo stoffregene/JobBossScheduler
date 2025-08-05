@@ -19,6 +19,17 @@ export default function JobDetailsModal({ jobId, onClose }: JobDetailsModalProps
     queryKey: ['/api/jobs', jobId],
   });
 
+  // Fetch schedule entries for this job to show assigned resources
+  const { data: scheduleEntries } = useQuery({
+    queryKey: ['/api/schedule', 'job', jobId],
+    queryFn: () => apiRequest(`/api/schedule?jobId=${jobId}`),
+  });
+
+  // Fetch resources to get resource names
+  const { data: resources } = useQuery({
+    queryKey: ['/api/resources'],
+  });
+
   const autoScheduleJobMutation = useMutation({
     mutationFn: () => apiRequest(`/api/jobs/${jobId}/auto-schedule`, 'POST'),
     onSuccess: () => {
@@ -162,26 +173,52 @@ export default function JobDetailsModal({ jobId, onClose }: JobDetailsModalProps
             
             {job.routing && job.routing.length > 0 ? (
               <div className="space-y-3">
-                {job.routing.map((operation, index) => (
-                  <div key={index} className="border border-gray-200 rounded-lg p-3">
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">
-                          OP-{operation.sequence.toString().padStart(3, '0')}: {operation.name}
+                {job.routing.map((operation, index) => {
+                  // Find the scheduled entry for this operation
+                  const scheduledEntry = scheduleEntries?.find((entry: any) => 
+                    entry.operationSequence === operation.sequence
+                  );
+                  const assignedResource = scheduledEntry?.assignedResourceId ? 
+                    resources?.find((r: any) => r.id === scheduledEntry.assignedResourceId) : null;
+
+                  return (
+                    <div key={index} className="border border-gray-200 rounded-lg p-3">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">
+                            OP-{operation.sequence.toString().padStart(3, '0')}: {operation.name}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {operation.machineType} ({operation.compatibleMachines.join(', ')})
+                          </div>
+                          {scheduledEntry && (
+                            <div className="mt-1 flex items-center space-x-2">
+                              <Badge variant="outline" className="text-xs">
+                                {scheduledEntry.status}
+                              </Badge>
+                              {assignedResource && (
+                                <div className="text-xs text-blue-600 font-medium">
+                                  👤 {assignedResource.name}
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
-                        <div className="text-xs text-gray-500">
-                          {operation.machineType} ({operation.compatibleMachines.join(', ')})
-                        </div>
+                        <div className="text-sm text-gray-700">{operation.estimatedHours.toFixed(1)} hours</div>
                       </div>
-                      <div className="text-sm text-gray-700">{operation.estimatedHours.toFixed(1)} hours</div>
+                      {operation.notes && (
+                        <div className="mt-2 text-xs text-gray-600">
+                          {operation.notes}
+                        </div>
+                      )}
+                      {scheduledEntry && (
+                        <div className="mt-2 text-xs text-gray-500">
+                          Scheduled: {new Date(scheduledEntry.startTime).toLocaleString()} - {new Date(scheduledEntry.endTime).toLocaleString()}
+                        </div>
+                      )}
                     </div>
-                    {operation.notes && (
-                      <div className="mt-2 text-xs text-gray-600">
-                        {operation.notes}
-                      </div>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="text-center text-gray-500 py-4">
