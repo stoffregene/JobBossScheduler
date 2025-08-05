@@ -27,6 +27,7 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [showUnscheduledJobs, setShowUnscheduledJobs] = useState(true);
+  const [colorblindMode, setColorblindMode] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -133,14 +134,38 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
   };
 
   const getJobColor = (priority: string, shift: number = 1) => {
-    // Base colors by priority, with shift pattern variations
+    if (colorblindMode) {
+      // Colorblind-friendly patterns and textures
+      switch (priority) {
+        case 'Critical':
+          return shift === 1 
+            ? 'bg-gray-800 border-4 border-white' 
+            : 'bg-gray-600 border-4 border-white border-dashed';
+        case 'High':
+          return shift === 1 
+            ? 'bg-gray-700 border-2 border-white' 
+            : 'bg-gray-500 border-2 border-white border-dotted';
+        default:
+          return shift === 1 
+            ? 'bg-gray-600 border border-white' 
+            : 'bg-gray-400 border border-white border-dashed';
+      }
+    }
+    
+    // Distinct colors for better visibility
     switch (priority) {
       case 'Critical':
-        return shift === 1 ? 'bg-red-600' : 'bg-red-600 bg-opacity-80 border-2 border-red-400';
+        return shift === 1 
+          ? 'bg-red-600 text-white' 
+          : 'bg-pink-500 text-white border-2 border-pink-300';
       case 'High':
-        return shift === 1 ? 'bg-orange-500' : 'bg-orange-500 bg-opacity-80 border-2 border-orange-300';
+        return shift === 1 
+          ? 'bg-orange-600 text-white' 
+          : 'bg-yellow-500 text-black border-2 border-yellow-300';
       default:
-        return shift === 1 ? 'bg-blue-600' : 'bg-blue-600 bg-opacity-80 border-2 border-blue-400';
+        return shift === 1 
+          ? 'bg-blue-600 text-white' 
+          : 'bg-green-500 text-white border-2 border-green-300';
     }
   };
 
@@ -212,6 +237,18 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
             >
               <Maximize2 className="h-4 w-4 mr-1" />
               {isFullscreen ? 'Exit' : 'Full'}
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setColorblindMode(!colorblindMode)}
+              className={colorblindMode ? 'bg-gray-100 dark:bg-gray-700' : ''}
+            >
+              <svg className="h-4 w-4 mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M12 1v6M12 17v6M4.22 4.22l4.24 4.24M15.54 15.54l4.24 4.24M1 12h6M17 12h6M4.22 19.78l4.24-4.24M15.54 8.46l4.24-4.24"/>
+              </svg>
+              {colorblindMode ? 'Color' : 'Pattern'}
             </Button>
             <Button 
               variant="outline" 
@@ -330,7 +367,7 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
                             {dayJobs.slice(0, 2).map((entry, idx) => (
                               <button
                                 key={idx}
-                                className={`flex-1 rounded text-white text-xs px-1 flex items-center justify-center font-medium cursor-pointer hover:opacity-80 transition-opacity relative overflow-hidden ${
+                                className={`flex-1 rounded text-xs px-1 flex items-center justify-center font-medium cursor-pointer hover:opacity-80 transition-opacity relative overflow-hidden ${
                                   getJobColor(entry.job?.priority || 'Normal', entry.shift)
                                 } ${hasMultiDayJob && multiDayPosition ? (
                                   multiDayPosition.isStart ? 'rounded-l-md rounded-r-none' :
@@ -373,30 +410,61 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
 
           {/* Legend */}
           <div className="mt-6 pt-4 border-t border-border flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-            <div className="flex items-center">
-              <div className="w-4 h-4 bg-blue-600 rounded mr-2"></div>
-              <span>Normal Priority (1st Shift)</span>
-            </div>
-            <div className="flex items-center">
-              <div className="w-4 h-4 bg-blue-600 bg-opacity-80 border-2 border-blue-400 rounded mr-2"></div>
-              <span>Normal Priority (2nd Shift)</span>
-            </div>
-            <div className="flex items-center">
-              <div className="w-4 h-4 bg-orange-500 rounded mr-2"></div>
-              <span>High Priority (1st Shift)</span>
-            </div>
-            <div className="flex items-center">
-              <div className="w-4 h-4 bg-orange-500 bg-opacity-80 border-2 border-orange-300 rounded mr-2"></div>
-              <span>High Priority (2nd Shift)</span>
-            </div>
-            <div className="flex items-center">
-              <div className="w-4 h-4 bg-red-600 rounded mr-2"></div>
-              <span>Critical (1st Shift)</span>
-            </div>
-            <div className="flex items-center">
-              <div className="w-4 h-4 bg-red-600 bg-opacity-80 border-2 border-red-400 rounded mr-2"></div>
-              <span>Critical (2nd Shift)</span>
-            </div>
+            {colorblindMode ? (
+              <>
+                <div className="flex items-center">
+                  <div className="w-4 h-4 bg-gray-600 border border-white rounded mr-2"></div>
+                  <span>Normal Priority (1st Shift)</span>
+                </div>
+                <div className="flex items-center">
+                  <div className="w-4 h-4 bg-gray-400 border border-white border-dashed rounded mr-2"></div>
+                  <span>Normal Priority (2nd Shift)</span>
+                </div>
+                <div className="flex items-center">
+                  <div className="w-4 h-4 bg-gray-700 border-2 border-white rounded mr-2"></div>
+                  <span>High Priority (1st Shift)</span>
+                </div>
+                <div className="flex items-center">
+                  <div className="w-4 h-4 bg-gray-500 border-2 border-white border-dotted rounded mr-2"></div>
+                  <span>High Priority (2nd Shift)</span>
+                </div>
+                <div className="flex items-center">
+                  <div className="w-4 h-4 bg-gray-800 border-4 border-white rounded mr-2"></div>
+                  <span>Critical (1st Shift)</span>
+                </div>
+                <div className="flex items-center">
+                  <div className="w-4 h-4 bg-gray-600 border-4 border-white border-dashed rounded mr-2"></div>
+                  <span>Critical (2nd Shift)</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center">
+                  <div className="w-4 h-4 bg-blue-600 rounded mr-2"></div>
+                  <span>Normal Priority (1st Shift)</span>
+                </div>
+                <div className="flex items-center">
+                  <div className="w-4 h-4 bg-green-500 border-2 border-green-300 rounded mr-2"></div>
+                  <span>Normal Priority (2nd Shift)</span>
+                </div>
+                <div className="flex items-center">
+                  <div className="w-4 h-4 bg-orange-600 rounded mr-2"></div>
+                  <span>High Priority (1st Shift)</span>
+                </div>
+                <div className="flex items-center">
+                  <div className="w-4 h-4 bg-yellow-500 border-2 border-yellow-300 rounded mr-2"></div>
+                  <span>High Priority (2nd Shift)</span>
+                </div>
+                <div className="flex items-center">
+                  <div className="w-4 h-4 bg-red-600 rounded mr-2"></div>
+                  <span>Critical (1st Shift)</span>
+                </div>
+                <div className="flex items-center">
+                  <div className="w-4 h-4 bg-pink-500 border-2 border-pink-300 rounded mr-2"></div>
+                  <span>Critical (2nd Shift)</span>
+                </div>
+              </>
+            )}
             <div className="flex items-center">
               <div className="w-4 h-4 bg-muted rounded mr-2 opacity-50"></div>
               <span>Unavailable (Fri-Sun)</span>

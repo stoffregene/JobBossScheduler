@@ -8,6 +8,24 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+**August 5, 2025** - SCHEDULE COLORS ENHANCED: Added distinct color schemes for different priorities/shifts and implemented colorblind-friendly mode with pattern-based visual indicators and accessibility toggle:
+
+**🎨 SCHEDULE COLOR SYSTEM ENHANCED**:
+- **DISTINCT COLORS**: Replaced confusing similar shades with unique colors - Normal (blue→green), High (orange→yellow), Critical (red→pink)
+- **COLORBLIND MODE**: Added pattern-based system with grayscale colors and different border styles (solid, dashed, dotted)  
+- **ACCESSIBILITY TOGGLE**: Eye icon button switches between "Color" and "Pattern" modes for better usability
+- **IMPROVED CONTRAST**: Proper text colors (white/black) for better readability across all color combinations
+- **UPDATED LEGEND**: Dynamic legend shows current color scheme with live preview squares
+
+**August 5, 2025** - FULLSCREEN SCHEDULE VIEW FIXED: Implemented proper scrolling and layout for fullscreen production schedule with horizontal/vertical scrolling, sticky headers, and proper container sizing:
+
+**📺 FULLSCREEN FUNCTIONALITY COMPLETED**:
+- **PROPER LAYOUT**: Added flexbox layout (`flex flex-col`) with `h-full` for proper fullscreen container
+- **SCROLLABLE CONTENT**: Made CardContent scrollable with `flex-1 overflow-auto` for both vertical and horizontal scrolling
+- **STICKY HEADERS**: Fixed background colors for sticky machine labels with proper z-index layering
+- **WIDE SCHEDULE SUPPORT**: Added horizontal scrolling for month view and fullscreen mode
+- **IMMERSIVE EXPERIENCE**: Full-screen overlay with proper background and positioning
+
 **August 5, 2025** - CRITICAL CAPACITY CALCULATION FIX: Fixed major frontend bug where capacity calculations showed incorrect negative available hours due to wrong duration calculation method:
 
 **🔧 CAPACITY CALCULATION CORRECTED**:
