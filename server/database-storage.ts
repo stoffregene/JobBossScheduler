@@ -1058,7 +1058,7 @@ export class DatabaseStorage implements IStorage {
     const allMachines = await this.getMachines();
     const allResources = await this.getResources();
     
-    console.log(`🔍 Finding machine for operation: ${operation.operationName || operation.name}, machineType: ${operation.machineType}`);
+    console.log(`🔍 Finding machine for operation: ${(operation as any).operationName || (operation as any).name || operation.machineType}, machineType: ${operation.machineType}`);
     console.log(`   Compatible machines required: [${operation.compatibleMachines.join(', ')}]`);
     
     // OPTIMIZATION: Pre-filter machines by type and compatible machines to avoid checking irrelevant machines
@@ -1175,7 +1175,7 @@ export class DatabaseStorage implements IStorage {
     
     // Log efficiency impact if this is a substitution
     if (bestMatch.efficiencyImpact !== 0) {
-      console.log(`⚠️ Efficiency Impact: ${bestMatch.efficiencyImpact.toFixed(1)}% for ${operation.operationName || operation.name} (${bestMatch.machine.machineId})`);
+      console.log(`⚠️ Efficiency Impact: ${bestMatch.efficiencyImpact.toFixed(1)}% for ${(operation as any).operationName || (operation as any).name || operation.machineType} (${bestMatch.machine.machineId})`);
     }
     
     return bestMatch;
@@ -1217,12 +1217,13 @@ export class DatabaseStorage implements IStorage {
     
     // REALISTIC CAPACITY ENFORCEMENT: Filter out shifts that are over capacity
     const availableShifts = [];
-    if (shiftLoads[1] < 320) availableShifts.push(1); // Shift 1 daily capacity ~320h across all machines
-    if (shiftLoads[2] < 120 && shift2WeeklyHours < 120) availableShifts.push(2); // Shift 2 has 120h/week limit
+    // More realistic daily capacity limits based on actual machine/operator availability
+    if (shiftLoads[1] < 120) availableShifts.push(1); // Shift 1 daily capacity ~120h (15 machines × 8h)
+    if (shiftLoads[2] < 40 && shift2WeeklyHours < 120) availableShifts.push(2); // Shift 2 daily capacity ~40h (5 machines × 8h), 120h/week limit
     
     if (availableShifts.length === 0) {
       console.log(`❌ CAPACITY EXCEEDED: Both shifts at capacity for ${targetDate.toDateString()}`);
-      console.log(`   Shift 1: ${shiftLoads[1].toFixed(1)}h/320h, Shift 2: ${shiftLoads[2].toFixed(1)}h/120h (weekly: ${shift2WeeklyHours.toFixed(1)}h/120h)`);
+      console.log(`   Shift 1: ${shiftLoads[1].toFixed(1)}h/120h, Shift 2: ${shiftLoads[2].toFixed(1)}h/40h (weekly: ${shift2WeeklyHours.toFixed(1)}h/120h)`);
       return []; // Return empty array to force job to move to next week
     }
     
@@ -1230,7 +1231,125 @@ export class DatabaseStorage implements IStorage {
     return availableShifts.sort((a, b) => shiftLoads[a as keyof typeof shiftLoads] - shiftLoads[b as keyof typeof shiftLoads]);
   }
 
-  private async canSubstitute(machine: Machine, operation: RoutingOperation): Promise<boolean> {
+  // Priority-based displacement: High priority jobs can displace lower priority jobs with buffer time
+  private async attemptPriorityDisplacement(
+    highPriorityJob: Job, 
+    operation: RoutingOperationType, 
+    targetDate: Date
+  ): Promise<{
+    success: boolean;
+    machineId?: string;
+    startTime?: Date;
+    endTime?: Date;
+    shift?: number;
+    displacedJobId?: string;
+  }> {
+    console.log(`🔄 Attempting priority displacement for ${highPriorityJob.priority} job ${highPriorityJob.jobNumber}`);
+    
+    // Get all scheduled entries for the target date
+    const allScheduleEntries = await this.getScheduleEntries();
+    const targetDateEntries = allScheduleEntries.filter(entry => {
+      const entryDate = new Date(entry.startTime);
+      return entryDate.toDateString() === targetDate.toDateString();
+    });
+    
+    // Get all jobs to check priorities and due dates
+    const allJobs = await this.getJobs();
+    
+    // Priority hierarchy: Critical > High > Normal > Low
+    const priorityRanking = { 'Critical': 4, 'High': 3, 'Normal': 2, 'Low': 1 };
+    const highPriorityRank = priorityRanking[highPriorityJob.priority as keyof typeof priorityRanking] || 2;
+    
+    // Find lower priority jobs that can be displaced
+    for (const entry of targetDateEntries) {
+      const scheduledJob = allJobs.find(j => j.id === entry.jobId);
+      if (!scheduledJob) continue;
+      
+      const scheduledJobRank = priorityRanking[scheduledJob.priority as keyof typeof priorityRanking] || 2;
+      
+      // Only displace lower priority jobs
+      if (scheduledJobRank >= highPriorityRank) continue;
+      
+      // Check if the scheduled job has buffer time (can be moved later)
+      const daysToDue = Math.ceil((scheduledJob.promisedDate.getTime() - targetDate.getTime()) / (24 * 60 * 60 * 1000));
+      const estimatedDaysNeeded = Math.ceil(parseFloat(scheduledJob.estimatedHours) / 8); // Assuming 8h/day
+      const bufferDays = daysToDue - estimatedDaysNeeded;
+      
+      // Require at least 2 days buffer for displacement (don't push jobs too close to due date)
+      if (bufferDays < 2) {
+        console.log(`   ❌ Job ${scheduledJob.jobNumber} has insufficient buffer (${bufferDays} days)`);
+        continue;
+      }
+      
+      // Check if the displaced job's machine can handle the high priority operation
+      const machines = await this.getMachines();
+      const entryMachine = machines.find(m => m.id === entry.machineId);
+      if (!entryMachine) continue;
+      
+      // Check compatibility (direct or substitution)
+      const isCompatible = operation.compatibleMachines.includes(entryMachine.machineId) ||
+        (entryMachine.substitutionGroup && await this.canSubstitute(entryMachine, operation));
+      
+      if (!isCompatible) {
+        console.log(`   ❌ Machine ${entryMachine.machineId} not compatible with operation`);
+        continue;
+      }
+      
+      // Check if machine has the right shift availability
+      if (!entryMachine.availableShifts?.includes(entry.shift)) {
+        console.log(`   ❌ Machine ${entryMachine.machineId} not available on shift ${entry.shift}`);
+        continue;
+      }
+      
+      console.log(`   ✅ Found displacement candidate: ${scheduledJob.jobNumber} (${scheduledJob.priority}) with ${bufferDays} days buffer`);
+      
+      // Move the lower priority job to a future date
+      const futureDate = new Date(targetDate.getTime() + (3 * 24 * 60 * 60 * 1000)); // Move 3 days later
+      const rescheduled = await this.rescheduleEntry(entry.id, futureDate);
+      
+      if (rescheduled) {
+        console.log(`   🔄 Successfully displaced job ${scheduledJob.jobNumber} to ${futureDate.toDateString()}`);
+        
+        return {
+          success: true,
+          machineId: entry.machineId,
+          startTime: new Date(entry.startTime),
+          endTime: new Date(entry.endTime),
+          shift: entry.shift,
+          displacedJobId: scheduledJob.id
+        };
+      }
+    }
+    
+    console.log(`   ❌ No suitable displacement candidates found for ${highPriorityJob.jobNumber}`);
+    return { success: false };
+  }
+
+  // Helper method to reschedule a schedule entry to a new date
+  private async rescheduleEntry(entryId: string, newDate: Date): Promise<boolean> {
+    try {
+      const entry = await db.select().from(scheduleEntries).where(eq(scheduleEntries.id, entryId)).limit(1);
+      if (entry.length === 0) return false;
+      
+      const originalEntry = entry[0];
+      const duration = new Date(originalEntry.endTime).getTime() - new Date(originalEntry.startTime).getTime();
+      
+      // Update the entry with new date
+      await db.update(scheduleEntries)
+        .set({
+          startTime: newDate,
+          endTime: new Date(newDate.getTime() + duration)
+        })
+        .where(eq(scheduleEntries.id, entryId));
+      
+      return true;
+    } catch (error) {
+      console.error(`Failed to reschedule entry ${entryId}:`, error);
+      return false;
+    }
+  }
+
+  private async canSubstitute(machine: Machine, operation: RoutingOperationType): Promise<boolean> {
     // Check if machine is in same substitution group as any compatible machine
     if (!machine.substitutionGroup) return false;
     
@@ -1341,9 +1460,42 @@ export class DatabaseStorage implements IStorage {
           continue;
         }
 
-        // REALISTIC CAPACITY ENFORCEMENT: Check if any shifts have capacity before attempting
+        // PRIORITY-BASED SCHEDULING: Check if capacity allows or if we can displace lower priority jobs
         const availableShifts = await this.getShiftsOrderedByLoad(currentDate);
         if (availableShifts.length === 0) {
+          // Try priority-based displacement for critical/high priority jobs
+          if (job.priority === 'Critical' || job.priority === 'High') {
+            const displacementResult = await this.attemptPriorityDisplacement(job, operation, currentDate);
+            if (displacementResult.success) {
+              console.log(`🔄 PRIORITY DISPLACEMENT: ${job.priority} job ${job.jobNumber} displaced lower priority job`);
+              // Schedule this operation in the freed slot
+              const scheduleEntry = await this.createScheduleEntry({
+                jobId: job.id,
+                machineId: displacementResult.machineId!,
+                operationSequence: operation.sequence,
+                startTime: displacementResult.startTime!,
+                endTime: displacementResult.endTime!,
+                shift: displacementResult.shift!,
+                status: "Scheduled"
+              });
+              
+              scheduleEntries.push(scheduleEntry);
+              onProgress?.({
+                percentage: ((i + 1) / sortedOperations.length) * 90,
+                status: `Operation ${i + 1} scheduled via priority displacement`,
+                stage: 'scheduled',
+                operationName: operation.operationName || operation.name,
+                currentOperation: i + 1,
+                totalOperations: sortedOperations.length
+              });
+              
+              // Move to next day
+              currentDate = new Date(currentDate.getTime() + dayInMs);
+              scheduled = true;
+              break;
+            }
+          }
+          
           console.log(`⏭️ MOVING TO NEXT WEEK: No capacity available on ${currentDate.toDateString()}`);
           // Move to next Monday to find capacity in following week
           const nextMonday = new Date(currentDate);

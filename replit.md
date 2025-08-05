@@ -10,7 +10,14 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
-**August 5, 2025** - Implemented realistic capacity-aware scheduling that moves jobs to future weeks when capacity is exceeded:
+**August 5, 2025** - Fixed core scheduling algorithm with priority-based displacement and realistic capacity enforcement:
+- **PRIORITY-BASED DISPLACEMENT**: Critical/High priority jobs can now displace lower priority jobs that have sufficient buffer time (minimum 2 days)
+- **REALISTIC DAILY CAPACITY LIMITS**: Shift 1 reduced to 120h/day (15 machines × 8h), Shift 2 reduced to 40h/day (5 machines × 8h)  
+- **SMART DISPLACEMENT LOGIC**: System checks job buffer time before displacement to prevent pushing jobs too close to due dates
+- **ENHANCED SCHEDULING INTELLIGENCE**: High priority jobs minimize customer delay by taking optimal slots from jobs with more delivery buffer
+- **CAPACITY-DRIVEN SCHEDULING**: Jobs properly move to future weeks when daily/weekly capacity limits are exceeded (no more overscheduling)
+
+**August 5, 2025** - Previously implemented realistic capacity-aware scheduling that moves jobs to future weeks when capacity is exceeded:
 - **REALISTIC SCHEDULING PHILOSOPHY**: System no longer forces jobs into desired dates when capacity limits are reached
 - **CAPACITY-DRIVEN WEEK MOVEMENT**: Jobs automatically move to next Monday when daily/weekly capacity limits are exceeded
 - **PRIORITY-BASED DELAY MINIMIZATION**: High-risk jobs are scheduled first to minimize delays when capacity constraints force rescheduling
