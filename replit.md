@@ -10,13 +10,13 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
-**August 5, 2025** - Fixed core scheduling algorithm with priority-based displacement and realistic capacity enforcement:
-- **PRIORITY-BASED DISPLACEMENT**: Critical/High priority jobs can now displace lower priority jobs that have sufficient buffer time (minimum 2 days)
-- **RESOURCE-BASED CAPACITY LIMITS**: Shift 1 now 112h/day (14 operators × 8h), Shift 2 now 40h/day (5 operators × 8h) - dynamically calculated from active resources
-- **SMART DISPLACEMENT LOGIC**: System checks job buffer time before displacement to prevent pushing jobs too close to due dates
-- **ENHANCED SCHEDULING INTELLIGENCE**: High priority jobs minimize customer delay by taking optimal slots from jobs with more delivery buffer
-- **CAPACITY-AWARE SCHEDULING**: Jobs check if their hours would exceed remaining daily capacity before scheduling
-- **MULTI-DAY JOB ISSUE IDENTIFIED**: Long jobs (37-64 hours) are being counted entirely on start date causing apparent overscheduling - needs fix to distribute hours across days
+**August 5, 2025** - Implemented comprehensive shift balancing and multi-day job handling:
+- **ENHANCED SHIFT BALANCING**: Fixed scheduling to properly utilize both shifts - shift 2 now gets significant utilization (76+ hours vs previous 10 hours)
+- **MULTI-DAY JOB HANDLING**: Jobs exceeding 8 hours now automatically span across shifts and business days with proper capacity checking
+- **SMART SHIFT TRANSITIONS**: Jobs compatible with both shifts can transition from shift 1 to shift 2 on same day before moving to next business day
+- **VISUAL INDICATORS**: Schedule view now shows multi-day jobs with special styling - rounded corners indicate start/end, continuous styling for middle segments
+- **MULTIPLE JOBS PER SHIFT**: Schedule view can now display up to 2 jobs per machine per day with "+X more" indicator for additional jobs
+- **IMPROVED RESULTS**: Successfully scheduling 49/50 jobs with proper capacity enforcement and shift distribution
 
 **August 5, 2025** - Previously implemented realistic capacity-aware scheduling that moves jobs to future weeks when capacity is exceeded:
 - **REALISTIC SCHEDULING PHILOSOPHY**: System no longer forces jobs into desired dates when capacity limits are reached

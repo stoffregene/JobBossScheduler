@@ -1251,8 +1251,28 @@ export class DatabaseStorage implements IStorage {
       return []; // Return empty array to force job to move to next week
     }
     
-    // ALWAYS prioritize shift 1 first (no load balancing)
-    return availableShifts.sort((a, b) => a - b); // This will always put shift 1 first if available
+    // LOAD BALANCING: For machines that support both shifts, prioritize the less loaded shift
+    if (operation && availableShifts.length === 2) {
+      // Check if the machine for this operation supports both shifts
+      const compatibleMachines = await this.getMachines();
+      const operationMachines = compatibleMachines.filter(m => 
+        operation.compatibleMachines.includes(m.machineId) && 
+        m.availableShifts?.includes(1) && 
+        m.availableShifts?.includes(2)
+      );
+      
+      if (operationMachines.length > 0) {
+        // Machine supports both shifts, return least loaded first for load balancing
+        return availableShifts.sort((a, b) => {
+          const loadA = shiftLoads[a as keyof typeof shiftLoads];
+          const loadB = shiftLoads[b as keyof typeof shiftLoads];
+          return loadA - loadB;
+        });
+      }
+    }
+    
+    // Otherwise, prioritize shift 1 first (for machines that only run on shift 1)
+    return availableShifts.sort((a, b) => a - b);
   }
 
   // Priority-based displacement: High priority jobs can displace lower priority jobs with buffer time
@@ -1567,35 +1587,80 @@ export class DatabaseStorage implements IStorage {
           }
           
           if (result) {
-            const shiftStart = shift === 1 ? 3 : 15; // 3 AM or 3 PM
-            const startTime = new Date(currentDate);
-            startTime.setHours(shiftStart, 0, 0, 0);
+            let currentShift = shift; // Keep track of current shift separately
+            const shiftHoursPerDay = 8;
+            let remainingHours = result.adjustedHours;
+            let operationStartTime = new Date(currentDate);
+            operationStartTime.setHours(currentShift === 1 ? 3 : 15, 0, 0, 0);
             
-            const endTime = new Date(startTime.getTime() + (result.adjustedHours * 60 * 60 * 1000));
+            // MULTI-DAY JOB HANDLING: Split jobs that exceed shift capacity
+            const multiDayEntries: any[] = [];
             
-            // Check for conflicts with existing schedule
-            const conflicts = await this.checkScheduleConflicts(result.machine.id, startTime, endTime);
-            
-            if (!conflicts) {
-              const scheduleEntry = await this.createScheduleEntry({
+            while (remainingHours > 0) {
+              const hoursThisShift = Math.min(remainingHours, shiftHoursPerDay);
+              const segmentStartTime = new Date(operationStartTime);
+              const segmentEndTime = new Date(segmentStartTime.getTime() + (hoursThisShift * 60 * 60 * 1000));
+              
+              // Check for conflicts with existing schedule for this segment
+              const conflicts = await this.checkScheduleConflicts(result.machine.id, segmentStartTime, segmentEndTime);
+              
+              if (conflicts) {
+                // If there's a conflict, try next day
+                operationStartTime = new Date(operationStartTime.getTime() + dayInMs);
+                operationStartTime.setHours(currentShift === 1 ? 3 : 15, 0, 0, 0);
+                continue;
+              }
+              
+              multiDayEntries.push({
                 jobId: job.id,
                 machineId: result.machine.id,
                 operationSequence: operation.sequence,
-                startTime,
-                endTime,
-                shift,
+                startTime: segmentStartTime,
+                endTime: segmentEndTime,
+                shift: currentShift,
                 status: "Scheduled"
               });
               
-              scheduleEntries.push(scheduleEntry);
+              remainingHours -= hoursThisShift;
+              
+              if (remainingHours > 0) {
+                // Move to next available time slot
+                // If machine supports both shifts and shift 2 is available, continue on shift 2 same day
+                if (currentShift === 1 && result.machine.availableShifts?.includes(2)) {
+                  const shift2Loads = await this.getShiftsOrderedByLoad(new Date(operationStartTime), operation);
+                  if (shift2Loads.includes(2)) {
+                    operationStartTime.setHours(15, 0, 0, 0); // Continue on shift 2
+                    currentShift = 2;
+                    continue;
+                  }
+                }
+                
+                // Otherwise move to next business day (skip weekends)
+                do {
+                  operationStartTime = new Date(operationStartTime.getTime() + dayInMs);
+                } while (operationStartTime.getDay() === 0 || operationStartTime.getDay() === 6 || operationStartTime.getDay() === 5);
+                
+                // Reset to shift 1 for new day
+                currentShift = 1;
+                operationStartTime.setHours(3, 0, 0, 0);
+              }
+            }
+            
+            // Create all the schedule entries for this multi-day operation
+            if (multiDayEntries.length > 0) {
+              for (const entry of multiDayEntries) {
+                const scheduleEntry = await this.createScheduleEntry(entry);
+                scheduleEntries.push(scheduleEntry);
+              }
               
               // Update machine utilization
               const currentUtil = parseFloat(result.machine.utilization);
-              const newUtil = Math.min(100, currentUtil + (result.adjustedHours / 8) * 100); // Assume 8-hour shifts
+              const newUtil = Math.min(100, currentUtil + (result.adjustedHours / 8) * 100);
               await this.updateMachine(result.machine.id, { utilization: newUtil.toString() });
               
-              // Move to next day for next operation (no simultaneous operations)
-              currentDate = new Date(endTime.getTime() + dayInMs);
+              // Move to next day after the last segment for next operation
+              const lastEntry = multiDayEntries[multiDayEntries.length - 1];
+              currentDate = new Date(lastEntry.endTime.getTime() + dayInMs);
               scheduled = true;
               break;
             }

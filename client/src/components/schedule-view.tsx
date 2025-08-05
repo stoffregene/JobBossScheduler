@@ -296,6 +296,25 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
                       // Job spans this day if it overlaps with the day's UTC range
                       return scheduleStartDay <= dayEndUTC && scheduleEndDay >= dayStartUTC;
                     });
+                    
+                    // Check if any job is multi-day (spans multiple days)
+                    const hasMultiDayJob = dayJobs.some(entry => {
+                      const startDate = new Date(entry.startTime);
+                      const endDate = new Date(entry.endTime);
+                      const duration = (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60); // hours
+                      return duration > 8 || startDate.toDateString() !== endDate.toDateString();
+                    });
+                    
+                    // Check position of multi-day job
+                    const multiDayPosition = dayJobs.length > 0 ? (() => {
+                      const entry = dayJobs[0];
+                      const startDate = new Date(entry.startTime);
+                      const endDate = new Date(entry.endTime);
+                      const isStart = startDate.toDateString() === day.toDateString();
+                      const isEnd = endDate.toDateString() === day.toDateString();
+                      const isContinuation = !isStart && !isEnd;
+                      return { isStart, isEnd, isContinuation };
+                    })() : null;
 
                   return (
                     <div key={dayIndex}>
@@ -307,18 +326,41 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
                         }`}
                       >
                         {dayJobs.length > 0 && (
-                          <button
-                            className={`absolute inset-1 rounded text-white text-xs px-2 flex items-center justify-center font-medium cursor-pointer hover:opacity-80 transition-opacity ${
-                              getJobColor(dayJobs[0].job?.priority || 'Normal', dayJobs[0].shift)
-                            }`}
-                            onClick={() => setSelectedJobId(dayJobs[0].job?.id || null)}
-                            data-testid={`schedule-job-${dayJobs[0].job?.jobNumber}`}
-                            title={`Shift ${dayJobs[0].shift} - ${dayJobs[0].job?.jobNumber} (Op${dayJobs[0].operationSequence})`}
-                          >
-                            <span className="truncate">
-                              {dayJobs[0].job?.jobNumber} (Op{dayJobs[0].operationSequence}) - S{dayJobs[0].shift}
-                            </span>
-                          </button>
+                          <div className="absolute inset-0 flex flex-col gap-0.5 p-0.5">
+                            {dayJobs.slice(0, 2).map((entry, idx) => (
+                              <button
+                                key={idx}
+                                className={`flex-1 rounded text-white text-xs px-1 flex items-center justify-center font-medium cursor-pointer hover:opacity-80 transition-opacity relative overflow-hidden ${
+                                  getJobColor(entry.job?.priority || 'Normal', entry.shift)
+                                } ${hasMultiDayJob && multiDayPosition ? (
+                                  multiDayPosition.isStart ? 'rounded-l-md rounded-r-none' :
+                                  multiDayPosition.isEnd ? 'rounded-r-md rounded-l-none' :
+                                  multiDayPosition.isContinuation ? 'rounded-none' : ''
+                                ) : ''}`}
+                                onClick={() => setSelectedJobId(entry.job?.id || null)}
+                                data-testid={`schedule-job-${entry.job?.jobNumber}`}
+                                title={`Shift ${entry.shift} - ${entry.job?.jobNumber} (Op${entry.operationSequence})${hasMultiDayJob ? ' - Multi-day job' : ''}`}
+                              >
+                                {/* Multi-day indicator */}
+                                {hasMultiDayJob && (
+                                  <div className={`absolute inset-y-0 ${
+                                    multiDayPosition?.isStart ? 'right-0' :
+                                    multiDayPosition?.isEnd ? 'left-0' :
+                                    'left-0 right-0'
+                                  } w-full bg-black/10 dark:bg-white/10`} />
+                                )}
+                                <span className="truncate relative z-10 text-[10px]">
+                                  {entry.job?.jobNumber} (Op{entry.operationSequence})
+                                  {dayJobs.length > 1 && ` S${entry.shift}`}
+                                </span>
+                              </button>
+                            ))}
+                            {dayJobs.length > 2 && (
+                              <div className="text-[9px] text-center text-gray-600 dark:text-gray-400">
+                                +{dayJobs.length - 2} more
+                              </div>
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>
