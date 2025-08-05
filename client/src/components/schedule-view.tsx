@@ -336,10 +336,10 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
                                   multiDayPosition.isStart ? 'rounded-l-md rounded-r-none' :
                                   multiDayPosition.isEnd ? 'rounded-r-md rounded-l-none' :
                                   multiDayPosition.isContinuation ? 'rounded-none' : ''
-                                ) : ''}`}
+                                ) : ''} ${entry.job?.routingModified ? 'border-2 border-dashed border-yellow-400 dark:border-yellow-300' : ''}`}
                                 onClick={() => setSelectedJobId(entry.job?.id || null)}
                                 data-testid={`schedule-job-${entry.job?.jobNumber}`}
-                                title={`Shift ${entry.shift} - ${entry.job?.jobNumber} (Op${entry.operationSequence})${hasMultiDayJob ? ' - Multi-day job' : ''}`}
+                                title={`Shift ${entry.shift} - ${entry.job?.jobNumber} (Op${entry.operationSequence})${hasMultiDayJob ? ' - Multi-day job' : ''}${entry.job?.routingModified ? ' - Modified Routing' : ''}`}
                               >
                                 {/* Multi-day indicator */}
                                 {hasMultiDayJob && (
@@ -400,6 +400,10 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
             <div className="flex items-center">
               <div className="w-4 h-4 bg-muted rounded mr-2 opacity-50"></div>
               <span>Unavailable</span>
+            </div>
+            <div className="flex items-center">
+              <div className="w-4 h-4 bg-blue-600 border-2 border-dashed border-yellow-400 rounded mr-2"></div>
+              <span>Modified Routing</span>
             </div>
           </div>
         </div>

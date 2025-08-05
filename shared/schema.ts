@@ -22,6 +22,7 @@ export const jobs = pgTable("jobs", {
   leadDays: integer("lead_days"), // Lead_Days from CSV
   linkMaterial: boolean("link_material").notNull().default(false), // Link_Material from CSV
   material: text("material"), // Material from CSV
+  routingModified: boolean("routing_modified").default(false), // Track if routing was changed during scheduling
 });
 
 export const machines = pgTable("machines", {

@@ -1170,8 +1170,30 @@ export class DatabaseStorage implements IStorage {
       };
     });
 
-    // Return the highest scored machine
-    const bestMatch = scoredMachines.sort((a, b) => b.score - a.score)[0];
+    // CRITICAL: Filter machines by individual machine capacity before sorting by score
+    const availableMachines = [];
+    for (const result of scoredMachines) {
+      const { machine, adjustedHours } = result;
+      
+      // Check if this specific machine has capacity on this date/shift
+      const machineHours = await this.getMachineHoursOnDate(machine.id, targetDate, shift);
+      const maxMachineHours = 8; // Each machine can only run 8 hours per shift
+      
+      if (machineHours + adjustedHours <= maxMachineHours) {
+        availableMachines.push(result);
+        console.log(`✅ Machine ${machine.machineId} available: ${machineHours.toFixed(1)}h + ${adjustedHours.toFixed(1)}h = ${(machineHours + adjustedHours).toFixed(1)}h / ${maxMachineHours}h`);
+      } else {
+        console.log(`❌ Machine ${machine.machineId} overloaded: ${machineHours.toFixed(1)}h + ${adjustedHours.toFixed(1)}h = ${(machineHours + adjustedHours).toFixed(1)}h / ${maxMachineHours}h`);
+      }
+    }
+    
+    if (availableMachines.length === 0) {
+      console.log(`❌ No machines have available capacity on ${targetDate.toDateString()} shift ${shift}`);
+      return null;
+    }
+
+    // Return the highest scored machine from available machines
+    const bestMatch = availableMachines.sort((a, b) => b.score - a.score)[0];
     
     // Log efficiency impact if this is a substitution
     if (bestMatch.efficiencyImpact !== 0) {
@@ -1467,6 +1489,25 @@ export class DatabaseStorage implements IStorage {
     console.log(`📊 Week ${weekString} Shift ${shift}: ${weekHours.toFixed(1)}h + ${hoursToAdd.toFixed(1)}h = ${(weekHours + hoursToAdd).toFixed(1)}h / ${maxHours}h max`);
     
     return { valid, currentHours: weekHours, maxHours };
+  }
+
+  // Get total hours scheduled for a specific machine on a specific date and shift
+  private async getMachineHoursOnDate(machineId: string, targetDate: Date, shift: number): Promise<number> {
+    const allScheduleEntries = await this.getScheduleEntries();
+    
+    const machineHours = allScheduleEntries
+      .filter(entry => {
+        const entryDate = new Date(entry.startTime);
+        return entry.machineId === machineId && 
+               entry.shift === shift &&
+               entryDate.toDateString() === targetDate.toDateString();
+      })
+      .reduce((total, entry) => {
+        const hours = (new Date(entry.endTime).getTime() - new Date(entry.startTime).getTime()) / (1000 * 60 * 60);
+        return total + hours;
+      }, 0);
+    
+    return machineHours;
   }
 
   async autoScheduleJob(
