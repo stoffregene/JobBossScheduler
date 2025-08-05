@@ -1182,7 +1182,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Get shifts ordered by current load (least loaded first) for better load balancing
-  private async getShiftsOrderedByLoad(targetDate: Date): Promise<number[]> {
+  private async getShiftsOrderedByLoad(targetDate: Date, operation?: RoutingOperationType): Promise<number[]> {
     const allScheduleEntries = await this.getScheduleEntries();
     
     // Count hours scheduled per shift for the target date
@@ -1215,20 +1215,44 @@ export class DatabaseStorage implements IStorage {
     
     console.log(`📊 Shift 2 weekly capacity: ${shift2WeeklyHours.toFixed(1)}h / 120h limit`);
     
-    // REALISTIC CAPACITY ENFORCEMENT: Filter out shifts that are over capacity
+    // STRICT CAPACITY ENFORCEMENT: Filter out shifts that are over capacity
     const availableShifts = [];
-    // More realistic daily capacity limits based on actual machine/operator availability
-    if (shiftLoads[1] < 120) availableShifts.push(1); // Shift 1 daily capacity ~120h (15 machines × 8h)
-    if (shiftLoads[2] < 40 && shift2WeeklyHours < 120) availableShifts.push(2); // Shift 2 daily capacity ~40h (5 machines × 8h), 120h/week limit
+    
+    // Get actual resource-based capacity limits
+    const resources = await this.getResources();
+    
+    const shift1Resources = resources.filter(r => r.shiftSchedule?.includes(1) && r.isActive).length;
+    const shift2Resources = resources.filter(r => r.shiftSchedule?.includes(2) && r.isActive).length;
+    
+    // Calculate actual daily capacity based on available resources
+    const shift1DailyCapacity = shift1Resources * 8; // Each resource works 8 hours
+    const shift2DailyCapacity = shift2Resources * 8; // Each resource works 8 hours
+    const shift2WeeklyCapacity = shift2DailyCapacity * 5; // 5 working days per week
+    
+    console.log(`📊 Resource-based capacity: Shift 1: ${shift1Resources} operators (${shift1DailyCapacity}h/day), Shift 2: ${shift2Resources} operators (${shift2DailyCapacity}h/day, ${shift2WeeklyCapacity}h/week)`);
+    
+    // Apply strict capacity limits - pass operation hours for checking
+    const operationHours = parseFloat(operation.estimatedHours) || 0;
+    
+    // Check if adding this operation would exceed capacity
+    if (shiftLoads[1] + operationHours <= shift1DailyCapacity) {
+      availableShifts.push(1);
+    }
+    
+    // For shift 2, check both daily AND weekly limits
+    if (shiftLoads[2] + operationHours <= shift2DailyCapacity && 
+        shift2WeeklyHours + operationHours <= shift2WeeklyCapacity) {
+      availableShifts.push(2);
+    }
     
     if (availableShifts.length === 0) {
       console.log(`❌ CAPACITY EXCEEDED: Both shifts at capacity for ${targetDate.toDateString()}`);
-      console.log(`   Shift 1: ${shiftLoads[1].toFixed(1)}h/120h, Shift 2: ${shiftLoads[2].toFixed(1)}h/40h (weekly: ${shift2WeeklyHours.toFixed(1)}h/120h)`);
+      console.log(`   Shift 1: ${shiftLoads[1].toFixed(1)}h/${shift1DailyCapacity}h, Shift 2: ${shiftLoads[2].toFixed(1)}h/${shift2DailyCapacity}h (weekly: ${shift2WeeklyHours.toFixed(1)}h/${shift2WeeklyCapacity}h)`);
       return []; // Return empty array to force job to move to next week
     }
     
-    // Return shifts ordered by load (least loaded first)
-    return availableShifts.sort((a, b) => shiftLoads[a as keyof typeof shiftLoads] - shiftLoads[b as keyof typeof shiftLoads]);
+    // ALWAYS prioritize shift 1 first (no load balancing)
+    return availableShifts.sort((a, b) => a - b); // This will always put shift 1 first if available
   }
 
   // Priority-based displacement: High priority jobs can displace lower priority jobs with buffer time
@@ -1461,7 +1485,7 @@ export class DatabaseStorage implements IStorage {
         }
 
         // PRIORITY-BASED SCHEDULING: Check if capacity allows or if we can displace lower priority jobs
-        const availableShifts = await this.getShiftsOrderedByLoad(currentDate);
+        const availableShifts = await this.getShiftsOrderedByLoad(currentDate, operation);
         if (availableShifts.length === 0) {
           // Try priority-based displacement for critical/high priority jobs
           if (job.priority === 'Critical' || job.priority === 'High') {
@@ -2308,7 +2332,7 @@ export class DatabaseStorage implements IStorage {
         console.log(`🎯 Trying to find machine for operation ${operation.name} on attempt ${attemptDays}`);
         
         // REALISTIC CAPACITY ENFORCEMENT: Check if any shifts have capacity before attempting
-        const availableShifts = await this.getShiftsOrderedByLoad(currentDate);
+        const availableShifts = await this.getShiftsOrderedByLoad(currentDate, operation);
         if (availableShifts.length === 0) {
           console.log(`⏭️ MOVING TO NEXT WEEK: No capacity available on ${currentDate.toDateString()}`);
           // Move to next Monday to find capacity in following week
