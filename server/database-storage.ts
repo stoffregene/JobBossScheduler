@@ -1200,7 +1200,7 @@ export class DatabaseStorage implements IStorage {
 
     if (compatibleMachines.length === 0) {
       // Try multi-shift logic for large operations
-      const operationHours = parseFloat(operation.estimatedHours);
+      const operationHours = Number(operation.estimatedHours);
       if (operationHours > 8) {
         console.log(`🔀 No single-shift machines found, trying multi-shift approach for ${operationHours}h operation`);
         return await this.findOptimalMachineForMultiShift(operation as any, targetDate, shift);
@@ -1211,7 +1211,7 @@ export class DatabaseStorage implements IStorage {
     // Score each machine based on multiple factors
     const scoredMachines = compatibleMachines.map(machine => {
       const efficiencyFactor = parseFloat(machine.efficiencyFactor);
-      const adjustedHours = parseFloat(operation.estimatedHours) / efficiencyFactor;
+      const adjustedHours = Number(operation.estimatedHours) / efficiencyFactor;
       
       // Calculate efficiency impact if this is a substitution
       let efficiencyImpact = 0;
@@ -1350,7 +1350,7 @@ export class DatabaseStorage implements IStorage {
     console.log(`📊 Resource-based capacity: Shift 1: ${shift1Resources} operators (${shift1DailyCapacity}h/day), Shift 2: ${shift2Resources} operators (${shift2DailyCapacity}h/day, ${shift2WeeklyCapacity}h/week)`);
     
     // Apply strict capacity limits - pass operation hours for checking
-    const operationHours = operation ? parseFloat(operation.estimatedHours) || 0 : 0;
+    const operationHours = operation ? operation.estimatedHours || 0 : 0;
     
     // Check if adding this operation would exceed capacity
     if (shiftLoads[1] + operationHours <= shift1DailyCapacity) {
@@ -1540,7 +1540,7 @@ export class DatabaseStorage implements IStorage {
     // Score machines and check if they can accommodate partial operation
     for (const machine of candidateMachines) {
       const efficiencyFactor = parseFloat(machine.efficiencyFactor);
-      const adjustedHours = parseFloat(operation.estimatedHours) / efficiencyFactor;
+      const adjustedHours = Number(operation.estimatedHours) / efficiencyFactor;
       
       // OPTIMIZATION: Use consolidated capacity function for better performance
       const capacity = await this.getMachineCapacityInfo(machine.id, targetDate, shift);
@@ -1557,13 +1557,15 @@ export class DatabaseStorage implements IStorage {
         if (machine.type === 'OUTSOURCE') {
           assignedResource = null; // RULE 1: External vendor, no internal resources
         } else if (machine.type === 'INSPECT') {
-          const inspectors = resources.filter(r => 
+          const allResources = await this.getResources();
+          const inspectors = allResources.filter(r => 
             r.isActive && r.shiftSchedule?.includes(shift) && 
             r.workCenters?.includes(machine.id) && r.role === 'Quality Inspector'
           );
           assignedResource = inspectors[0] || null;
         } else {
-          const operators = resources.filter(r => 
+          const allResources = await this.getResources();
+          const operators = allResources.filter(r => 
             r.isActive && r.shiftSchedule?.includes(shift) && 
             r.workCenters?.includes(machine.id) && 
             (r.role === 'Operator' || r.role === 'Shift Lead')
@@ -2844,7 +2846,7 @@ export class DatabaseStorage implements IStorage {
     }
 
     // Schedule at day 0 regardless of material status
-    const scheduleEntries = await this.autoScheduleJobWithOptimalStart(jobId, onProgress);
+    const scheduleEntries = await this.autoScheduleJobWithOptimalStart(jobId);
     
     if (scheduleEntries) {
       // Create alert if materials need review
