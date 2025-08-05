@@ -1707,7 +1707,11 @@ export class DatabaseStorage implements IStorage {
     const maxHours = shift === 1 ? 448 : 120; // Shift 1: 112h/day × 4 days, Shift 2: 120h/week
     const valid = (weekHours + hoursToAdd) <= maxHours;
     
-    console.log(`📊 Week ${weekString} Shift ${shift}: ${weekHours.toFixed(1)}h + ${hoursToAdd.toFixed(1)}h = ${(weekHours + hoursToAdd).toFixed(1)}h / ${maxHours}h max`);
+    if (!valid) {
+      console.log(`🚫 CAPACITY EXCEEDED - Week ${weekString} Shift ${shift}: ${weekHours.toFixed(1)}h + ${hoursToAdd.toFixed(1)}h = ${(weekHours + hoursToAdd).toFixed(1)}h / ${maxHours}h max`);
+    } else {
+      console.log(`📊 Week ${weekString} Shift ${shift}: ${weekHours.toFixed(1)}h + ${hoursToAdd.toFixed(1)}h = ${(weekHours + hoursToAdd).toFixed(1)}h / ${maxHours}h max`);
+    }
     
     return { valid, currentHours: weekHours, maxHours };
   }

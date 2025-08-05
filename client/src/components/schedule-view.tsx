@@ -399,11 +399,23 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
             </div>
             <div className="flex items-center">
               <div className="w-4 h-4 bg-muted rounded mr-2 opacity-50"></div>
-              <span>Unavailable</span>
+              <span>Unavailable (Fri-Sun)</span>
             </div>
             <div className="flex items-center">
               <div className="w-4 h-4 bg-blue-600 border-2 border-dashed border-yellow-400 rounded mr-2"></div>
               <span>Modified Routing</span>
+            </div>
+            <div className="flex items-center">
+              <div className="w-4 h-4 bg-gradient-to-r from-blue-600 to-blue-400 rounded mr-2 relative">
+                <div className="absolute inset-y-0 right-0 w-1 bg-black/20"></div>
+              </div>
+              <span>Multi-day Jobs (span multiple days)</span>
+            </div>
+            <div className="flex items-center text-xs">
+              <span className="font-medium">Legend:</span>
+              <span className="ml-2">Rounded edges = start/end of multi-day job</span>
+              <span className="mx-2">|</span>
+              <span>S1/S2 = Shift indicators</span>
             </div>
           </div>
         </div>
