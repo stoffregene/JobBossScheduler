@@ -8,6 +8,16 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+**August 5, 2025** - UI COMPATIBILITY MATRIX DISPLAY FIX: Enhanced Job Details Modal to properly filter and display only compatible operators based on strict matrix rules:
+
+**🎯 JOB DETAILS MODAL ENHANCEMENTS**:
+- **COMPATIBILITY FILTERING**: Modal now filters to show ONLY operators qualified for each specific operation
+- **ROLE-BASED DISPLAY**: INSPECT operations show only Quality Inspectors, PRODUCTION shows only Operators/Shift Leads
+- **OUTSOURCE CLARITY**: OUTSOURCE operations correctly display "No internal resources" instead of operator list
+- **TIMEZONE DISPLAY FIX**: Fixed date display to show Central Time correctly instead of incorrect July dates
+- **DUPLICATE CLEANUP**: Removed duplicate schedule entries that were causing confusion
+- **VERIFICATION**: Job 58303 now correctly shows Lindsay Jackson (Quality Inspector) as the only compatible operator
+
 **August 5, 2025** - CRITICAL TIMEZONE BUG FIXED: Resolved past scheduling issue by implementing proper US Central time handling and ensuring all jobs schedule from TODAY or later, never in the past:
 
 **🕐 TIMEZONE AND PAST SCHEDULING FIX**:

@@ -249,7 +249,21 @@ export default function JobDetailsModal({ jobId, onClose }: JobDetailsModalProps
                       )}
                       {scheduledEntry && (
                         <div className="mt-2 text-xs text-gray-500">
-                          Scheduled: {new Date(scheduledEntry.startTime).toLocaleString()} - {new Date(scheduledEntry.endTime).toLocaleString()}
+                          Scheduled: {new Date(scheduledEntry.startTime).toLocaleString('en-US', {
+                            year: 'numeric',
+                            month: 'numeric', 
+                            day: 'numeric',
+                            hour: 'numeric',
+                            minute: 'numeric',
+                            timeZone: 'America/Chicago'
+                          })} - {new Date(scheduledEntry.endTime).toLocaleString('en-US', {
+                            year: 'numeric',
+                            month: 'numeric',
+                            day: 'numeric', 
+                            hour: 'numeric',
+                            minute: 'numeric',
+                            timeZone: 'America/Chicago'
+                          })}
                         </div>
                       )}
                     </div>
