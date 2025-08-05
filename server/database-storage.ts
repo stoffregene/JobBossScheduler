@@ -2380,43 +2380,57 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  // Calculate job priority based on promised date and hours to complete
+  // Calculate job priority based on 28-day lead time from creation date
   private calculateJobPriority(job: any): { priority: number, classification: string } {
     const now = new Date();
+    const createdDate = job.createdDate ? new Date(job.createdDate) : null;
     const promisedDate = new Date(job.promisedDate);
-    const totalHours = parseFloat(job.estimatedHours) || 0;
     
-    // Calculate days until promised date
+    if (!createdDate) {
+      // Fallback to promised date logic if no creation date
+      const daysUntilPromised = Math.ceil((promisedDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
+      const priority = daysUntilPromised < 0 ? 1000 : Math.max(100, 500 - daysUntilPromised * 10);
+      const classification = daysUntilPromised < 0 ? 'Critical' : daysUntilPromised <= 7 ? 'High' : 'Normal';
+      console.log(`📊 Job ${job.jobNumber} priority: ${priority} (${classification}) - NO CREATION DATE, using promised: ${daysUntilPromised} days`);
+      return { priority, classification };
+    }
+    
+    // Calculate 28-day lead time target from creation date
+    const leadTimeTarget = new Date(createdDate.getTime() + (28 * 24 * 60 * 60 * 1000));
+    
+    // Calculate "late time in days" - how many days past the 28-day lead time we are
+    const lateTimeDays = Math.ceil((now.getTime() - leadTimeTarget.getTime()) / (24 * 60 * 60 * 1000));
+    
+    // Also consider promised date urgency
     const daysUntilPromised = Math.ceil((promisedDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
-    
-    // Estimate total work days needed (assuming 8-hour days)
-    const workDaysNeeded = Math.ceil(totalHours / 8);
-    
-    // Calculate urgency score (lower is more urgent)
-    const daysBuffer = daysUntilPromised - workDaysNeeded;
     
     let priority: number;
     let classification: string;
     
-    if (daysBuffer < 0) {
-      // Already late or will be late
-      priority = 1000 - daysBuffer; // Higher number = higher priority
+    // Priority based on "late time" - higher late time = higher priority
+    if (lateTimeDays > 0) {
+      // Job is already late beyond 28-day lead time
+      priority = 1000 + lateTimeDays * 10; // Higher number = higher priority
       classification = 'Critical';
-    } else if (daysBuffer <= 2) {
-      // Very tight timeline
-      priority = 800 + (2 - daysBuffer) * 50;
+    } else if (lateTimeDays >= -3) {
+      // Within 3 days of 28-day lead time
+      priority = 800 + (3 + lateTimeDays) * 50;
       classification = 'High';  
-    } else if (daysBuffer <= 7) {
-      // Some urgency
-      priority = 500 + (7 - daysBuffer) * 20;
+    } else if (daysUntilPromised <= 7) {
+      // Not late on lead time but promised date is soon
+      priority = 600 + (7 - daysUntilPromised) * 20;
+      classification = 'High';
+    } else if (lateTimeDays >= -7) {
+      // Within a week of 28-day lead time
+      priority = 400 + (7 + lateTimeDays) * 20;
       classification = 'Normal';
     } else {
-      // Plenty of time
-      priority = Math.max(100, 400 - daysBuffer * 5);
+      // Plenty of time before lead time
+      priority = Math.max(100, 300 + lateTimeDays * 5);
       classification = 'Low';
     }
     
-    console.log(`📊 Job ${job.jobNumber} priority: ${priority} (${classification}) - Days until promised: ${daysUntilPromised}, Work days needed: ${workDaysNeeded}, Buffer: ${daysBuffer}`);
+    console.log(`📊 Job ${job.jobNumber} priority: ${priority} (${classification}) - Late time: ${lateTimeDays} days, Days until promised: ${daysUntilPromised}, Lead time target: ${leadTimeTarget.toDateString()}`);
     
     return { priority, classification };
   }
