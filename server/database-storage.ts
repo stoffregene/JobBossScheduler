@@ -2766,7 +2766,8 @@ export class DatabaseStorage implements IStorage {
                 startTime,
                 endTime,
                 shift,
-                status: "Scheduled"
+                status: "Scheduled",
+                assignedResourceId: segmentResult.assignedResource?.id || null
               });
               
               scheduleEntries.push(segmentEntry);
@@ -2811,7 +2812,8 @@ export class DatabaseStorage implements IStorage {
                 startTime,
                 endTime,
                 shift,
-                status: "Scheduled"
+                status: "Scheduled",
+                assignedResourceId: result.assignedResource?.id || null
               });
               
               scheduleEntries.push(scheduleEntry);

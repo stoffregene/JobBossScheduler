@@ -20,13 +20,13 @@ export default function JobDetailsModal({ jobId, onClose }: JobDetailsModalProps
   });
 
   // Fetch schedule entries for this job to show assigned resources
-  const { data: scheduleEntries } = useQuery({
+  const { data: scheduleEntries } = useQuery<any[]>({
     queryKey: ['/api/schedule', 'job', jobId],
     queryFn: () => apiRequest(`/api/schedule?jobId=${jobId}`),
   });
 
   // Fetch resources to get resource names
-  const { data: resources } = useQuery({
+  const { data: resources } = useQuery<any[]>({
     queryKey: ['/api/resources'],
   });
 
@@ -178,8 +178,8 @@ export default function JobDetailsModal({ jobId, onClose }: JobDetailsModalProps
                   const scheduledEntry = scheduleEntries?.find((entry: any) => 
                     entry.operationSequence === operation.sequence
                   );
-                  const assignedResource = scheduledEntry?.assignedResourceId ? 
-                    resources?.find((r: any) => r.id === scheduledEntry.assignedResourceId) : null;
+                  const assignedResource = scheduledEntry?.assignedResourceId && resources ? 
+                    resources.find((r: any) => r.id === scheduledEntry.assignedResourceId) : null;
 
                   return (
                     <div key={index} className="border border-gray-200 rounded-lg p-3">
