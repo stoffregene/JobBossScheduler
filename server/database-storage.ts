@@ -22,6 +22,19 @@ import type { IStorage } from "./storage-interface";
 import { barFeederService } from "./bar-feeder-service";
 
 export class DatabaseStorage implements IStorage {
+  // OPTIMIZATION: Cache frequently accessed data to improve performance
+  private scheduleCache: ScheduleEntry[] | null = null;
+  private scheduleCacheExpiry: number = 0;
+  private readonly CACHE_DURATION = 30000; // 30 seconds cache
+
+  // OPTIMIZATION: Cache machine capabilities for faster lookups
+  private machineCapabilitiesCache: Map<string, {
+    machine: Machine;
+    shifts: number[];
+    maxHours: number;
+    capabilities: string[];
+  }> = new Map();
+
   constructor() {
     this.initializeDefaultData();
   }
@@ -711,6 +724,10 @@ export class DatabaseStorage implements IStorage {
         status: entry.status || "Scheduled",
       })
       .returning();
+    
+    // OPTIMIZATION: Invalidate cache when creating new entries
+    this.invalidateScheduleCache();
+    
     return scheduleEntry;
   }
 
@@ -720,12 +737,20 @@ export class DatabaseStorage implements IStorage {
       .set(updates)
       .where(eq(scheduleEntries.id, id))
       .returning();
+    
+    // OPTIMIZATION: Invalidate cache when updating entries
+    this.invalidateScheduleCache();
+    
     return entry || undefined;
   }
 
   async deleteScheduleEntry(id: string): Promise<boolean> {
     try {
       await db.delete(scheduleEntries).where(eq(scheduleEntries.id, id));
+      
+      // OPTIMIZATION: Invalidate cache when deleting entries
+      this.invalidateScheduleCache();
+      
       return true;
     } catch (error) {
       console.error('Error deleting schedule entry:', error);
@@ -735,6 +760,9 @@ export class DatabaseStorage implements IStorage {
 
   async clearAllScheduleEntries(): Promise<void> {
     await db.delete(scheduleEntries);
+    
+    // OPTIMIZATION: Invalidate cache when clearing all entries
+    this.invalidateScheduleCache();
   }
 
   // Alerts implementation
@@ -1182,32 +1210,32 @@ export class DatabaseStorage implements IStorage {
       };
     });
 
-    // ENHANCED CAPACITY CHECK: Support multi-shift operations >8 hours
+    // OPTIMIZATION: Enhanced capacity check with consolidated logic and better debugging
     const availableMachines = [];
     for (const result of scoredMachines) {
       const { machine, adjustedHours } = result;
       
-      // Check if this specific machine has capacity on this date/shift
-      const machineHours = await this.getMachineHoursOnDate(machine.id, targetDate, shift);
-      const maxMachineHours = 8; // Each machine can only run 8 hours per shift
+      // OPTIMIZATION: Use consolidated capacity function for better performance
+      const capacity = await this.getMachineCapacityInfo(machine.id, targetDate, shift);
       
-      // For operations >8 hours, check if machine can accommodate at least SOME portion
-      if (adjustedHours > maxMachineHours) {
-        const availableHours = maxMachineHours - machineHours;
-        if (availableHours > 1) { // Need at least 1 hour available to start the operation
-          // Machine can accommodate partial operation - multi-shift logic will handle the rest
+      // DEBUGGING AID: Log detailed capacity information
+      console.log(`🔍 Capacity Check - ${machine.machineId}: ${capacity.currentHours.toFixed(1)}h/${capacity.maxHours}h used (${capacity.utilizationPercent.toFixed(1)}%), Available: ${capacity.availableHours.toFixed(1)}h`);
+      
+      // For large operations (>max hours per shift), check if machine can accommodate at least partial work
+      if (adjustedHours > capacity.maxHours) {
+        if (capacity.availableHours > 1) { // Need at least 1 hour to start multi-shift operation
           availableMachines.push(result);
-          console.log(`✅ Multi-shift machine ${machine.machineId} available: ${availableHours.toFixed(1)}h available of ${adjustedHours.toFixed(1)}h needed (will span multiple shifts)`);
+          console.log(`✅ Multi-shift ${machine.machineId}: ${capacity.availableHours.toFixed(1)}h available for ${adjustedHours.toFixed(1)}h operation (will span shifts)`);
         } else {
-          console.log(`❌ Machine ${machine.machineId} no capacity: ${machineHours.toFixed(1)}h used / ${maxMachineHours}h max (need >1h for multi-shift start)`);
+          console.log(`❌ Multi-shift ${machine.machineId}: Insufficient capacity - need >1h to start, only ${capacity.availableHours.toFixed(1)}h available`);
         }
       } else {
-        // Standard single-shift check
-        if (machineHours + adjustedHours <= maxMachineHours) {
+        // Standard single-shift capacity validation
+        if (adjustedHours <= capacity.availableHours) {
           availableMachines.push(result);
-          console.log(`✅ Machine ${machine.machineId} available: ${machineHours.toFixed(1)}h + ${adjustedHours.toFixed(1)}h = ${(machineHours + adjustedHours).toFixed(1)}h / ${maxMachineHours}h`);
+          console.log(`✅ Single-shift ${machine.machineId}: ${adjustedHours.toFixed(1)}h fits in ${capacity.availableHours.toFixed(1)}h available`);
         } else {
-          console.log(`❌ Machine ${machine.machineId} overloaded: ${machineHours.toFixed(1)}h + ${adjustedHours.toFixed(1)}h = ${(machineHours + adjustedHours).toFixed(1)}h / ${maxMachineHours}h`);
+          console.log(`❌ Single-shift ${machine.machineId}: ${adjustedHours.toFixed(1)}h needed > ${capacity.availableHours.toFixed(1)}h available`);
         }
       }
     }
@@ -1225,74 +1253,31 @@ export class DatabaseStorage implements IStorage {
       console.log(`⚠️ Efficiency Impact: ${bestMatch.efficiencyImpact.toFixed(1)}% for ${(operation as any).operationName || (operation as any).name || operation.machineType} (${bestMatch.machine.machineId})`);
     }
     
-    // Find and assign an available resource for this machine/shift combination
-    const machineResources = await this.getResources();
-    let assignedResource = null;
-    
-    if (bestMatch.machine.type === 'OUTSOURCE') {
-      // OUTSOURCE operations: NO internal resources, use external vendor placeholder
-      assignedResource = null; // No internal resource assignment for outsource work
-      console.log(`🏭 OUTSOURCE operation: No internal resource assigned, external vendor handles this`);
-    } else if (bestMatch.machine.type === 'INSPECT') {
-      // INSPECT operations: Only assign Quality Inspectors
-      const inspectors = machineResources.filter(resource => {
-        const isActive = resource.isActive;
-        const hasShift = resource.shiftSchedule?.includes(shift);
-        const canOperateMachine = resource.workCenters?.includes(bestMatch.machine.id);
-        const isInspector = resource.role === 'Quality Inspector';
-        
-        console.log(`🔍 INSPECT check ${resource.name}: active=${isActive}, shift=${hasShift}, machine=${canOperateMachine}, inspector=${isInspector}`);
-        
-        return isActive && hasShift && canOperateMachine && isInspector;
-      });
-      
-      if (inspectors.length > 0) {
-        assignedResource = inspectors[0];
-        console.log(`🔍 Assigned inspector: ${assignedResource.name} to machine ${bestMatch.machine.machineId}`);
-      } else {
-        console.log(`❌ No qualified inspectors found for machine ${bestMatch.machine.machineId} on shift ${shift}`);
-        return null; // Fail the operation if no inspector available
-      }
-    } else {
-      // PRODUCTION operations: Only assign Operators (not inspectors)
-      const availableResources = machineResources.filter(resource => {
-        const isActive = resource.isActive;
-        const hasShift = resource.shiftSchedule?.includes(shift);
-        const canOperateMachine = resource.workCenters?.includes(bestMatch.machine.id);
-        const isOperator = resource.role === 'Operator' || resource.role === 'Shift Lead';
-        
-        console.log(`⚙️ PRODUCTION check ${resource.name}: active=${isActive}, shift=${hasShift}, machine=${canOperateMachine}, operator=${isOperator}`);
-        console.log(`   Resource work centers: ${resource.workCenters?.join(', ')}`);
-        console.log(`   Target machine ID: ${bestMatch.machine.id}, Machine: ${bestMatch.machine.machineId}`);
-        
-        return isActive && hasShift && canOperateMachine && isOperator;
-      });
-      
-      if (availableResources.length > 0) {
-        assignedResource = availableResources[0];
-        console.log(`⚙️ Assigned operator: ${assignedResource.name} to machine ${bestMatch.machine.machineId}`);
-      } else {
-        console.log(`❌ No qualified operators found for machine ${bestMatch.machine.machineId} on shift ${shift}`);
-        console.log(`❌ Total resources checked: ${machineResources.length}, Active: ${machineResources.filter(r => r.isActive).length}, On shift ${shift}: ${machineResources.filter(r => r.shiftSchedule?.includes(shift)).length}`);
-        return null; // Fail the operation if no qualified operator available
-      }
-    }
+    // OPTIMIZATION: Use consolidated resource assignment function
+    const operationType = bestMatch.machine.type === 'OUTSOURCE' ? 'OUTSOURCE' : 
+                         bestMatch.machine.type === 'INSPECT' ? 'INSPECT' : 'PRODUCTION';
+    const assignedResource = await this.assignOptimalResource(bestMatch.machine, shift, operationType);
     
     // Add shift and resource information to the result
     return { ...bestMatch, shift, assignedResource };
   }
 
+  // OPTIMIZATION: Centralized duration calculation function to eliminate redundant code
+  private calculateEntryDurationHours(entry: ScheduleEntry): number {
+    return (new Date(entry.endTime).getTime() - new Date(entry.startTime).getTime()) / (1000 * 60 * 60);
+  }
+
   // Get shifts ordered by current load (least loaded first) for better load balancing
   private async getShiftsOrderedByLoad(targetDate: Date, operation?: RoutingOperationType): Promise<number[]> {
-    const allScheduleEntries = await this.getScheduleEntries();
+    const scheduleEntries = await this.getCachedScheduleEntries(); // OPTIMIZATION: Use cached entries
     
     // Count hours scheduled per shift for the target date
     const shiftLoads = { 1: 0, 2: 0 };
     
-    for (const entry of allScheduleEntries) {
+    for (const entry of scheduleEntries) {
       const entryDate = new Date(entry.startTime);
       if (entryDate.toDateString() === targetDate.toDateString()) {
-        const duration = (new Date(entry.endTime).getTime() - new Date(entry.startTime).getTime()) / (1000 * 60 * 60);
+        const duration = this.calculateEntryDurationHours(entry); // OPTIMIZATION: Use centralized function
         shiftLoads[entry.shift as keyof typeof shiftLoads] += duration;
       }
     }
@@ -1525,10 +1510,11 @@ export class DatabaseStorage implements IStorage {
       const efficiencyFactor = parseFloat(machine.efficiencyFactor);
       const adjustedHours = parseFloat(operation.estimatedHours) / efficiencyFactor;
       
-      // Check available capacity on this shift/date
-      const machineHours = await this.getMachineHoursOnDate(machine.id, targetDate, shift);
-      const maxShiftHours = 8;
-      const availableHours = maxShiftHours - machineHours;
+      // OPTIMIZATION: Use consolidated capacity function for better performance
+      const capacity = await this.getMachineCapacityInfo(machine.id, targetDate, shift);
+      const machineHours = capacity.currentHours;
+      const maxShiftHours = capacity.maxHours;
+      const availableHours = capacity.availableHours;
       
       if (availableHours > 0) {
         console.log(`   ✅ Multi-shift machine found: ${machine.machineId} (${availableHours}h available, will span multiple shifts)`);
@@ -1664,14 +1650,14 @@ export class DatabaseStorage implements IStorage {
     return `${date.getFullYear()}-W${weekNumber.toString().padStart(2, '0')}`;
   }
 
-  // Validate weekly capacity constraints
+  // OPTIMIZATION: Validate weekly capacity constraints with caching
   private async validateWeeklyCapacity(
     targetDate: Date,
     shift: number,
     hoursToAdd: number
   ): Promise<{ valid: boolean; currentHours: number; maxHours: number }> {
     const weekString = this.getWeekString(targetDate);
-    const allScheduleEntries = await this.getScheduleEntries();
+    const allScheduleEntries = await this.getCachedScheduleEntries(); // OPTIMIZATION: Use cached entries
     
     // Calculate current hours for this week and shift
     const weekHours = allScheduleEntries
@@ -1679,10 +1665,7 @@ export class DatabaseStorage implements IStorage {
         const entryWeek = this.getWeekString(new Date(entry.startTime));
         return entryWeek === weekString && entry.shift === shift;
       })
-      .reduce((total, entry) => {
-        const hours = (new Date(entry.endTime).getTime() - new Date(entry.startTime).getTime()) / (1000 * 60 * 60);
-        return total + hours;
-      }, 0);
+      .reduce((total, entry) => total + this.calculateEntryDurationHours(entry), 0);
     
     // Weekly capacity limits
     const maxHours = shift === 1 ? 448 : 120; // Shift 1: 112h/day × 4 days, Shift 2: 120h/week
@@ -1708,23 +1691,124 @@ export class DatabaseStorage implements IStorage {
     return sawWaterjetKeywords.some(keyword => operationName.includes(keyword));
   }
 
-  // Get total hours scheduled for a specific machine on a specific date and shift
-  private async getMachineHoursOnDate(machineId: string, targetDate: Date, shift: number): Promise<number> {
-    const allScheduleEntries = await this.getScheduleEntries();
+  // OPTIMIZATION: Centralized capacity checking with caching
+  private async getCachedScheduleEntries(): Promise<ScheduleEntry[]> {
+    const now = Date.now();
+    if (this.scheduleCache && now < this.scheduleCacheExpiry) {
+      return this.scheduleCache;
+    }
     
-    const machineHours = allScheduleEntries
+    this.scheduleCache = await this.getScheduleEntries();
+    this.scheduleCacheExpiry = now + this.CACHE_DURATION;
+    return this.scheduleCache;
+  }
+
+  // OPTIMIZATION: Invalidate cache when schedule changes
+  private invalidateScheduleCache(): void {
+    this.scheduleCache = null;
+    this.scheduleCacheExpiry = 0;
+  }
+
+  // OPTIMIZATION: Consolidated capacity checking function
+  private async getMachineCapacityInfo(
+    machineId: string, 
+    targetDate: Date, 
+    shift: number
+  ): Promise<{
+    currentHours: number;
+    maxHours: number;
+    availableHours: number;
+    utilizationPercent: number;
+  }> {
+    const scheduleEntries = await this.getCachedScheduleEntries();
+    
+    const currentHours = scheduleEntries
       .filter(entry => {
         const entryDate = new Date(entry.startTime);
         return entry.machineId === machineId && 
                entry.shift === shift &&
                entryDate.toDateString() === targetDate.toDateString();
       })
-      .reduce((total, entry) => {
-        const hours = (new Date(entry.endTime).getTime() - new Date(entry.startTime).getTime()) / (1000 * 60 * 60);
-        return total + hours;
-      }, 0);
+      .reduce((total, entry) => total + this.calculateEntryDurationHours(entry), 0);
     
-    return machineHours;
+    const maxHours = shift === 1 ? 12 : 12; // 12 hours per shift (3am-3pm, 3pm-3am)
+    const availableHours = Math.max(0, maxHours - currentHours);
+    const utilizationPercent = (currentHours / maxHours) * 100;
+    
+    return {
+      currentHours,
+      maxHours, 
+      availableHours,
+      utilizationPercent
+    };
+  }
+
+  // OPTIMIZATION: Consolidated resource assignment function to eliminate duplicate code
+  private async assignOptimalResource(
+    machine: Machine, 
+    shift: number, 
+    operationType: 'PRODUCTION' | 'INSPECT' | 'OUTSOURCE'
+  ): Promise<Resource | null> {
+    console.log(`🔍 Resource Assignment for ${machine.machineId} (${operationType}) on Shift ${shift}`);
+    
+    if (machine.type === 'OUTSOURCE' || operationType === 'OUTSOURCE') {
+      console.log(`🏭 OUTSOURCE operation: No internal resource assignment, external vendor handles work`);
+      return null; // External vendors handle outsourced work
+    }
+    
+    const allResources = await this.getResources();
+    
+    if (operationType === 'INSPECT') {
+      // INSPECT operations: Only assign Quality Inspectors
+      const inspectors = allResources.filter(resource => {
+        const isActive = resource.isActive;
+        const hasShift = resource.shiftSchedule?.includes(shift);
+        const canOperateMachine = resource.workCenters?.includes(machine.id);
+        const isInspector = resource.role === 'Quality Inspector';
+        
+        console.log(`🔍 INSPECT check ${resource.name}: active=${isActive}, shift=${hasShift}, machine=${canOperateMachine}, inspector=${isInspector}`);
+        return isActive && hasShift && canOperateMachine && isInspector;
+      });
+      
+      if (inspectors.length > 0) {
+        console.log(`✅ Assigned inspector: ${inspectors[0].name} to ${machine.machineId}`);
+        return inspectors[0];
+      } else {
+        console.log(`❌ No qualified inspectors available for ${machine.machineId}`);
+        return null;
+      }
+    }
+    
+    // PRODUCTION operations: Assign Operators or Shift Leads
+    const operators = allResources.filter(resource => {
+      const isActive = resource.isActive;
+      const hasShift = resource.shiftSchedule?.includes(shift);
+      const canOperateMachine = resource.workCenters?.includes(machine.id);
+      const isOperator = resource.role === 'Operator' || resource.role === 'Shift Lead';
+      
+      console.log(`⚙️ PRODUCTION check ${resource.name}: active=${isActive}, shift=${hasShift}, machine=${canOperateMachine}, operator=${isOperator}`);
+      console.log(`   Resource work centers: ${resource.workCenters?.join(', ')}`);
+      console.log(`   Target machine ID: ${machine.id}, Machine: ${machine.machineId}`);
+      
+      return isActive && hasShift && canOperateMachine && isOperator;
+    });
+    
+    if (operators.length > 0) {
+      // Prefer Shift Leads over regular Operators
+      const shiftLeads = operators.filter(r => r.role === 'Shift Lead');
+      const selectedResource = shiftLeads.length > 0 ? shiftLeads[0] : operators[0];
+      console.log(`⚙️ Assigned operator: ${selectedResource.name} to machine ${machine.machineId}`);
+      return selectedResource;
+    } else {
+      console.log(`❌ No qualified operators available for machine ${machine.machineId}`);
+      return null;
+    }
+  }
+
+  // DEPRECATED: Use getMachineCapacityInfo instead
+  private async getMachineHoursOnDate(machineId: string, targetDate: Date, shift: number): Promise<number> {
+    const capacity = await this.getMachineCapacityInfo(machineId, targetDate, shift);
+    return capacity.currentHours;
   }
 
   async autoScheduleJob(
@@ -2030,10 +2114,9 @@ export class DatabaseStorage implements IStorage {
                 }
               }
               
-              // Get existing machine hours to check capacity
-              const machineHours = await this.getMachineHoursOnDate(result.machine.id, operationStartTime, currentShift);
-              const maxShiftHours = currentShift === 1 ? 12 : 12; // Shift 1: 3am-3pm (12h), Shift 2: 3pm-3am (12h)
-              const availableCapacity = Math.max(0, maxShiftHours - machineHours);
+              // OPTIMIZATION: Use consolidated capacity function for better performance
+              const capacity = await this.getMachineCapacityInfo(result.machine.id, operationStartTime, currentShift);
+              const availableCapacity = capacity.availableHours;
               
               const hoursThisShift = Math.min(remainingHours, availableHoursInShift, availableCapacity);
               
@@ -2969,9 +3052,9 @@ export class DatabaseStorage implements IStorage {
                 for (const shift of availableShifts) {
                   const tempResult = await this.findBestMachineForOperation(operation as any, segmentDate, shift);
                   if (tempResult) {
-                    // Check if machine has capacity for this segment
-                    const machineHours = await this.getMachineHoursOnDate(tempResult.machine.id, segmentDate, shift);
-                    if (machineHours + segment.hours <= maxShiftHours) {
+                    // OPTIMIZATION: Use consolidated capacity function
+                    const capacity = await this.getMachineCapacityInfo(tempResult.machine.id, segmentDate, shift);
+                    if (capacity.currentHours + segment.hours <= capacity.maxHours) {
                       segmentResult = { ...tempResult, adjustedHours: segment.hours, shift };
                       break;
                     }
