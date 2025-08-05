@@ -1209,31 +1209,51 @@ export class DatabaseStorage implements IStorage {
     let assignedResource = null;
     
     if (bestMatch.machine.type === 'OUTSOURCE') {
-      // Outsource machines use virtual external vendor resource
-      assignedResource = { id: 'outsource-virtual', name: 'External Vendor' };
+      // OUTSOURCE operations: NO internal resources, use external vendor placeholder
+      assignedResource = null; // No internal resource assignment for outsource work
+      console.log(`🏭 OUTSOURCE operation: No internal resource assigned, external vendor handles this`);
+    } else if (bestMatch.machine.type === 'INSPECT') {
+      // INSPECT operations: Only assign Quality Inspectors
+      const inspectors = machineResources.filter(resource => {
+        const isActive = resource.isActive;
+        const hasShift = resource.shiftSchedule?.includes(shift);
+        const canOperateMachine = resource.workCenters?.includes(bestMatch.machine.id);
+        const isInspector = resource.role === 'Quality Inspector';
+        
+        console.log(`🔍 INSPECT check ${resource.name}: active=${isActive}, shift=${hasShift}, machine=${canOperateMachine}, inspector=${isInspector}`);
+        
+        return isActive && hasShift && canOperateMachine && isInspector;
+      });
+      
+      if (inspectors.length > 0) {
+        assignedResource = inspectors[0];
+        console.log(`🔍 Assigned inspector: ${assignedResource.name} to machine ${bestMatch.machine.machineId}`);
+      } else {
+        console.log(`❌ No qualified inspectors found for machine ${bestMatch.machine.machineId} on shift ${shift}`);
+        return null; // Fail the operation if no inspector available
+      }
     } else {
-      // Find available resources for this machine on this shift
+      // PRODUCTION operations: Only assign Operators (not inspectors)
       const availableResources = machineResources.filter(resource => {
         const isActive = resource.isActive;
         const hasShift = resource.shiftSchedule?.includes(shift);
         const canOperateMachine = resource.workCenters?.includes(bestMatch.machine.id);
+        const isOperator = resource.role === 'Operator' || resource.role === 'Shift Lead';
         
-        if (resource.name === 'Aaron Chastain') {
-          console.log(`👤 DEBUG Aaron Chastain: active=${isActive}, shift=${hasShift}, machine=${canOperateMachine}`);
-          console.log(`👤 Aaron's work centers: ${resource.workCenters?.join(', ')}`);
-          console.log(`👤 Target machine ID: ${bestMatch.machine.id}, Machine: ${bestMatch.machine.machineId}`);
-        }
+        console.log(`⚙️ PRODUCTION check ${resource.name}: active=${isActive}, shift=${hasShift}, machine=${canOperateMachine}, operator=${isOperator}`);
+        console.log(`   Resource work centers: ${resource.workCenters?.join(', ')}`);
+        console.log(`   Target machine ID: ${bestMatch.machine.id}, Machine: ${bestMatch.machine.machineId}`);
         
-        return isActive && hasShift && canOperateMachine;
+        return isActive && hasShift && canOperateMachine && isOperator;
       });
       
       if (availableResources.length > 0) {
-        // For now, assign the first available resource (could be enhanced with load balancing)
         assignedResource = availableResources[0];
-        console.log(`👤 Assigned resource: ${assignedResource.name} to machine ${bestMatch.machine.machineId}`);
+        console.log(`⚙️ Assigned operator: ${assignedResource.name} to machine ${bestMatch.machine.machineId}`);
       } else {
-        console.log(`❌ No qualified resources found for machine ${bestMatch.machine.machineId} on shift ${shift}`);
+        console.log(`❌ No qualified operators found for machine ${bestMatch.machine.machineId} on shift ${shift}`);
         console.log(`❌ Total resources checked: ${machineResources.length}, Active: ${machineResources.filter(r => r.isActive).length}, On shift ${shift}: ${machineResources.filter(r => r.shiftSchedule?.includes(shift)).length}`);
+        return null; // Fail the operation if no qualified operator available
       }
     }
     
@@ -1613,22 +1633,47 @@ export class DatabaseStorage implements IStorage {
           const machines = await this.getMachines();
           let machineId = 'outsource-placeholder';
           let status = "Outsourced";
+          let assignedResourceId = null;
           
           if (operation.machineType.includes('INSPECT') || operation.name.toLowerCase().includes('inspect')) {
-            // Find inspect machine
+            // INSPECT: Find inspect machine and assign ONLY quality inspectors
             const inspectMachine = machines.find(m => m.machineId.includes('INSPECT'));
             machineId = inspectMachine?.id || 'inspect-placeholder';
             status = "Scheduled";
+            
+            // Find available quality inspectors for this machine
+            const resources = await this.getResources();
+            const inspectors = resources.filter(resource => {
+              const isActive = resource.isActive;
+              const hasShift = resource.shiftSchedule?.includes(1); // Default to shift 1
+              const canOperateMachine = resource.workCenters?.includes(machineId);
+              const isInspector = resource.role === 'Quality Inspector';
+              
+              console.log(`🔍 INSPECT resource check ${resource.name}: active=${isActive}, shift=${hasShift}, machine=${canOperateMachine}, inspector=${isInspector}`);
+              
+              return isActive && hasShift && canOperateMachine && isInspector;
+            });
+            
+            if (inspectors.length > 0) {
+              assignedResourceId = inspectors[0].id;
+              console.log(`🔍 Assigned inspector ${inspectors[0].name} to INSPECT operation`);
+            } else {
+              console.log(`❌ No qualified inspectors available for INSPECT operation`);
+              console.log(`❌ Total resources: ${resources.length}, Active: ${resources.filter(r => r.isActive).length}, Inspectors: ${resources.filter(r => r.role === 'Quality Inspector').length}`);
+              // Still create the entry but without resource assignment
+            }
           } else {
-            // Find outsource machine
+            // OUTSOURCE: Find outsource machine, NO internal resource assignment
             const outsourceMachine = machines.find(m => m.machineId === 'OUTSOURCE-01');
             machineId = outsourceMachine?.id || 'outsource-placeholder';
+            assignedResourceId = null; // CRITICAL: Never assign internal resources to outsource
+            console.log(`🏭 OUTSOURCE operation: No internal resource assigned, handled by external vendor`);
           }
           
           const scheduleEntry = await this.createScheduleEntry({
             jobId: job.id,
             machineId: machineId,
-            assignedResourceId: null, // No resource constraints for outsource/inspect
+            assignedResourceId: assignedResourceId,
             operationSequence: operation.sequence,
             startTime: currentDate,
             endTime: new Date(currentDate.getTime() + (parseFloat(operation.estimatedHours) * 60 * 60 * 1000)),
