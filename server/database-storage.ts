@@ -2448,6 +2448,7 @@ export class DatabaseStorage implements IStorage {
     console.log(`📋 Total jobs: ${jobs.length}, Unscheduled/Planning/Open: ${unscheduledJobs.length}`);
     if (unscheduledJobs.length === 0) {
       console.log(`📋 Job statuses found: ${[...new Set(jobs.map(j => j.status))].join(', ')}`);
+      return { scheduled: 0, failed: 0, results: [] };
     }
     
     // Sort jobs by priority (Critical > High > Normal > Low), then by promised date
@@ -2669,53 +2670,160 @@ export class DatabaseStorage implements IStorage {
             console.log(`❌ Invalid machine result, skipping`);
             continue;
           }
-          // Use the shift that was already validated for capacity
-          const shift = result.shift || 1;
-          console.log(`🔧 Using validated shift ${shift} for machine ${result.machine.machineId}`);
-          const shiftStart = shift === 1 ? 3 : 15; // 3 AM or 3 PM
-          const startTime = new Date(currentDate);
-          startTime.setHours(shiftStart, 0, 0, 0);
           
-          const endTime = new Date(startTime.getTime() + (result.adjustedHours * 60 * 60 * 1000));
+          // Check if operation needs to be split across multiple shifts
+          const maxShiftHours = 8;
+          const totalHours = result.adjustedHours;
           
-          // Check for conflicts with existing schedule
-          const conflicts = await this.checkScheduleConflicts(result.machine.id, startTime, endTime);
-          
-          if (!conflicts) {
-            const scheduleEntry = await this.createScheduleEntry({
-              jobId: job.id,
-              machineId: result.machine.id,
-              operationSequence: operation.sequence,
-              startTime,
-              endTime,
-              shift,
-              status: "Scheduled"
-            });
+          if (totalHours > maxShiftHours) {
+            console.log(`🔀 Operation ${operation.name} requires ${totalHours.toFixed(1)}h - splitting across multiple shifts`);
             
-            scheduleEntries.push(scheduleEntry);
+            // Split operation into multiple segments
+            const segments = [];
+            let remainingHours = totalHours;
+            let segmentNumber = 1;
             
-            // Update machine utilization
-            const currentUtil = parseFloat(result.machine.utilization);
-            const newUtil = Math.min(100, currentUtil + (result.adjustedHours / 8) * 100);
-            await this.updateMachine(result.machine.id, { utilization: newUtil.toString() });
+            while (remainingHours > 0) {
+              const segmentHours = Math.min(remainingHours, maxShiftHours);
+              segments.push({
+                hours: segmentHours,
+                isPartial: totalHours > maxShiftHours,
+                segmentNumber,
+                totalSegments: Math.ceil(totalHours / maxShiftHours)
+              });
+              remainingHours -= segmentHours;
+              segmentNumber++;
+            }
             
-            // Move to next day for next operation
-            currentDate = new Date(endTime.getTime() + dayInMs);
-            scheduled = true;
+            console.log(`🔀 Split into ${segments.length} segments: ${segments.map(s => s.hours.toFixed(1) + 'h').join(', ')}`);
             
-            // Progress update for successful scheduling
-            const completedProgress = 10 + (((opIndex + 1) / totalOperations) * 80);
-            onProgress?.({
-              percentage: completedProgress,
-              status: `Operation ${opIndex + 1} scheduled successfully on ${result.machine.machineId}`,
-              stage: 'scheduled',
-              operationName: operation.name,
-              currentOperation: opIndex + 1,
-              totalOperations
-            });
+            // Schedule each segment sequentially
+            let segmentDate = new Date(currentDate);
+            let segmentScheduled = false;
             
-            break;
+            for (const segment of segments) {
+              // Find available machine and shift for this segment
+              let segmentResult = null;
+              let attempts = 0;
+              const maxAttempts = 20; // Prevent infinite loops
+              
+              while (!segmentResult && attempts < maxAttempts) {
+                // Skip weekends (Friday-Sunday)
+                while ((segmentDate.getDay() < 1 || segmentDate.getDay() > 4)) {
+                  segmentDate = new Date(segmentDate.getTime() + dayInMs);
+                }
+                
+                const availableShifts = await this.getShiftsOrderedByLoad(segmentDate, operation);
+                for (const shift of availableShifts) {
+                  const tempResult = await this.findBestMachineForOperation(operation, segmentDate, shift);
+                  if (tempResult && tempResult.adjustedHours >= segment.hours) {
+                    // Check if machine has capacity for this segment
+                    const machineHours = await this.getMachineHoursOnDate(tempResult.machine.id, segmentDate, shift);
+                    if (machineHours + segment.hours <= maxShiftHours) {
+                      segmentResult = { ...tempResult, adjustedHours: segment.hours, shift };
+                      break;
+                    }
+                  }
+                }
+                
+                if (!segmentResult) {
+                  segmentDate = new Date(segmentDate.getTime() + dayInMs);
+                  attempts++;
+                }
+              }
+              
+              if (!segmentResult) {
+                console.log(`❌ Could not schedule segment ${segment.segmentNumber} after ${maxAttempts} attempts`);
+                break;
+              }
+              
+              // Schedule this segment
+              const shift = segmentResult.shift;
+              const shiftStart = shift === 1 ? 3 : 15;
+              const startTime = new Date(segmentDate);
+              startTime.setHours(shiftStart, 0, 0, 0);
+              
+              const endTime = new Date(startTime.getTime() + (segment.hours * 60 * 60 * 1000));
+              
+              const segmentEntry = await this.createScheduleEntry({
+                jobId: job.id,
+                machineId: segmentResult.machine.id,
+                operationSequence: operation.sequence,
+                startTime,
+                endTime,
+                shift,
+                status: "Scheduled"
+              });
+              
+              scheduleEntries.push(segmentEntry);
+              console.log(`✅ Scheduled segment ${segment.segmentNumber}/${segment.totalSegments}: ${segment.hours.toFixed(1)}h on ${segmentDate.toDateString()} shift ${shift}`);
+              
+              // Move to next available time slot (could be same day next shift or next day)
+              if (shift === 1 && availableShifts.includes(2)) {
+                // Try shift 2 same day
+                segmentDate = new Date(segmentDate);
+              } else {
+                // Move to next business day
+                segmentDate = new Date(segmentDate.getTime() + dayInMs);
+              }
+              
+              segmentScheduled = true;
+            }
+            
+            if (segmentScheduled) {
+              scheduled = true;
+              // Set currentDate to end of last segment for next operation
+              currentDate = new Date(segmentDate.getTime() + dayInMs);
+            }
+            
+          } else {
+            // Single shift operation - original logic
+            const shift = result.shift || 1;
+            console.log(`🔧 Using validated shift ${shift} for machine ${result.machine.machineId}`);
+            const shiftStart = shift === 1 ? 3 : 15; // 3 AM or 3 PM
+            const startTime = new Date(currentDate);
+            startTime.setHours(shiftStart, 0, 0, 0);
+            
+            const endTime = new Date(startTime.getTime() + (result.adjustedHours * 60 * 60 * 1000));
+            
+            // Check for conflicts with existing schedule
+            const conflicts = await this.checkScheduleConflicts(result.machine.id, startTime, endTime);
+            
+            if (!conflicts) {
+              const scheduleEntry = await this.createScheduleEntry({
+                jobId: job.id,
+                machineId: result.machine.id,
+                operationSequence: operation.sequence,
+                startTime,
+                endTime,
+                shift,
+                status: "Scheduled"
+              });
+              
+              scheduleEntries.push(scheduleEntry);
+              
+              // Update machine utilization
+              const currentUtil = parseFloat(result.machine.utilization);
+              const newUtil = Math.min(100, currentUtil + (result.adjustedHours / 8) * 100);
+              await this.updateMachine(result.machine.id, { utilization: newUtil.toString() });
+              
+              // Move to next day for next operation
+              currentDate = new Date(endTime.getTime() + dayInMs);
+              scheduled = true;
+              
+              // Progress update for successful scheduling
+              const completedProgress = 10 + (((opIndex + 1) / totalOperations) * 80);
+              onProgress?.({
+                percentage: completedProgress,
+                status: `Operation ${opIndex + 1} scheduled successfully on ${result.machine.machineId}`,
+                stage: 'scheduled',
+                operationName: operation.name,
+                currentOperation: opIndex + 1,
+                totalOperations
+              });
+            }
           }
+          
           if (scheduled) break;
         }
         
@@ -2747,10 +2855,10 @@ export class DatabaseStorage implements IStorage {
     }
     
     // Only update job status if ALL operations were scheduled successfully
-    if (scheduleEntries.length === job.routing.length) {
+    if (scheduleEntries.length === job.routing?.length) {
       await this.updateJob(jobId, { status: "Scheduled" });
     } else {
-      console.log(`⚠️ Job ${job.jobNumber} only partially scheduled: ${scheduleEntries.length}/${job.routing.length} operations`);
+      console.log(`⚠️ Job ${job.jobNumber} only partially scheduled: ${scheduleEntries.length}/${job.routing?.length || 0} operations`);
     }
     
     return scheduleEntries;
