@@ -1103,18 +1103,29 @@ export class DatabaseStorage implements IStorage {
 
       // Check if there are resources available for this machine on this shift
       // Resources must be active, work the shift, AND be qualified for this specific machine
-      const machineResources = allResources.filter(resource => 
-        resource.isActive &&
-        resource.shiftSchedule?.includes(shift) &&
-        resource.workCenters?.includes(machine.id)
-      );
-      
-      if (machineResources.length === 0) {
-        console.log(`     ❌ Machine ${machine.machineId} has NO qualified resources on shift ${shift}`);
-        continue;
+      // SPECIAL CASE: OUTSOURCE machines don't need operator resources - they are external vendors
+      let machineResources = [];
+      if (machine.type === 'OUTSOURCE') {
+        // Outsource machines always have "virtual" resources available
+        machineResources = [{ id: 'outsource-virtual', name: 'External Vendor' }];
+        console.log(`     ✅ OUTSOURCE machine ${machine.machineId} uses external vendor resources`);
+      } else {
+        machineResources = allResources.filter(resource => 
+          resource.isActive &&
+          resource.shiftSchedule?.includes(shift) &&
+          resource.workCenters?.includes(machine.id)
+        );
+        
+        if (machineResources.length === 0) {
+          console.log(`     ❌ Machine ${machine.machineId} has NO qualified resources on shift ${shift}`);
+          console.log(`     Resources needed: active=true, shifts=${shift}, workCenters includes ${machine.id}`);
+          continue;
+        }
       }
 
-      console.log(`     ✅ Machine ${machine.machineId} has ${machineResources.length} qualified resources on shift ${shift}`);
+      if (machine.type !== 'OUTSOURCE') {
+        console.log(`     ✅ Machine ${machine.machineId} has ${machineResources.length} qualified resources on shift ${shift}`);
+      }
       compatibleMachines.push(machine);
     }
 
@@ -1187,8 +1198,35 @@ export class DatabaseStorage implements IStorage {
     
     console.log(`📊 Shift loads for ${targetDate.toDateString()}: Shift 1: ${shiftLoads[1].toFixed(1)}h, Shift 2: ${shiftLoads[2].toFixed(1)}h`);
     
+    // Check weekly capacity for shift 2 (120h/week limit)
+    const weekStart = new Date(targetDate);
+    weekStart.setDate(targetDate.getDate() - targetDate.getDay() + 1); // Monday of this week
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6); // Sunday of this week
+    
+    let shift2WeeklyHours = 0;
+    for (const entry of allScheduleEntries) {
+      const entryDate = new Date(entry.startTime);
+      if (entry.shift === 2 && entryDate >= weekStart && entryDate <= weekEnd) {
+        const duration = (new Date(entry.endTime).getTime() - new Date(entry.startTime).getTime()) / (1000 * 60 * 60);
+        shift2WeeklyHours += duration;
+      }
+    }
+    
+    console.log(`📊 Shift 2 weekly capacity: ${shift2WeeklyHours.toFixed(1)}h / 120h limit`);
+    
+    // Filter out shifts that are over capacity
+    const availableShifts = [];
+    if (shiftLoads[1] < 320) availableShifts.push(1); // Shift 1 daily capacity ~320h across all machines
+    if (shiftLoads[2] < 120 && shift2WeeklyHours < 120) availableShifts.push(2); // Shift 2 has 120h/week limit
+    
+    if (availableShifts.length === 0) {
+      console.log(`⚠️ Both shifts at capacity for ${targetDate.toDateString()}`);
+      return [1, 2]; // Return both, but scheduling will likely fail
+    }
+    
     // Return shifts ordered by load (least loaded first)
-    return [1, 2].sort((a, b) => shiftLoads[a as keyof typeof shiftLoads] - shiftLoads[b as keyof typeof shiftLoads]);
+    return availableShifts.sort((a, b) => shiftLoads[a as keyof typeof shiftLoads] - shiftLoads[b as keyof typeof shiftLoads]);
   }
 
   private async canSubstitute(machine: Machine, operation: RoutingOperation): Promise<boolean> {
@@ -2111,6 +2149,10 @@ export class DatabaseStorage implements IStorage {
         const machineResults = machineResult ? [machineResult] : [];
         
         if (machineResults.length === 0) {
+          console.log(`❌ No machine found for operation ${operation.name} on ${currentDate.toDateString()}`);
+          console.log(`   - Operation requires: ${operation.compatibleMachines.join(', ')}`);
+          console.log(`   - Machine type: ${operation.machineType}`);
+          
           // Move to next day, but skip weekends and Fridays
           do {
             currentDate = new Date(currentDate.getTime() + dayInMs);
