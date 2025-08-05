@@ -786,7 +786,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           stage: 'error'
         } 
       });
-      res.status(500).json({ message: "Failed to auto-schedule job" });
+      console.error('❌ Critical Error auto-scheduling job:', error);
+      console.error('❌ Error details:', error instanceof Error ? error.message : 'Unknown error');
+      console.error('❌ Stack trace:', error instanceof Error ? error.stack : 'No stack trace');
+      res.status(500).json({ message: "Failed to auto-schedule job", error: error instanceof Error ? error.message : 'Unknown error' });
     }
   });
 

@@ -1129,8 +1129,10 @@ export class DatabaseStorage implements IStorage {
       const canSubstitute = machine.substitutionGroup && await this.canSubstitute(machine, operation);
       
       if (!isDirectlyCompatible && !canSubstitute) {
-        console.log(`     ❌ Machine ${machine.machineId} rejected - not compatible`);
+        console.log(`     ❌ Machine ${machine.machineId} rejected - not compatible (direct: ${isDirectlyCompatible}, substitute: ${canSubstitute})`);
         continue;
+      } else {
+        console.log(`     ✅ Machine ${machine.machineId} is compatible (direct: ${isDirectlyCompatible}, substitute: ${canSubstitute})`);
       }
 
       // Check if there are resources available for this machine on this shift
@@ -1291,10 +1293,10 @@ export class DatabaseStorage implements IStorage {
     weekEnd.setDate(weekStart.getDate() + 6); // Sunday of this week
     
     let shift2WeeklyHours = 0;
-    for (const entry of allScheduleEntries) {
+    for (const entry of scheduleEntries) {
       const entryDate = new Date(entry.startTime);
       if (entry.shift === 2 && entryDate >= weekStart && entryDate <= weekEnd) {
-        const duration = (new Date(entry.endTime).getTime() - new Date(entry.startTime).getTime()) / (1000 * 60 * 60);
+        const duration = this.calculateEntryDurationHours(entry); // OPTIMIZATION: Use centralized function
         shift2WeeklyHours += duration;
       }
     }
@@ -1318,7 +1320,7 @@ export class DatabaseStorage implements IStorage {
     console.log(`📊 Resource-based capacity: Shift 1: ${shift1Resources} operators (${shift1DailyCapacity}h/day), Shift 2: ${shift2Resources} operators (${shift2DailyCapacity}h/day, ${shift2WeeklyCapacity}h/week)`);
     
     // Apply strict capacity limits - pass operation hours for checking
-    const operationHours = parseFloat(operation.estimatedHours) || 0;
+    const operationHours = operation ? parseFloat(operation.estimatedHours) || 0 : 0;
     
     // Check if adding this operation would exceed capacity
     if (shiftLoads[1] + operationHours <= shift1DailyCapacity) {
