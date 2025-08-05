@@ -18,6 +18,7 @@ Preferred communication style: Simple, everyday language.
 - **VISUAL INDICATORS**: Schedule view now shows multi-day jobs with special styling - rounded corners indicate start/end, continuous styling for middle segments
 - **MULTIPLE JOBS PER SHIFT**: Schedule view can now display up to 2 jobs per machine per day with "+X more" indicator for additional jobs
 - **CAPACITY-AWARE RESULTS**: All scheduled weeks now pass checksum validation - hours are properly distributed within rated capacities
+- **FIXED SCHEDULING STATUS REPORTING**: System now accurately reports scheduling failures - jobs only marked as "Scheduled" when ALL operations are successfully scheduled
 
 **August 5, 2025** - Previously implemented realistic capacity-aware scheduling that moves jobs to future weeks when capacity is exceeded:
 - **REALISTIC SCHEDULING PHILOSOPHY**: System no longer forces jobs into desired dates when capacity limits are reached

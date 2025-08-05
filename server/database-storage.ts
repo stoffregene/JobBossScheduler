@@ -2315,12 +2315,19 @@ export class DatabaseStorage implements IStorage {
         console.log(`📋 Scheduling job ${job.jobNumber} (${job.priority} priority)`);
         const scheduleEntries = await this.autoScheduleJobWithOptimalStart(job.id);
         
-        if (scheduleEntries && scheduleEntries.length > 0) {
+        // Check if ALL operations were scheduled (not just some)
+        const jobData = await this.getJob(job.id);
+        const expectedOperations = jobData?.routing?.length || 0;
+        
+        if (scheduleEntries && scheduleEntries.length > 0 && scheduleEntries.length === expectedOperations) {
           scheduled++;
-          results.push({ jobNumber: job.jobNumber, status: 'scheduled', priority: job.priority });
+          results.push({ jobNumber: job.jobNumber, status: 'scheduled', priority: job.priority, operations: scheduleEntries.length });
         } else {
           failed++;
-          results.push({ jobNumber: job.jobNumber, status: 'failed', priority: job.priority, reason: 'No available machines' });
+          const reason = scheduleEntries && scheduleEntries.length > 0 
+            ? `Only ${scheduleEntries.length}/${expectedOperations} operations scheduled`
+            : 'No available machines or capacity';
+          results.push({ jobNumber: job.jobNumber, status: 'failed', priority: job.priority, reason });
         }
       } catch (error) {
         failed++;
@@ -2552,18 +2559,32 @@ export class DatabaseStorage implements IStorage {
       }
       
       if (!scheduled) {
+        // Failed to schedule this operation - rollback all schedule entries for this job
+        console.log(`❌ Failed to schedule operation ${operation.sequence} for job ${job.jobNumber}`);
+        
+        // Delete any schedule entries we created for this job
+        for (const entry of scheduleEntries) {
+          await this.deleteScheduleEntry(entry.id);
+        }
+        
         await this.createAlert({
           type: "warning",
           title: "Scheduling Conflict",
           message: `Unable to schedule operation ${operation.sequence} for job ${job.jobNumber} within manufacturing window`,
           jobId: job.id
         });
-        return null;
+        
+        // Return empty array instead of null to indicate failure
+        return [];
       }
     }
     
-    // Update job status to scheduled
-    await this.updateJob(jobId, { status: "Scheduled" });
+    // Only update job status if ALL operations were scheduled successfully
+    if (scheduleEntries.length === job.routing.length) {
+      await this.updateJob(jobId, { status: "Scheduled" });
+    } else {
+      console.log(`⚠️ Job ${job.jobNumber} only partially scheduled: ${scheduleEntries.length}/${job.routing.length} operations`);
+    }
     
     return scheduleEntries;
   }
