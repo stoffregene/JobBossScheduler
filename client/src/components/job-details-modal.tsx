@@ -225,12 +225,15 @@ export default function JobDetailsModal({ jobId, onClose }: JobDetailsModalProps
                               <Badge variant="outline" className="text-xs">
                                 {scheduledEntry.status}
                               </Badge>
-                              {assignedResource && (
+                              {operation.machineType === 'OUTSOURCE' ? (
+                                <div className="text-xs text-orange-600 font-medium">
+                                  🏭 External vendor (no internal resources)
+                                </div>
+                              ) : assignedResource ? (
                                 <div className="text-xs text-blue-600 font-medium">
                                   👤 {assignedResource.name} ({assignedResource.role})
                                 </div>
-                              )}
-                              {!assignedResource && operation.machineType !== 'OUTSOURCE' && (
+                              ) : (
                                 <div className="text-xs text-gray-500">
                                   Compatible operators: {compatibleResources.length > 0 
                                     ? compatibleResources.map((r: any) => r.name).join(', ')
