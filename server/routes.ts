@@ -153,7 +153,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/jobs/schedule-all", async (req, res) => {
     try {
       console.log("🎯 Starting priority-based scheduling for all jobs...");
-      const maxJobs = parseInt(req.query.maxJobs as string) || 50;
+      const maxJobs = parseInt(req.query.maxJobs as string) || 100;
       
       const result = await storage.scheduleJobsByPriority(maxJobs);
       

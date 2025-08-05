@@ -2867,7 +2867,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Schedule multiple jobs in priority order
-  async scheduleJobsByPriority(maxJobs: number = 50): Promise<{ scheduled: number, failed: number, results: any[] }> {
+  async scheduleJobsByPriority(maxJobs: number = 100): Promise<{ scheduled: number, failed: number, results: any[] }> {
     await this.updateAllJobPriorities();
     
     const jobs = await this.getJobs();
