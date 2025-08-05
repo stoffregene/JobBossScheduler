@@ -2,12 +2,11 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Download, Filter, Maximize2, ChevronLeft, ChevronRight, GripVertical } from "lucide-react";
+import { Download, Filter, Maximize2, ChevronLeft, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import type { Job, Machine, ScheduleEntry } from "@shared/schema";
 import JobDetailsModal from "./job-details-modal";
-import { DndProvider, useDrag, useDrop } from 'react-dnd';
-import { HTML5Backend } from 'react-dnd-html5-backend';
+// Removed drag and drop imports
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -19,105 +18,9 @@ interface ScheduleViewProps {
   onScheduleViewChange: (view: { type: "week" | "month"; date: Date }) => void;
 }
 
-// Drag and drop types
-const ItemTypes = {
-  JOB: 'job',
-};
+// Drag and drop functionality removed
 
-interface DragItem {
-  type: string;
-  job: Job;
-}
-
-interface DropTarget {
-  machineId: string;
-  date: Date;
-  shift: number;
-}
-
-// Draggable job component
-function DraggableJob({ job }: { job: Job }) {
-  const [{ isDragging }, drag] = useDrag(() => ({
-    type: ItemTypes.JOB,
-    item: { job },
-    collect: (monitor) => ({
-      isDragging: !!monitor.isDragging(),
-    }),
-  }));
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'Critical': return 'bg-red-100 dark:bg-red-900 border-red-300 text-red-800 dark:text-red-200';
-      case 'High': return 'bg-orange-100 dark:bg-orange-900 border-orange-300 text-orange-800 dark:text-orange-200';
-      case 'Normal': return 'bg-blue-100 dark:bg-blue-900 border-blue-300 text-blue-800 dark:text-blue-200';
-      case 'Low': return 'bg-gray-100 dark:bg-gray-800 border-gray-300 text-gray-800 dark:text-gray-200';
-      default: return 'bg-gray-100 dark:bg-gray-800 border-gray-300 text-gray-800 dark:text-gray-200';
-    }
-  };
-
-  return (
-    <div
-      ref={drag}
-      className={`p-2 mb-2 border rounded cursor-move transition-opacity ${
-        isDragging ? 'opacity-50' : ''
-      } ${getPriorityColor(job.priority)} hover:shadow-md`}
-      data-testid={`draggable-job-${job.jobNumber}`}
-    >
-      <div className="flex items-center justify-between">
-        <div className="flex-1">
-          <div className="font-semibold text-sm">{job.jobNumber}</div>
-          <div className="text-xs opacity-75">{job.partNumber}</div>
-          <div className="text-xs opacity-60">{job.priority} Priority</div>
-        </div>
-        <GripVertical className="w-4 h-4 opacity-50" />
-      </div>
-    </div>
-  );
-}
-
-// Drop zone component for scheduling
-function ScheduleDropZone({ 
-  children, 
-  machineId, 
-  date, 
-  shift, 
-  onDrop 
-}: { 
-  children: React.ReactNode; 
-  machineId: string; 
-  date: Date; 
-  shift: number; 
-  onDrop: (item: DragItem, target: DropTarget) => void; 
-}) {
-  const [{ isOver, canDrop }, drop] = useDrop(() => ({
-    accept: ItemTypes.JOB,
-    drop: (item: DragItem) => {
-      onDrop(item, { machineId, date, shift });
-    },
-    collect: (monitor) => ({
-      isOver: !!monitor.isOver(),
-      canDrop: !!monitor.canDrop(),
-    }),
-  }));
-
-  return (
-    <div
-      ref={drop}
-      className={`relative transition-colors ${
-        isOver && canDrop 
-          ? 'bg-green-100 dark:bg-green-900 border-green-300' 
-          : canDrop 
-            ? 'hover:bg-gray-100 dark:hover:bg-gray-700' 
-            : ''
-      }`}
-    >
-      {children}
-      {isOver && canDrop && (
-        <div className="absolute inset-0 bg-green-200 dark:bg-green-800 opacity-30 rounded pointer-events-none" />
-      )}
-    </div>
-  );
-}
+// Drag and drop components removed
 
 export default function ScheduleView({ scheduleView, onScheduleViewChange }: ScheduleViewProps) {
   const [machineTypeFilter, setMachineTypeFilter] = useState<string>("ALL");
@@ -142,47 +45,7 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
   // Get unscheduled jobs (status = "Open")
   const unscheduledJobs = jobs?.filter(job => job.status === "Open") || [];
 
-  // Drag and drop mutation for scheduling jobs
-  const dragScheduleMutation = useMutation({
-    mutationFn: async ({ jobId, machineId, startDate, shift }: {
-      jobId: string;
-      machineId: string;
-      startDate: string;
-      shift: number;
-    }) => {
-      return apiRequest(`/api/jobs/${jobId}/drag-schedule`, {
-        method: 'POST',
-        body: JSON.stringify({ machineId, startDate, shift }),
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/schedule'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
-      toast({
-        title: "Job Scheduled",
-        description: "Job has been successfully scheduled via drag and drop.",
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Scheduling Failed",
-        description: error.message || "Failed to schedule job via drag and drop",
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Handle drag and drop
-  const handleJobDrop = (item: DragItem, target: DropTarget) => {
-    const startDate = target.date.toISOString().split('T')[0];
-    dragScheduleMutation.mutate({
-      jobId: item.job.id,
-      machineId: target.machineId,
-      startDate,
-      shift: target.shift,
-    });
-  };
+  // Drag and drop functionality removed
 
   const getWeekDays = () => {
     const currentWeek = [];
@@ -282,28 +145,9 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
   };
 
   return (
-    <DndProvider backend={HTML5Backend}>
-      <div className={`flex gap-4 ${isFullscreen ? "fixed inset-4 z-50" : ""}`}>
-        {/* Unscheduled Jobs Sidebar */}
-        <Card className="w-64 flex-shrink-0">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold">
-              Unscheduled Jobs ({unscheduledJobs.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 max-h-96 overflow-y-auto">
-            {unscheduledJobs.length === 0 ? (
-              <p className="text-sm text-muted-foreground">All jobs are scheduled</p>
-            ) : (
-              unscheduledJobs.slice(0, 20).map(job => (
-                <DraggableJob key={job.id} job={job} />
-              ))
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Main Schedule View */}
-        <Card className="flex-1">
+    <div className={`${isFullscreen ? "fixed inset-4 z-50" : ""}`}>
+      {/* Production Schedule - Full Width */}
+      <Card className="w-full">
           <CardHeader className="pb-4">
             <div className="flex flex-col space-y-3">
               {/* Title and Navigation Row */}
@@ -454,13 +298,7 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
                     });
 
                   return (
-                    <ScheduleDropZone
-                      key={dayIndex}
-                      machineId={machine.id}
-                      date={weekDays[dayIndex]}
-                      shift={1} // TODO: Support shift selection
-                      onDrop={handleJobDrop}
-                    >
+                    <div key={dayIndex}>
                       <div 
                         className={`h-12 rounded relative flex items-center justify-center ${
                           isUnavailable 
@@ -483,7 +321,7 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
                           </button>
                         )}
                       </div>
-                    </ScheduleDropZone>
+                    </div>
                   );
                   })}
                 </div>
@@ -533,7 +371,6 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
           />
         )}
       </Card>
-      </div>
-    </DndProvider>
+    </div>
   );
 }

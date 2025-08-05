@@ -157,26 +157,26 @@ export default function Dashboard() {
           <DashboardOverview />
         </div>
 
-        {/* Main Content Grid - Reorganized for better visibility */}
-        <div className="grid grid-cols-1 xl:grid-cols-5 lg:grid-cols-4 gap-6">
-          {/* Left Column: Job Queue - Enhanced visibility */}
+        {/* Production Schedule - Full Width */}
+        <div className="mb-8">
+          <ScheduleView 
+            scheduleView={scheduleView}
+            onScheduleViewChange={setScheduleView}
+          />
+        </div>
+
+        {/* Secondary Content Grid */}
+        <div className="grid grid-cols-1 xl:grid-cols-4 lg:grid-cols-3 gap-6">
+          {/* Job Queue */}
           <div className="xl:col-span-2 lg:col-span-2 space-y-6">
             <JobQueue onJobSelect={setSelectedJobId} />
-          </div>
-
-          {/* Center Column: Production Schedule Calendar - More real estate */}
-          <div className="xl:col-span-2 lg:col-span-2 space-y-6">
-            <ScheduleView 
-              scheduleView={scheduleView}
-              onScheduleViewChange={setScheduleView}
-            />
             
-            {/* Resource Capacity tied to production schedule */}
+            {/* Resource Capacity */}
             <ResourceAllocation scheduleView={scheduleView} />
           </div>
 
-          {/* Right Column: Alerts, Materials & Work Center Status */}
-          <div className="xl:col-span-1 lg:col-span-1 space-y-6">
+          {/* Alerts, Materials & Work Center Status */}
+          <div className="xl:col-span-2 lg:col-span-1 space-y-6">
             <SchedulingFailuresWidget />
             <MaterialOrdersWidget />
             <JobsAwaitingMaterialWidget />
