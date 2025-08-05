@@ -1595,24 +1595,40 @@ export class DatabaseStorage implements IStorage {
           continue;
         }
         
-        // OPTIMIZATION: Handle outsource operations specially - don't schedule them on specific machines
-        if (operation.machineType === 'OUTSOURCE' || operation.compatibleMachines.includes('OUTSOURCE-01')) {
-          // Outsource operations are placeholders - create entry without actual machine scheduling
+        // OPTIMIZATION: Handle outsource and inspect operations specially - no capacity limits
+        if (operation.machineType === 'OUTSOURCE' || operation.compatibleMachines.includes('OUTSOURCE-01') || 
+            operation.machineType.includes('INSPECT') || operation.name.toLowerCase().includes('inspect')) {
+          // Outsource/Inspect operations are placeholders - create entry without capacity constraints
+          const machines = await this.getMachines();
+          let machineId = 'outsource-placeholder';
+          let status = "Outsourced";
+          
+          if (operation.machineType.includes('INSPECT') || operation.name.toLowerCase().includes('inspect')) {
+            // Find inspect machine
+            const inspectMachine = machines.find(m => m.machineId.includes('INSPECT'));
+            machineId = inspectMachine?.id || 'inspect-placeholder';
+            status = "Scheduled";
+          } else {
+            // Find outsource machine
+            const outsourceMachine = machines.find(m => m.machineId === 'OUTSOURCE-01');
+            machineId = outsourceMachine?.id || 'outsource-placeholder';
+          }
+          
           const scheduleEntry = await this.createScheduleEntry({
             jobId: job.id,
-            machineId: (await this.getMachines()).find(m => m.machineId === 'OUTSOURCE-01')?.id || 'outsource-placeholder', // Use actual outsource machine ID
-            assignedResourceId: null, // Outsource operations managed externally
+            machineId: machineId,
+            assignedResourceId: null, // No resource constraints for outsource/inspect
             operationSequence: operation.sequence,
             startTime: currentDate,
             endTime: new Date(currentDate.getTime() + (parseFloat(operation.estimatedHours) * 60 * 60 * 1000)),
-            shift: 1, // Default to shift 1 for outsource
-            status: "Outsourced"
+            shift: 1, // Default to shift 1
+            status: status
           });
           
           scheduleEntries.push(scheduleEntry);
           onProgress?.({
             percentage: ((i + 1) / sortedOperations.length) * 90,
-            status: `Operation ${i + 1} marked as outsourced`,
+            status: `Operation ${i + 1} scheduled (${status.toLowerCase()})`,
             stage: 'scheduled',
             operationName: operation.name,
             currentOperation: i + 1,
@@ -2414,7 +2430,14 @@ export class DatabaseStorage implements IStorage {
     await this.updateAllJobPriorities();
     
     const jobs = await this.getJobs();
-    const unscheduledJobs = jobs.filter(job => job.status === 'Unscheduled' || job.status === 'Open');
+    const unscheduledJobs = jobs.filter(job => 
+      job.status === 'Unscheduled' || job.status === 'Open' || job.status === 'Planning'
+    );
+    
+    console.log(`📋 Total jobs: ${jobs.length}, Unscheduled/Planning/Open: ${unscheduledJobs.length}`);
+    if (unscheduledJobs.length === 0) {
+      console.log(`📋 Job statuses found: ${[...new Set(jobs.map(j => j.status))].join(', ')}`);
+    }
     
     // Sort jobs by priority (Critical > High > Normal > Low), then by promised date
     const priorityOrder = { 'Critical': 4, 'High': 3, 'Normal': 2, 'Low': 1 };
