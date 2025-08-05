@@ -19,11 +19,13 @@ export default function JobDetailsModal({ jobId, onClose }: JobDetailsModalProps
     queryKey: ['/api/jobs', jobId],
   });
 
-  // Fetch schedule entries for this job to show assigned resources
-  const { data: scheduleEntries } = useQuery<any[]>({
-    queryKey: ['/api/schedule', 'job', jobId],
-    queryFn: () => apiRequest(`/api/schedule?jobId=${jobId}`, 'GET'),
+  // Fetch all schedule entries and filter for this job
+  const { data: allScheduleEntries } = useQuery<any[]>({
+    queryKey: ['/api/schedule'],
   });
+  
+  // Filter schedule entries for this specific job
+  const scheduleEntries = allScheduleEntries?.filter(entry => entry.jobId === jobId) || [];
 
   // Fetch resources to get resource names
   const { data: resources } = useQuery<any[]>({
@@ -186,14 +188,20 @@ export default function JobDetailsModal({ jobId, onClose }: JobDetailsModalProps
                   const assignedResource = scheduledEntry?.assignedResourceId && resources ? 
                     resources.find((r: any) => r.id === scheduledEntry.assignedResourceId) : null;
                   
-                  // Debug logging for job 59902
-                  if (job?.jobNumber === '59902') {
-                    console.log(`Job 59902 Debug - Operation ${operation.sequence}:`, {
+                  // Debug logging for troubleshooting
+                  if (job?.jobNumber === '59902' || job?.jobNumber === '58905') {
+                    console.log(`${job.jobNumber} Debug - Operation ${operation.sequence}:`, {
+                      jobId: job.id,
                       operationName: operation.name,
                       machineType: operation.machineType,
-                      scheduledEntry,
-                      assignedResourceId: scheduledEntry?.assignedResourceId,
-                      assignedResource: assignedResource ? {name: assignedResource.name, role: assignedResource.role} : null
+                      scheduledEntry: scheduledEntry ? {
+                        id: scheduledEntry.id,
+                        jobId: scheduledEntry.jobId,
+                        operationSequence: scheduledEntry.operationSequence,
+                        assignedResourceId: scheduledEntry.assignedResourceId
+                      } : null,
+                      assignedResource: assignedResource ? {name: assignedResource.name, role: assignedResource.role} : null,
+                      allScheduleEntriesForJob: scheduleEntries.length
                     });
                   }
                   
