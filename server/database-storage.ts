@@ -1213,16 +1213,27 @@ export class DatabaseStorage implements IStorage {
       assignedResource = { id: 'outsource-virtual', name: 'External Vendor' };
     } else {
       // Find available resources for this machine on this shift
-      const availableResources = machineResources.filter(resource => 
-        resource.isActive &&
-        resource.shiftSchedule?.includes(shift) &&
-        resource.workCenters?.includes(bestMatch.machine.id)
-      );
+      const availableResources = machineResources.filter(resource => {
+        const isActive = resource.isActive;
+        const hasShift = resource.shiftSchedule?.includes(shift);
+        const canOperateMachine = resource.workCenters?.includes(bestMatch.machine.id);
+        
+        if (resource.name === 'Aaron Chastain') {
+          console.log(`👤 DEBUG Aaron Chastain: active=${isActive}, shift=${hasShift}, machine=${canOperateMachine}`);
+          console.log(`👤 Aaron's work centers: ${resource.workCenters?.join(', ')}`);
+          console.log(`👤 Target machine ID: ${bestMatch.machine.id}, Machine: ${bestMatch.machine.machineId}`);
+        }
+        
+        return isActive && hasShift && canOperateMachine;
+      });
       
       if (availableResources.length > 0) {
         // For now, assign the first available resource (could be enhanced with load balancing)
         assignedResource = availableResources[0];
         console.log(`👤 Assigned resource: ${assignedResource.name} to machine ${bestMatch.machine.machineId}`);
+      } else {
+        console.log(`❌ No qualified resources found for machine ${bestMatch.machine.machineId} on shift ${shift}`);
+        console.log(`❌ Total resources checked: ${machineResources.length}, Active: ${machineResources.filter(r => r.isActive).length}, On shift ${shift}: ${machineResources.filter(r => r.shiftSchedule?.includes(shift)).length}`);
       }
     }
     

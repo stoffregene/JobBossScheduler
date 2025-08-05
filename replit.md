@@ -10,7 +10,15 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
-**August 5, 2025** - Implemented comprehensive shift balancing with weekly capacity validation:
+**August 5, 2025** - Fixed resource assignment and scheduling improvements:
+- **RESOURCE ASSIGNMENT FIX**: Fixed critical bug where resources were assigned to incompatible machines (e.g., Aaron Chastain to VMC when he only operates lathes)
+- **PROPER MACHINE COMPATIBILITY**: Resources now properly filtered by workCenters field to ensure only qualified operators are assigned
+- **INSPECT OPERATIONS**: Treat INSPECT operations like outsourcing with no capacity limits - solves infinite scheduling loops
+- **LAG TIME PRECISION**: Fixed lag times to apply ONLY to saw/waterjet operations (24hr buffer), not all operations
+- **HOUR-BASED SCHEDULING**: Operations now schedule continuously by hours (e.g., 2hr mill at 3am, 0hr inspect at 5am)
+- **SCHEDULE ALL ENHANCEMENT**: Updated to include 'Open' and 'Planning' status jobs with debug logging for better troubleshooting
+
+**August 5, 2025** - Previously implemented comprehensive shift balancing with weekly capacity validation:
 - **WEEKLY CAPACITY VALIDATION**: Added checksum validation to ensure weekly hours never exceed shift capacities (Shift 1: 448h/week, Shift 2: 120h/week)
 - **ENHANCED SHIFT BALANCING**: Fixed scheduling to properly utilize both shifts with weekly capacity constraints
 - **MULTI-DAY JOB HANDLING**: Jobs exceeding 8 hours now automatically span across shifts and business days with proper capacity checking
