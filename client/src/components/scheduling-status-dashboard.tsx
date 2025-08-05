@@ -111,16 +111,22 @@ export function SchedulingStatusDashboard() {
           hasBlockingIssues = true;
         }
 
-        // Check for qualified operators
-        const qualifiedOperators = resources.filter(resource => 
-          resource.isActive &&
-          (resource.role === 'Operator' || resource.role === 'Shift Lead') &&
-          compatibleMachines.some(machine => resource.workCenters?.includes(machine.id))
-        );
+        // Check for qualified operators (skip for OUTSOURCE and INSPECT-001 operations)
+        const isExternalOperation = operation.machineType === 'OUTSOURCE' || 
+                                   operation.compatibleMachines.includes('OUTSOURCE-001') ||
+                                   operation.compatibleMachines.includes('INSPECT-001');
+        
+        if (!isExternalOperation) {
+          const qualifiedOperators = resources.filter(resource => 
+            resource.isActive &&
+            (resource.role === 'Operator' || resource.role === 'Shift Lead') &&
+            compatibleMachines.some(machine => resource.workCenters?.includes(machine.id))
+          );
 
-        if (qualifiedOperators.length === 0 && compatibleMachines.length > 0) {
-          operationIssues.push('No qualified operators available for compatible machines');
-          hasBlockingIssues = true;
+          if (qualifiedOperators.length === 0 && compatibleMachines.length > 0) {
+            operationIssues.push('No qualified operators available for compatible machines');
+            hasBlockingIssues = true;
+          }
         }
 
         // Check for extremely long operations that might cause capacity issues

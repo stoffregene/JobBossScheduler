@@ -1554,8 +1554,8 @@ export class DatabaseStorage implements IStorage {
         // CRITICAL: Apply same strict resource assignment rules everywhere
         let assignedResource = null;
         
-        if (machine.type === 'OUTSOURCE') {
-          assignedResource = null; // RULE 1: External vendor, no internal resources
+        if (machine.type === 'OUTSOURCE' || machine.machineId === 'INSPECT-001') {
+          assignedResource = null; // RULE 1: External vendor or inspection station, no internal resources
         } else if (machine.type === 'INSPECT') {
           const allResources = await this.getResources();
           const inspectors = allResources.filter(r => 
@@ -1790,9 +1790,9 @@ export class DatabaseStorage implements IStorage {
   ): Promise<Resource | null> {
     console.log(`🔍 Resource Assignment for ${machine.machineId} (${operationType}) on Shift ${shift}`);
     
-    if (machine.type === 'OUTSOURCE' || operationType === 'OUTSOURCE') {
-      console.log(`🏭 OUTSOURCE operation: No internal resource assignment, external vendor handles work`);
-      return null; // External vendors handle outsourced work
+    if (machine.type === 'OUTSOURCE' || operationType === 'OUTSOURCE' || machine.machineId === 'INSPECT-001') {
+      console.log(`🏭 OUTSOURCE/INSPECT-001 operation: No internal resource assignment, external vendor or inspection station handles work`);
+      return null; // External vendors or inspection stations handle work
     }
     
     const allResources = await this.getResources();
