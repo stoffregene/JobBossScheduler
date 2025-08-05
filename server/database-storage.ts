@@ -1178,7 +1178,8 @@ export class DatabaseStorage implements IStorage {
       console.log(`⚠️ Efficiency Impact: ${bestMatch.efficiencyImpact.toFixed(1)}% for ${(operation as any).operationName || (operation as any).name || operation.machineType} (${bestMatch.machine.machineId})`);
     }
     
-    return bestMatch;
+    // Add shift information to the result
+    return { ...bestMatch, shift };
   }
 
   // Get shifts ordered by current load (least loaded first) for better load balancing
@@ -1431,6 +1432,43 @@ export class DatabaseStorage implements IStorage {
     return true;
   }
 
+  // Helper to calculate week string from date
+  private getWeekString(date: Date): string {
+    const yearStart = new Date(date.getFullYear(), 0, 1);
+    const days = Math.floor((date.getTime() - yearStart.getTime()) / (24 * 60 * 60 * 1000));
+    const weekNumber = Math.ceil((days + yearStart.getDay() + 1) / 7);
+    return `${date.getFullYear()}-W${weekNumber.toString().padStart(2, '0')}`;
+  }
+
+  // Validate weekly capacity constraints
+  private async validateWeeklyCapacity(
+    targetDate: Date,
+    shift: number,
+    hoursToAdd: number
+  ): Promise<{ valid: boolean; currentHours: number; maxHours: number }> {
+    const weekString = this.getWeekString(targetDate);
+    const allScheduleEntries = await this.getScheduleEntries();
+    
+    // Calculate current hours for this week and shift
+    const weekHours = allScheduleEntries
+      .filter(entry => {
+        const entryWeek = this.getWeekString(new Date(entry.startTime));
+        return entryWeek === weekString && entry.shift === shift;
+      })
+      .reduce((total, entry) => {
+        const hours = (new Date(entry.endTime).getTime() - new Date(entry.startTime).getTime()) / (1000 * 60 * 60);
+        return total + hours;
+      }, 0);
+    
+    // Weekly capacity limits
+    const maxHours = shift === 1 ? 448 : 120; // Shift 1: 112h/day × 4 days, Shift 2: 120h/week
+    const valid = (weekHours + hoursToAdd) <= maxHours;
+    
+    console.log(`📊 Week ${weekString} Shift ${shift}: ${weekHours.toFixed(1)}h + ${hoursToAdd.toFixed(1)}h = ${(weekHours + hoursToAdd).toFixed(1)}h / ${maxHours}h max`);
+    
+    return { valid, currentHours: weekHours, maxHours };
+  }
+
   async autoScheduleJob(
     jobId: string, 
     onProgress?: (progress: {
@@ -1608,6 +1646,19 @@ export class DatabaseStorage implements IStorage {
                 // If there's a conflict, try next day
                 operationStartTime = new Date(operationStartTime.getTime() + dayInMs);
                 operationStartTime.setHours(currentShift === 1 ? 3 : 15, 0, 0, 0);
+                continue;
+              }
+              
+              // Check weekly capacity before scheduling this segment
+              const weeklyCheck = await this.validateWeeklyCapacity(segmentStartTime, currentShift, hoursThisShift);
+              if (!weeklyCheck.valid) {
+                console.log(`   ❌ Weekly capacity exceeded for segment, moving to next week`);
+                // Move to next Monday
+                const nextMonday = new Date(operationStartTime);
+                nextMonday.setDate(operationStartTime.getDate() + (8 - operationStartTime.getDay()));
+                operationStartTime = nextMonday;
+                operationStartTime.setHours(3, 0, 0, 0); // Reset to shift 1
+                currentShift = 1;
                 continue;
               }
               
@@ -2412,8 +2463,14 @@ export class DatabaseStorage implements IStorage {
         for (const shift of availableShifts) {
           const machineResult = await this.findBestMachineForOperation(operation, currentDate, shift);
           if (machineResult) {
-            machineResults.push({ ...machineResult, shift });
-            break; // Use first available shift with capacity
+            // Validate weekly capacity before accepting this machine
+            const weeklyCheck = await this.validateWeeklyCapacity(currentDate, shift, machineResult.adjustedHours);
+            if (weeklyCheck.valid) {
+              machineResults.push({ ...machineResult, shift });
+              break; // Use first available shift with capacity
+            } else {
+              console.log(`   ❌ Weekly capacity exceeded for shift ${shift}, trying next shift`);
+            }
           }
         }
         
