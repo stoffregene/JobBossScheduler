@@ -1333,40 +1333,61 @@ export class DatabaseStorage implements IStorage {
     
     console.log(`📊 Shift 2 weekly capacity: ${shift2WeeklyHours.toFixed(1)}h / 120h limit`);
     
-    // STRICT CAPACITY ENFORCEMENT: Filter out shifts that are over capacity
+    // PRIORITY SHIFT SELECTION: Always try Shift 1 first, then Shift 2 if needed
     const availableShifts = [];
     
-    // Get actual resource-based capacity limits
-    const resources = await this.getResources();
+    // If we have a specific operation, check which shifts have compatible machines first
+    if (operation) {
+      const allMachines = await this.getMachines();
+      const compatibleMachines = allMachines.filter(machine => 
+        operation.compatibleMachines.includes(machine.machineId) &&
+        machine.status === 'Available'
+      );
+      
+      console.log(`🔍 Compatible machines for ${operation.machineType}: ${compatibleMachines.map(m => m.machineId).join(', ')}`);
+      
+      // Check which shifts these machines support
+      const shift1Compatible = compatibleMachines.some(m => m.availableShifts?.includes(1));
+      const shift2Compatible = compatibleMachines.some(m => m.availableShifts?.includes(2));
+      
+      console.log(`📅 Shift compatibility: Shift 1: ${shift1Compatible}, Shift 2: ${shift2Compatible}`);
+      
+      // Always prioritize Shift 1 if machines are available there
+      if (shift1Compatible) {
+        availableShifts.push(1);
+      }
+      
+      // Only add Shift 2 if machines are available there
+      if (shift2Compatible) {
+        availableShifts.push(2);
+      }
+      
+      // If no compatible machines found, still return both shifts to let the scheduler try substitution
+      if (availableShifts.length === 0) {
+        console.log(`⚠️ No compatible machines found, but returning all shifts for substitution check`);
+        availableShifts.push(1, 2);
+      }
+    } else {
+      // No specific operation, return shifts in priority order
+      availableShifts.push(1, 2);
+    }
     
+    // Get resource information for logging
+    const resources = await this.getResources();
     const shift1Resources = resources.filter(r => r.shiftSchedule?.includes(1) && r.isActive).length;
     const shift2Resources = resources.filter(r => r.shiftSchedule?.includes(2) && r.isActive).length;
+    const shift1DailyCapacity = shift1Resources * 8;
+    const shift2DailyCapacity = shift2Resources * 8;
     
-    // Calculate actual daily capacity based on available resources
-    const shift1DailyCapacity = shift1Resources * 8; // Each resource works 8 hours
-    const shift2DailyCapacity = shift2Resources * 8; // Each resource works 8 hours
-    const shift2WeeklyCapacity = shift2DailyCapacity * 5; // 5 working days per week
+    console.log(`📊 Resource capacity: Shift 1: ${shift1Resources} operators (${shift1DailyCapacity}h/day, current: ${shiftLoads[1].toFixed(1)}h), Shift 2: ${shift2Resources} operators (${shift2DailyCapacity}h/day, current: ${shiftLoads[2].toFixed(1)}h)`);
     
-    console.log(`📊 Resource-based capacity: Shift 1: ${shift1Resources} operators (${shift1DailyCapacity}h/day), Shift 2: ${shift2Resources} operators (${shift2DailyCapacity}h/day, ${shift2WeeklyCapacity}h/week)`);
-    
-    // Apply strict capacity limits - pass operation hours for checking
+    // Check if shifts are severely overloaded (more than 150% capacity) and warn
     const operationHours = operation ? operation.estimatedHours || 0 : 0;
-    
-    // Check if adding this operation would exceed capacity
-    if (shiftLoads[1] + operationHours <= shift1DailyCapacity) {
-      availableShifts.push(1);
+    if (availableShifts.includes(1) && shiftLoads[1] + operationHours > shift1DailyCapacity * 1.5) {
+      console.log(`⚠️ WARNING: Shift 1 severely overloaded: ${(shiftLoads[1] + operationHours).toFixed(1)}h > ${(shift1DailyCapacity * 1.5).toFixed(1)}h capacity`);
     }
-    
-    // For shift 2, check both daily AND weekly limits
-    if (shiftLoads[2] + operationHours <= shift2DailyCapacity && 
-        shift2WeeklyHours + operationHours <= shift2WeeklyCapacity) {
-      availableShifts.push(2);
-    }
-    
-    if (availableShifts.length === 0) {
-      console.log(`❌ CAPACITY EXCEEDED: Both shifts at capacity for ${targetDate.toDateString()}`);
-      console.log(`   Shift 1: ${shiftLoads[1].toFixed(1)}h/${shift1DailyCapacity}h, Shift 2: ${shiftLoads[2].toFixed(1)}h/${shift2DailyCapacity}h (weekly: ${shift2WeeklyHours.toFixed(1)}h/${shift2WeeklyCapacity}h)`);
-      return []; // Return empty array to force job to move to next week
+    if (availableShifts.includes(2) && shiftLoads[2] + operationHours > shift2DailyCapacity * 1.5) {
+      console.log(`⚠️ WARNING: Shift 2 severely overloaded: ${(shiftLoads[2] + operationHours).toFixed(1)}h > ${(shift2DailyCapacity * 1.5).toFixed(1)}h capacity`);
     }
     
     // LOAD BALANCING: For machines that support both shifts, prioritize the less loaded shift
