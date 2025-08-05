@@ -1146,19 +1146,48 @@ export class DatabaseStorage implements IStorage {
       // SPECIAL CASE: OUTSOURCE machines don't need operator resources - they are external vendors
       let machineResources = [];
       if (machine.type === 'OUTSOURCE') {
-        // Outsource machines always have "virtual" resources available
-        machineResources = [{ id: 'outsource-virtual', name: 'External Vendor' }];
-        console.log(`     ✅ OUTSOURCE machine ${machine.machineId} uses external vendor resources`);
-      } else {
-        machineResources = allResources.filter(resource => 
-          resource.isActive &&
-          resource.shiftSchedule?.includes(shift) &&
-          resource.workCenters?.includes(machine.id)
-        );
+        // CRITICAL FIX: Outsource machines get NO internal resources - work is done externally
+        machineResources = []; // Empty array but not null to avoid type issues
+        console.log(`     ✅ OUTSOURCE machine ${machine.machineId} requires NO internal resources - external vendor`);
+      } else if (machine.type === 'INSPECT') {
+        // CRITICAL FIX: INSPECT machines need Quality Inspectors only - STRICT COMPATIBILITY CHECK
+        console.log(`🔍 Resource Assignment for ${machine.machineId} (${machine.type}) on Shift ${shift}`);
+        machineResources = allResources.filter(resource => {
+          const isActive = resource.isActive;
+          const worksShift = resource.shiftSchedule?.includes(shift);
+          const isMachineQualified = resource.workCenters?.includes(machine.id);
+          const isInspector = resource.role === 'Quality Inspector';
+          
+          console.log(`🔍 ${machine.type} check ${resource.name}: active=${isActive}, shift=${worksShift}, machine=${isMachineQualified}, inspector=${isInspector}`);
+          
+          // CRITICAL: Only Quality Inspectors qualified for THIS specific machine
+          return isActive && worksShift && isMachineQualified && isInspector;
+        });
         
         if (machineResources.length === 0) {
-          console.log(`     ❌ Machine ${machine.machineId} has NO qualified resources on shift ${shift}`);
-          console.log(`     Resources needed: active=true, shifts=${shift}, workCenters includes ${machine.id}`);
+          console.log(`     ❌ INSPECT machine ${machine.machineId} has NO qualified Quality Inspectors on shift ${shift}`);
+          continue;
+        }
+      } else {
+        // PRODUCTION machines need operators qualified for this specific machine
+        console.log(`⚙️ Resource Assignment for ${machine.machineId} (${machine.type}) on Shift ${shift}`);
+        machineResources = allResources.filter(resource => {
+          const isActive = resource.isActive;
+          const worksShift = resource.shiftSchedule?.includes(shift);
+          const isMachineQualified = resource.workCenters?.includes(machine.id);
+          const isOperator = resource.role === 'Operator' || resource.role === 'Shift Lead';
+          
+          console.log(`⚙️ PRODUCTION check ${resource.name}: active=${isActive}, shift=${worksShift}, machine=${isMachineQualified}, operator=${isOperator}`);
+          console.log(`   Resource work centers: ${resource.workCenters?.join(', ')}`);
+          console.log(`   Target machine ID: ${machine.id}, Machine: ${machine.machineId}`);
+          
+          // CRITICAL: Only Operators/Shift Leads qualified for THIS specific machine
+          return isActive && worksShift && isMachineQualified && isOperator;
+        });
+        
+        if (machineResources.length === 0) {
+          console.log(`     ❌ PRODUCTION machine ${machine.machineId} has NO qualified operators on shift ${shift}`);
+          console.log(`     Resources needed: active=true, shifts=${shift}, workCenters includes ${machine.id}, role=Operator/Shift Lead`);
           continue;
         }
       }
@@ -1264,7 +1293,7 @@ export class DatabaseStorage implements IStorage {
     // OPTIMIZATION: Use consolidated resource assignment function
     const operationType = bestMatch.machine.type === 'OUTSOURCE' ? 'OUTSOURCE' : 
                          bestMatch.machine.type === 'INSPECT' ? 'INSPECT' : 'PRODUCTION';
-    const assignedResource = await this.assignOptimalResource(bestMatch.machine, shift, operationType);
+    const assignedResource = operationType === 'OUTSOURCE' ? null : await this.assignOptimalResource(bestMatch.machine, shift, operationType);
     
     // Add shift and resource information to the result
     return { ...bestMatch, shift, assignedResource };
