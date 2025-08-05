@@ -12,6 +12,7 @@ import MaterialOrdersWidget from "../components/material-orders-widget";
 import JobsAwaitingMaterialWidget from "../components/jobs-awaiting-material-widget";
 import { EfficiencyImpactWidget } from "../components/efficiency-impact-widget";
 import { SchedulingFailuresWidget } from "../components/scheduling-failures-widget";
+import { SchedulingStatusDashboard } from "../components/scheduling-status-dashboard";
 import { Building2, Clock, Users, Package, Upload, Moon, Sun } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
@@ -108,6 +109,12 @@ export default function Dashboard() {
                   <Button variant="outline" size="sm" className="flex items-center gap-2" data-testid="link-work-centers">
                     <Building2 className="w-4 h-4" />
                     Work Centers
+                  </Button>
+                </Link>
+                <Link href="/scheduling-status">
+                  <Button variant="outline" size="sm" className="flex items-center gap-2" data-testid="link-scheduling-status">
+                    <Clock className="w-4 h-4" />
+                    Scheduling Status
                   </Button>
                 </Link>
               </nav>

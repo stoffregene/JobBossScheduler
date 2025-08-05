@@ -9,6 +9,7 @@ import ResourceManagement from "./pages/resource-management-simple";
 import MaterialTracking from "./pages/material-tracking";
 import JobImport from "./pages/job-import";
 import WorkCenterManagement from "./pages/work-center-management";
+import SchedulingStatusPage from "./pages/scheduling-status";
 import NotFound from "./pages/not-found";
 
 function Router() {
@@ -20,6 +21,7 @@ function Router() {
       <Route path="/job-import" component={JobImport} />
       <Route path="/import" component={JobImport} />
       <Route path="/work-centers" component={WorkCenterManagement} />
+      <Route path="/scheduling-status" component={SchedulingStatusPage} />
       <Route component={NotFound} />
     </Switch>
   );
