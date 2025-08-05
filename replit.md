@@ -8,6 +8,15 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+**August 5, 2025** - CRITICAL CAPACITY CALCULATION FIX: Fixed major frontend bug where capacity calculations showed incorrect negative available hours due to wrong duration calculation method:
+
+**🔧 CAPACITY CALCULATION CORRECTED**:
+- **BUG IDENTIFIED**: Frontend was using entire job `estimatedHours` for each schedule entry instead of actual entry duration
+- **CALCULATION FIX**: Now properly calculates duration from `startTime` to `endTime` for each schedule entry  
+- **CAPACITY ENFORCEMENT VERIFIED**: Backend properly validates weekly capacity limits (448h Shift 1, 120h Shift 2) and prevents over-scheduling
+- **VISUAL ENHANCEMENTS**: Added available hours display and improved multi-day job visual indicators
+- **RESULT**: Accurate capacity utilization display instead of misleading negative values
+
 **August 5, 2025** - OUTSOURCE OPERATIONS UI FIX: Fixed frontend display to correctly show external vendor message for OUTSOURCE operations instead of displaying internal operators:
 
 **🏭 OUTSOURCE DISPLAY CORRECTION**:

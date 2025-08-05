@@ -197,10 +197,12 @@ export default function ResourceAllocation({ scheduleView }: ResourceAllocationP
 
     relevantScheduleEntries.forEach(entry => {
       const machine = machines.find(m => m.id === entry.machineId);
-      const job = jobs.find(j => j.id === entry.jobId);
       
-      if (machine && job && (workCenterFilter === "ALL" || machine.type === workCenterFilter)) {
-        const hours = parseFloat(job.estimatedHours || "0");
+      if (machine && (workCenterFilter === "ALL" || machine.type === workCenterFilter)) {
+        // Calculate actual duration of this schedule entry in hours
+        const startTime = new Date(entry.startTime);
+        const endTime = new Date(entry.endTime);
+        const hours = (endTime.getTime() - startTime.getTime()) / (1000 * 60 * 60); // Convert ms to hours
         
         // Use the database shift value directly instead of recalculating from time
         // This ensures consistency with the scheduler's decisions
@@ -329,7 +331,7 @@ export default function ResourceAllocation({ scheduleView }: ResourceAllocationP
           </div>
           <div className="flex justify-between text-xs text-muted-foreground mt-1">
             <span>{utilizationPercent}% utilized</span>
-            <span>{Math.round(usedOperatorCapacity)}h scheduled</span>
+            <span>{Math.round(usedOperatorCapacity)}h scheduled / {Math.round(totalOperatorCapacity - usedOperatorCapacity)}h available</span>
           </div>
         </div>
 
