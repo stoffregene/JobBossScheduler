@@ -6,6 +6,21 @@ This is a comprehensive Manufacturing Resource Planning (MRP) system designed fo
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes
+
+**August 5, 2025** - MAJOR ANALYSIS: Created comprehensive resource-work center compatibility matrix revealing critical scheduling constraints:
+- **RESOURCE-MACHINE COMPATIBILITY FIX**: Fixed critical bug where resources were assigned to incompatible machines (e.g., Lindsay Jackson to lathe ops, Aaron Chastain to inspect ops)
+- **ROLE-BASED ASSIGNMENT**: Production operations only assign Operators/Shift Leads, INSPECT operations only assign Quality Inspectors
+- **WORK CENTER VALIDATION**: Resources now properly filtered by workCenters field to ensure only qualified operators are assigned to compatible machines
+- **COMPATIBILITY MATRIX ANALYSIS**: Generated complete permutation matrix showing all 19 operators across 31 machines with substitution capabilities (see resource-compatibility-matrix.md)
+- **CRITICAL BOTTLENECKS IDENTIFIED**: 
+  * HCN 5000 neo (4th axis): Only Drew Darling qualified - major scheduling constraint
+  * Welding operations: Only Calob Lamaster qualified - single point of failure
+  * Premium lathes: Limited to Aaron Chastain & Trevin Jorgensen for complex work
+- **MACHINE SUBSTITUTION RULES**: Documented that 4th axis machines can do 3-axis work, but 3-axis machines cannot do 4th axis operations
+- **OUTSOURCE RESOURCE FIX**: OUTSOURCE operations now correctly receive NO internal resources (null assignment) - external vendors handle the work
+- **INSPECT OPERATIONS**: Only Quality Inspectors can be assigned to INSPECT operations, no capacity limits to prevent infinite loops
+
 ## System Architecture
 
 ### Frontend Architecture
