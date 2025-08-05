@@ -1416,6 +1416,302 @@ export class DatabaseStorage implements IStorage {
     return { success: true, scheduleEntries };
   }
 
+  async manualScheduleJob(jobId: string, startDate: string): Promise<{ success: boolean; scheduleEntries?: ScheduleEntry[]; failureReason?: string }> {
+    const job = await this.getJob(jobId);
+    if (!job || !job.routing || job.routing.length === 0) {
+      return { 
+        success: false, 
+        failureReason: "Job not found or has no routing operations"
+      };
+    }
+
+    // Validate start date is not in the past
+    const startDateTime = new Date(startDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    if (startDateTime < today) {
+      return { 
+        success: false, 
+        failureReason: "Cannot schedule jobs in the past" 
+      };
+    }
+
+    const scheduleEntries: ScheduleEntry[] = [];
+    let currentDate = new Date(startDateTime);
+    const dayInMs = 24 * 60 * 60 * 1000;
+    
+    // Sort operations by sequence
+    const sortedOperations = [...job.routing].sort((a, b) => a.sequence - b.sequence);
+    
+    for (let i = 0; i < sortedOperations.length; i++) {
+      const operation = sortedOperations[i];
+      let scheduled = false;
+      let attempts = 0;
+      const maxAttempts = 10; // Try up to 10 working days
+      
+      while (!scheduled && attempts < maxAttempts) {
+        // Skip weekends (Fri-Sun) - only schedule Mon-Thu
+        if (currentDate.getDay() === 0 || currentDate.getDay() === 5 || currentDate.getDay() === 6) {
+          currentDate = new Date(currentDate.getTime() + dayInMs);
+          attempts++;
+          continue;
+        }
+        
+        // Handle outsource operations
+        if (operation.machineType === 'OUTSOURCE' || operation.compatibleMachines.includes('OUTSOURCE-01')) {
+          const machines = await this.getMachines();
+          const outsourceMachine = machines.find(m => m.machineId === 'OUTSOURCE-01');
+          
+          if (outsourceMachine) {
+            const scheduleEntry = await this.createScheduleEntry({
+              jobId: job.id,
+              machineId: outsourceMachine.id,
+              operationSequence: operation.sequence,
+              startTime: currentDate,
+              endTime: new Date(currentDate.getTime() + (parseFloat(operation.estimatedHours) * 60 * 60 * 1000)),
+              shift: 1,
+              status: "Outsourced"
+            });
+            scheduleEntries.push(scheduleEntry);
+            scheduled = true;
+            // Move to next day for next operation
+            currentDate = new Date(currentDate.getTime() + dayInMs);
+            break;
+          }
+        } else {
+          // Try scheduling regular operations - prioritize shift 1, then shift 2
+          for (const shift of [1, 2]) {
+            const machineResult = await this.findBestMachineForOperation(operation, currentDate, shift);
+            
+            if (machineResult) {
+              const operationDurationMs = machineResult.adjustedHours * 60 * 60 * 1000;
+              const shiftStartHour = shift === 1 ? 6 : 18; // 6 AM or 6 PM
+              
+              const startTime = new Date(currentDate);
+              startTime.setHours(shiftStartHour, 0, 0, 0);
+              
+              const endTime = new Date(startTime.getTime() + operationDurationMs);
+              
+              // Check for conflicts
+              const hasConflicts = await this.checkScheduleConflicts(machineResult.machine.id, startTime, endTime);
+              
+              if (!hasConflicts) {
+                const scheduleEntry = await this.createScheduleEntry({
+                  jobId: job.id,
+                  machineId: machineResult.machine.id,
+                  operationSequence: operation.sequence,
+                  startTime,
+                  endTime,
+                  shift,
+                  status: "Scheduled"
+                });
+                
+                scheduleEntries.push(scheduleEntry);
+                scheduled = true;
+                
+                // Calculate next start date - if operation ends same day, next operation can start next day
+                // If operation spans multiple days, next operation starts day after completion
+                const daysToAdd = Math.ceil(machineResult.adjustedHours / 8) || 1; // Assume 8-hour shifts
+                currentDate = new Date(currentDate.getTime() + (daysToAdd * dayInMs));
+                break;
+              }
+            }
+          }
+        }
+        
+        if (!scheduled) {
+          currentDate = new Date(currentDate.getTime() + dayInMs);
+          attempts++;
+        }
+      }
+      
+      if (!scheduled) {
+        return {
+          success: false,
+          failureReason: `Failed to schedule operation ${operation.sequence} (${operation.name || operation.operationName}) - no available machines found`
+        };
+      }
+    }
+    
+    // Update job status to scheduled
+    await this.updateJob(jobId, { status: "Scheduled" });
+    
+    return { success: true, scheduleEntries };
+  }
+
+  async dragScheduleJob(jobId: string, machineId: string, startDate: string, shift: number): Promise<{ success: boolean; scheduleEntries?: ScheduleEntry[]; failureReason?: string }> {
+    const job = await this.getJob(jobId);
+    if (!job || !job.routing || job.routing.length === 0) {
+      return { 
+        success: false, 
+        failureReason: "Job not found or has no routing operations"
+      };
+    }
+
+    // Validate start date is not in the past
+    const startDateTime = new Date(startDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    if (startDateTime < today) {
+      return { 
+        success: false, 
+        failureReason: "Cannot schedule jobs in the past" 
+      };
+    }
+
+    // Get the target machine
+    const machine = await this.getMachine(machineId);
+    if (!machine) {
+      return {
+        success: false,
+        failureReason: "Target machine not found"
+      };
+    }
+
+    // Check if machine supports the requested shift
+    if (!machine.availableShifts?.includes(shift)) {
+      return {
+        success: false,
+        failureReason: `Machine ${machine.machineId} does not support shift ${shift}`
+      };
+    }
+
+    const scheduleEntries: ScheduleEntry[] = [];
+    let currentDate = new Date(startDateTime);
+    const dayInMs = 24 * 60 * 60 * 1000;
+    
+    // Sort operations by sequence
+    const sortedOperations = [...job.routing].sort((a, b) => a.sequence - b.sequence);
+    
+    // Try to schedule the first operation on the specified machine/date/shift
+    for (let i = 0; i < sortedOperations.length; i++) {
+      const operation = sortedOperations[i];
+      let scheduled = false;
+      let attempts = 0;
+      const maxAttempts = 10;
+      
+      while (!scheduled && attempts < maxAttempts) {
+        // Skip weekends (Fri-Sun) - only schedule Mon-Thu
+        if (currentDate.getDay() === 0 || currentDate.getDay() === 5 || currentDate.getDay() === 6) {
+          currentDate = new Date(currentDate.getTime() + dayInMs);
+          attempts++;
+          continue;
+        }
+        
+        // For the first operation, use the specified machine if compatible
+        if (i === 0) {
+          // Check if the target machine is compatible with this operation
+          const machines = await this.getMachines();
+          const isCompatible = operation.compatibleMachines.includes(machine.machineId) || 
+                              operation.machineType === machine.type ||
+                              (machine.substitutionGroup && operation.compatibleMachines.some(compatId => {
+                                const compatMachine = machines.find(m => m.machineId === compatId);
+                                return compatMachine && compatMachine.substitutionGroup === machine.substitutionGroup;
+                              }));
+
+          if (!isCompatible) {
+            return {
+              success: false,
+              failureReason: `Machine ${machine.machineId} is not compatible with operation ${operation.name} (requires: ${operation.compatibleMachines.join(', ')})`
+            };
+          }
+
+          // Calculate operation duration and timing
+          const operationHours = parseFloat(operation.estimatedHours);
+          const operationDurationMs = operationHours * 60 * 60 * 1000;
+          const shiftStartHour = shift === 1 ? 6 : 18; // 6 AM or 6 PM
+          
+          const startTime = new Date(currentDate);
+          startTime.setHours(shiftStartHour, 0, 0, 0);
+          
+          const endTime = new Date(startTime.getTime() + operationDurationMs);
+          
+          // Check for conflicts
+          const hasConflicts = await this.checkScheduleConflicts(machine.id, startTime, endTime);
+          
+          if (!hasConflicts) {
+            const scheduleEntry = await this.createScheduleEntry({
+              jobId: job.id,
+              machineId: machine.id,
+              operationSequence: operation.sequence,
+              startTime,
+              endTime,
+              shift,
+              status: "Scheduled"
+            });
+            
+            scheduleEntries.push(scheduleEntry);
+            scheduled = true;
+            
+            // Move to next day for subsequent operations
+            const daysToAdd = Math.ceil(operationHours / 8) || 1;
+            currentDate = new Date(currentDate.getTime() + (daysToAdd * dayInMs));
+          } else {
+            return {
+              success: false,
+              failureReason: `Time slot conflict: Machine ${machine.machineId} is already booked during the requested time`
+            };
+          }
+        } else {
+          // For subsequent operations, use normal scheduling logic
+          for (const tryShift of [1, 2]) {
+            const machineResult = await this.findBestMachineForOperation(operation, currentDate, tryShift);
+            
+            if (machineResult) {
+              const operationDurationMs = machineResult.adjustedHours * 60 * 60 * 1000;
+              const shiftStartHour = tryShift === 1 ? 6 : 18;
+              
+              const startTime = new Date(currentDate);
+              startTime.setHours(shiftStartHour, 0, 0, 0);
+              
+              const endTime = new Date(startTime.getTime() + operationDurationMs);
+              
+              const hasConflicts = await this.checkScheduleConflicts(machineResult.machine.id, startTime, endTime);
+              
+              if (!hasConflicts) {
+                const scheduleEntry = await this.createScheduleEntry({
+                  jobId: job.id,
+                  machineId: machineResult.machine.id,
+                  operationSequence: operation.sequence,
+                  startTime,
+                  endTime,
+                  shift: tryShift,
+                  status: "Scheduled"
+                });
+                
+                scheduleEntries.push(scheduleEntry);
+                scheduled = true;
+                
+                const daysToAdd = Math.ceil(machineResult.adjustedHours / 8) || 1;
+                currentDate = new Date(currentDate.getTime() + (daysToAdd * dayInMs));
+                break;
+              }
+            }
+          }
+        }
+        
+        if (!scheduled) {
+          currentDate = new Date(currentDate.getTime() + dayInMs);
+          attempts++;
+        }
+      }
+      
+      if (!scheduled) {
+        return {
+          success: false,
+          failureReason: `Failed to schedule operation ${operation.sequence} (${operation.name || operation.operationName})`
+        };
+      }
+    }
+    
+    // Update job status to scheduled
+    await this.updateJob(jobId, { status: "Scheduled" });
+    
+    return { success: true, scheduleEntries };
+  }
+
   private async checkScheduleConflicts(machineId: string, startTime: Date, endTime: Date): Promise<boolean> {
     const existingEntries = await this.getScheduleEntriesForMachine(machineId);
     

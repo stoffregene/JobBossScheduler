@@ -52,6 +52,9 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
     operations: [] as string[]
   });
   const [isScheduleProgressVisible, setIsScheduleProgressVisible] = useState(false);
+  const [isManualScheduleOpen, setIsManualScheduleOpen] = useState(false);
+  const [manualScheduleJob, setManualScheduleJob] = useState<Job | null>(null);
+  const [manualStartDate, setManualStartDate] = useState('');
 
   const { data: rawJobs, isLoading } = useQuery<Job[]>({
     queryKey: ['/api/jobs'],
@@ -63,6 +66,8 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
     if (!rawJobs) return [];
     
     let filteredJobs = rawJobs.filter(job => {
+      // Hide scheduled jobs from queue unless specifically filtered for them
+      if (filters.status === 'all' && job.status === 'Scheduled') return false;
       if (filters.status && filters.status !== 'all' && job.status !== filters.status) return false;
       if (filters.priority && filters.priority !== 'all' && job.priority !== filters.priority) return false;
       if (filters.customer && !job.customer?.toLowerCase().includes(filters.customer.toLowerCase())) return false;
@@ -318,6 +323,31 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
         variant: "destructive",
       });
     }
+  });
+
+  const manualScheduleMutation = useMutation({
+    mutationFn: async ({ jobId, startDate }: { jobId: string; startDate: string }) => {
+      return apiRequest(`/api/jobs/${jobId}/manual-schedule`, 'POST', { startDate });
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/schedule'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/machines'] });
+      setIsManualScheduleOpen(false);
+      setManualScheduleJob(null);
+      setManualStartDate('');
+      toast({
+        title: "Manual Scheduling Success",
+        description: `Job has been manually scheduled successfully.`,
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Manual Scheduling Failed",
+        description: error instanceof Error ? error.message : "Unable to manually schedule this job.",
+        variant: "destructive",
+      });
+    },
   });
 
   const unscheduleAllMutation = useMutation({
@@ -1128,7 +1158,9 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
                           size="sm"
                           onClick={(e) => {
                             e.stopPropagation();
-                            // Manual scheduling logic
+                            setManualScheduleJob(job);
+                            setManualStartDate('');
+                            setIsManualScheduleOpen(true);
                           }}
                           title="Manual Schedule"
                         >
@@ -1328,6 +1360,75 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
         </CollapsibleContent>
       </Card>
       
+      {/* Manual Scheduling Dialog */}
+      <Dialog open={isManualScheduleOpen} onOpenChange={setIsManualScheduleOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Manual Schedule Job</DialogTitle>
+          </DialogHeader>
+          {manualScheduleJob && (
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <p className="text-sm text-gray-600">
+                  <strong>Job:</strong> {manualScheduleJob.jobNumber} - {manualScheduleJob.partNumber}
+                </p>
+                <p className="text-sm text-gray-600">
+                  <strong>Description:</strong> {manualScheduleJob.description}
+                </p>
+                <p className="text-sm text-gray-600">
+                  <strong>Due Date:</strong> {new Date(manualScheduleJob.dueDate).toLocaleDateString()}
+                </p>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="manualStartDate">Start Date for First Operation</Label>
+                <Input
+                  id="manualStartDate"
+                  type="date"
+                  value={manualStartDate}
+                  onChange={(e) => setManualStartDate(e.target.value)}
+                  min={new Date().toISOString().split('T')[0]}
+                  data-testid="input-manual-start-date"
+                />
+                <p className="text-xs text-gray-500">
+                  Following operations will be scheduled automatically based on this start date.
+                </p>
+              </div>
+              
+              <div className="flex justify-between pt-4">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setIsManualScheduleOpen(false)}
+                  data-testid="button-cancel-manual-schedule"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={() => {
+                    if (!manualStartDate) {
+                      toast({
+                        title: "Missing Start Date",
+                        description: "Please select a start date for the first operation.",
+                        variant: "destructive",
+                      });
+                      return;
+                    }
+                    manualScheduleMutation.mutate({
+                      jobId: manualScheduleJob.id,
+                      startDate: manualStartDate
+                    });
+                  }}
+                  disabled={manualScheduleMutation.isPending || !manualStartDate}
+                  data-testid="button-confirm-manual-schedule"
+                >
+                  {manualScheduleMutation.isPending ? 'Scheduling...' : 'Schedule Job'}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Progress tracking for auto-scheduling */}
       <ScheduleProgressToast
         isVisible={isScheduleProgressVisible}

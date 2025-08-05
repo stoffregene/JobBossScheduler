@@ -75,7 +75,9 @@ export interface IStorage {
   findBestMachineForOperation(operation: RoutingOperation, targetDate: Date, shift: number): Promise<{ machine: Machine; adjustedHours: number; score: number; efficiencyImpact?: number } | null>;
   updateAllJobPriorities(): Promise<void>;
   scheduleJobsByPriority(maxJobs?: number): Promise<{ scheduled: number, failed: number, results: any[] }>;
-  autoScheduleJob(jobId: string): Promise<ScheduleEntry[] | null>;
+  autoScheduleJob(jobId: string, progressCallback?: (progress: any) => void): Promise<{ success: boolean; scheduleEntries?: ScheduleEntry[]; failureReason?: string; failureDetails?: any }>;
+  manualScheduleJob(jobId: string, startDate: string): Promise<{ success: boolean; scheduleEntries?: ScheduleEntry[]; failureReason?: string }>;
+  dragScheduleJob(jobId: string, machineId: string, startDate: string, shift: number): Promise<{ success: boolean; scheduleEntries?: ScheduleEntry[]; failureReason?: string }>;
   getMachinesBySubstitutionGroup(substitutionGroup: string): Promise<Machine[]>;
   
   // Efficiency tracking

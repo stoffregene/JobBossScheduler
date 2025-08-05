@@ -790,6 +790,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Manual schedule job - specific start date for first operation
+  app.post("/api/jobs/:id/manual-schedule", async (req, res) => {
+    try {
+      const { startDate } = req.body;
+      
+      if (!startDate) {
+        return res.status(400).json({ message: "Start date is required for manual scheduling" });
+      }
+
+      // Validate that the start date is not in the past
+      const startDateTime = new Date(startDate);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      if (startDateTime < today) {
+        return res.status(400).json({ message: "Cannot schedule jobs in the past" });
+      }
+
+      console.log(`📅 Manual scheduling job ${req.params.id} starting ${startDate}`);
+      
+      const result = await storage.manualScheduleJob(req.params.id, startDate);
+      
+      if (!result.success) {
+        return res.status(400).json({ 
+          message: result.failureReason || "Unable to manually schedule job"
+        });
+      }
+
+      broadcast({ type: 'job_manually_scheduled', data: { jobId: req.params.id, scheduleEntries: result.scheduleEntries } });
+      res.json({ scheduleEntries: result.scheduleEntries, message: "Job successfully manually scheduled" });
+    } catch (error) {
+      console.error('Error manually scheduling job:', error);
+      res.status(500).json({ message: "Failed to manually schedule job" });
+    }
+  });
+
+  // Drag and drop schedule job - specific machine and date
+  app.post("/api/jobs/:id/drag-schedule", async (req, res) => {
+    try {
+      const { machineId, startDate, shift } = req.body;
+      
+      if (!machineId || !startDate || !shift) {
+        return res.status(400).json({ message: "Machine ID, start date, and shift are required for drag scheduling" });
+      }
+
+      // Validate that the start date is not in the past
+      const startDateTime = new Date(startDate);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      if (startDateTime < today) {
+        return res.status(400).json({ message: "Cannot schedule jobs in the past" });
+      }
+
+      console.log(`🎯 Drag scheduling job ${req.params.id} on machine ${machineId} starting ${startDate} shift ${shift}`);
+      
+      const result = await storage.dragScheduleJob(req.params.id, machineId, startDate, shift);
+      
+      if (!result.success) {
+        return res.status(400).json({ 
+          message: result.failureReason || "Unable to drag schedule job"
+        });
+      }
+
+      broadcast({ type: 'job_drag_scheduled', data: { jobId: req.params.id, scheduleEntries: result.scheduleEntries } });
+      res.json({ scheduleEntries: result.scheduleEntries, message: "Job successfully drag scheduled" });
+    } catch (error) {
+      console.error('Error drag scheduling job:', error);
+      res.status(500).json({ message: "Failed to drag schedule job" });
+    }
+  });
+
 
 
   app.get("/api/machines/substitution-groups/:group", async (req, res) => {
