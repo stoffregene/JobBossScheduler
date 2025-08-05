@@ -1215,14 +1215,15 @@ export class DatabaseStorage implements IStorage {
     
     console.log(`📊 Shift 2 weekly capacity: ${shift2WeeklyHours.toFixed(1)}h / 120h limit`);
     
-    // Filter out shifts that are over capacity
+    // REALISTIC CAPACITY ENFORCEMENT: Filter out shifts that are over capacity
     const availableShifts = [];
     if (shiftLoads[1] < 320) availableShifts.push(1); // Shift 1 daily capacity ~320h across all machines
     if (shiftLoads[2] < 120 && shift2WeeklyHours < 120) availableShifts.push(2); // Shift 2 has 120h/week limit
     
     if (availableShifts.length === 0) {
-      console.log(`⚠️ Both shifts at capacity for ${targetDate.toDateString()}`);
-      return [1, 2]; // Return both, but scheduling will likely fail
+      console.log(`❌ CAPACITY EXCEEDED: Both shifts at capacity for ${targetDate.toDateString()}`);
+      console.log(`   Shift 1: ${shiftLoads[1].toFixed(1)}h/320h, Shift 2: ${shiftLoads[2].toFixed(1)}h/120h (weekly: ${shift2WeeklyHours.toFixed(1)}h/120h)`);
+      return []; // Return empty array to force job to move to next week
     }
     
     // Return shifts ordered by load (least loaded first)
@@ -1340,12 +1341,21 @@ export class DatabaseStorage implements IStorage {
           continue;
         }
 
-        // For regular operations: Always prioritize shift 1 for machines that don't run on shift 2
-        // This ensures bottleneck machines like HCN5000 Neo get scheduled on shift 1
-        const shifts = [1, 2]; // Always try shift 1 first
+        // REALISTIC CAPACITY ENFORCEMENT: Check if any shifts have capacity before attempting
+        const availableShifts = await this.getShiftsOrderedByLoad(currentDate);
+        if (availableShifts.length === 0) {
+          console.log(`⏭️ MOVING TO NEXT WEEK: No capacity available on ${currentDate.toDateString()}`);
+          // Move to next Monday to find capacity in following week
+          const nextMonday = new Date(currentDate);
+          nextMonday.setDate(currentDate.getDate() + (8 - currentDate.getDay())); // Move to next Monday
+          currentDate = nextMonday;
+          continue; // Skip this day entirely
+        }
+        
         let operationFailureReasons: string[] = [];
         
-        for (const shift of shifts) {
+        // Use only shifts that have available capacity
+        for (const shift of availableShifts) {
           const result = await this.findBestMachineForOperation(operation, currentDate, shift);
           
           if (!result) {
@@ -1429,20 +1439,20 @@ export class DatabaseStorage implements IStorage {
           machineType: operation.machineType,
           compatibleMachines: operation.compatibleMachines,
           attemptedDates: Math.ceil((maxDate.getTime() - (job.createdDate.getTime() + (7 * dayInMs))) / dayInMs),
-          reasons: operationFailureReasons.length > 0 ? operationFailureReasons : [`No suitable machines found for ${operation.machineType}`]
+          reasons: [`No suitable machines found for ${operation.machineType}`]
         };
         failureDetails.push(failureDetail);
         
         await this.createAlert({
           type: "warning",
           title: "Scheduling Conflict",
-          message: `Unable to schedule operation ${operation.sequence} (${operation.name}) for job ${job.jobNumber}: ${failureDetail.reasons.join('; ')}`,
+          message: `Unable to schedule operation ${operation.sequence} (${operation.operationName || operation.name}) for job ${job.jobNumber}: ${failureDetail.reasons.join('; ')}`,
           jobId: job.id
         });
         
         return { 
           success: false, 
-          failureReason: `Failed to schedule operation ${operation.sequence} (${operation.name})`,
+          failureReason: `Failed to schedule operation ${operation.sequence} (${operation.operationName || operation.name})`,
           failureDetails 
         };
       }
@@ -2144,9 +2154,29 @@ export class DatabaseStorage implements IStorage {
         });
         
         console.log(`🎯 Trying to find machine for operation ${operation.name} on attempt ${attemptDays}`);
-        const machineResult = await this.findBestMachineForOperation(operation, currentDate, 1);
-        console.log(`🎯 Machine result:`, machineResult);
-        const machineResults = machineResult ? [machineResult] : [];
+        
+        // REALISTIC CAPACITY ENFORCEMENT: Check if any shifts have capacity before attempting
+        const availableShifts = await this.getShiftsOrderedByLoad(currentDate);
+        if (availableShifts.length === 0) {
+          console.log(`⏭️ MOVING TO NEXT WEEK: No capacity available on ${currentDate.toDateString()}`);
+          // Move to next Monday to find capacity in following week
+          const nextMonday = new Date(currentDate);
+          nextMonday.setDate(currentDate.getDate() + (8 - currentDate.getDay())); // Move to next Monday
+          currentDate = nextMonday;
+          attemptDays = Math.floor((currentDate.getTime() - (new Date().getTime() + dayInMs)) / dayInMs);
+          continue; // Skip this day entirely
+        }
+        
+        let machineResults = [];
+        for (const shift of availableShifts) {
+          const machineResult = await this.findBestMachineForOperation(operation, currentDate, shift);
+          if (machineResult) {
+            machineResults.push({ ...machineResult, shift });
+            break; // Use first available shift with capacity
+          }
+        }
+        
+        console.log(`🎯 Machine result (with capacity check):`, machineResults);
         
         if (machineResults.length === 0) {
           console.log(`❌ No machine found for operation ${operation.name} on ${currentDate.toDateString()}`);
@@ -2167,55 +2197,52 @@ export class DatabaseStorage implements IStorage {
             console.log(`❌ Invalid machine result, skipping`);
             continue;
           }
-          if (!result.machine.availableShifts) {
-            console.log(`❌ Machine ${result.machine.machineId} has no availableShifts property`);
-            continue;
-          }
-          for (const shift of result.machine.availableShifts) {
-            const shiftStart = shift === 1 ? 3 : 15; // 3 AM or 3 PM
-            const startTime = new Date(currentDate);
-            startTime.setHours(shiftStart, 0, 0, 0);
+          // Use the shift that was already validated for capacity
+          const shift = result.shift || 1;
+          console.log(`🔧 Using validated shift ${shift} for machine ${result.machine.machineId}`);
+          const shiftStart = shift === 1 ? 3 : 15; // 3 AM or 3 PM
+          const startTime = new Date(currentDate);
+          startTime.setHours(shiftStart, 0, 0, 0);
+          
+          const endTime = new Date(startTime.getTime() + (result.adjustedHours * 60 * 60 * 1000));
+          
+          // Check for conflicts with existing schedule
+          const conflicts = await this.checkScheduleConflicts(result.machine.id, startTime, endTime);
+          
+          if (!conflicts) {
+            const scheduleEntry = await this.createScheduleEntry({
+              jobId: job.id,
+              machineId: result.machine.id,
+              operationSequence: operation.sequence,
+              startTime,
+              endTime,
+              shift,
+              status: "Scheduled"
+            });
             
-            const endTime = new Date(startTime.getTime() + (result.adjustedHours * 60 * 60 * 1000));
+            scheduleEntries.push(scheduleEntry);
             
-            // Check for conflicts with existing schedule
-            const conflicts = await this.checkScheduleConflicts(result.machine.id, startTime, endTime);
+            // Update machine utilization
+            const currentUtil = parseFloat(result.machine.utilization);
+            const newUtil = Math.min(100, currentUtil + (result.adjustedHours / 8) * 100);
+            await this.updateMachine(result.machine.id, { utilization: newUtil.toString() });
             
-            if (!conflicts) {
-              const scheduleEntry = await this.createScheduleEntry({
-                jobId: job.id,
-                machineId: result.machine.id,
-                operationSequence: operation.sequence,
-                startTime,
-                endTime,
-                shift,
-                status: "Scheduled"
-              });
-              
-              scheduleEntries.push(scheduleEntry);
-              
-              // Update machine utilization
-              const currentUtil = parseFloat(result.machine.utilization);
-              const newUtil = Math.min(100, currentUtil + (result.adjustedHours / 8) * 100);
-              await this.updateMachine(result.machine.id, { utilization: newUtil.toString() });
-              
-              // Move to next day for next operation
-              currentDate = new Date(endTime.getTime() + dayInMs);
-              scheduled = true;
-              
-              // Progress update for successful scheduling
-              const completedProgress = 10 + (((opIndex + 1) / totalOperations) * 80);
-              onProgress?.({
-                percentage: completedProgress,
-                status: `Operation ${opIndex + 1} scheduled successfully on ${result.machine.machineId}`,
-                stage: 'scheduled',
-                operationName: operation.name,
-                currentOperation: opIndex + 1,
-                totalOperations
-              });
-              
-              break;
-            }
+            // Move to next day for next operation
+            currentDate = new Date(endTime.getTime() + dayInMs);
+            scheduled = true;
+            
+            // Progress update for successful scheduling
+            const completedProgress = 10 + (((opIndex + 1) / totalOperations) * 80);
+            onProgress?.({
+              percentage: completedProgress,
+              status: `Operation ${opIndex + 1} scheduled successfully on ${result.machine.machineId}`,
+              stage: 'scheduled',
+              operationName: operation.name,
+              currentOperation: opIndex + 1,
+              totalOperations
+            });
+            
+            break;
           }
           if (scheduled) break;
         }

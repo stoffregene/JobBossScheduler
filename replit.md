@@ -10,6 +10,16 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+**August 5, 2025** - Implemented realistic capacity-aware scheduling that moves jobs to future weeks when capacity is exceeded:
+- **REALISTIC SCHEDULING PHILOSOPHY**: System no longer forces jobs into desired dates when capacity limits are reached
+- **CAPACITY-DRIVEN WEEK MOVEMENT**: Jobs automatically move to next Monday when daily/weekly capacity limits are exceeded
+- **PRIORITY-BASED DELAY MINIMIZATION**: High-risk jobs are scheduled first to minimize delays when capacity constraints force rescheduling
+- **WEEKLY CAPACITY ENFORCEMENT**: Shift 2 weekly limit (120h) properly enforced - jobs move to following week when limit exceeded
+- **DAILY CAPACITY LIMITS**: Shift 1 daily capacity (~320h) and Shift 2 daily capacity (~120h) properly enforced
+- **NO MORE OVER-SCHEDULING**: System will fail jobs realistically rather than jam everything into overloaded schedules
+- **ENHANCED DEBUGGING**: Comprehensive scheduling failure debugging shows exactly why jobs fail (capacity, compatibility, resources)
+- **OUTSOURCE RESOURCE FIX**: Fixed OUTSOURCE machines to use virtual external vendor resources instead of requiring internal operators
+
 **August 4, 2025** - Implemented priority-based scheduling system with no past scheduling:
 - **PRIORITY CALCULATION**: Jobs automatically assigned priorities based on promised dates and completion hours
   - Critical: Jobs that are late or will be late (negative buffer between promised date and required work days)
