@@ -29,6 +29,11 @@ export default function JobDetailsModal({ jobId, onClose }: JobDetailsModalProps
   const { data: resources } = useQuery<any[]>({
     queryKey: ['/api/resources'],
   });
+  
+  // Fetch machines to get compatibility info
+  const { data: machines } = useQuery<any[]>({
+    queryKey: ['/api/machines'],
+  });
 
   const autoScheduleJobMutation = useMutation({
     mutationFn: () => apiRequest(`/api/jobs/${jobId}/auto-schedule`, 'POST'),
@@ -180,6 +185,30 @@ export default function JobDetailsModal({ jobId, onClose }: JobDetailsModalProps
                   );
                   const assignedResource = scheduledEntry?.assignedResourceId && resources ? 
                     resources.find((r: any) => r.id === scheduledEntry.assignedResourceId) : null;
+                  
+                  // Find compatible resources for this operation
+                  const compatibleResources = resources?.filter((resource: any) => {
+                    if (!resource.isActive) return false;
+                    
+                    // Find machines that can handle this operation
+                    const compatibleMachineIds = machines?.filter((machine: any) => 
+                      operation.compatibleMachines.includes(machine.machineId)
+                    ).map((m: any) => m.id) || [];
+                    
+                    // Check if resource can operate any of the compatible machines
+                    const canOperateMachine = resource.workCenters?.some((wcId: string) => 
+                      compatibleMachineIds.includes(wcId)
+                    );
+                    
+                    // Apply role-based filtering
+                    if (operation.machineType === 'OUTSOURCE') {
+                      return false; // No internal resources for outsource
+                    } else if (operation.machineType.includes('INSPECT')) {
+                      return resource.role === 'Quality Inspector' && canOperateMachine;
+                    } else {
+                      return (resource.role === 'Operator' || resource.role === 'Shift Lead') && canOperateMachine;
+                    }
+                  }) || [];
 
                   return (
                     <div key={index} className="border border-gray-200 rounded-lg p-3">
@@ -198,7 +227,14 @@ export default function JobDetailsModal({ jobId, onClose }: JobDetailsModalProps
                               </Badge>
                               {assignedResource && (
                                 <div className="text-xs text-blue-600 font-medium">
-                                  👤 {assignedResource.name}
+                                  👤 {assignedResource.name} ({assignedResource.role})
+                                </div>
+                              )}
+                              {!assignedResource && operation.machineType !== 'OUTSOURCE' && (
+                                <div className="text-xs text-gray-500">
+                                  Compatible operators: {compatibleResources.length > 0 
+                                    ? compatibleResources.map((r: any) => r.name).join(', ')
+                                    : 'None available'}
                                 </div>
                               )}
                             </div>
