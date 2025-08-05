@@ -145,9 +145,9 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
   };
 
   return (
-    <div className={`${isFullscreen ? "fixed inset-4 z-50" : ""}`}>
+    <div className={`${isFullscreen ? "fixed inset-4 z-50 bg-background" : ""}`}>
       {/* Production Schedule - Full Width */}
-      <Card className="w-full">
+      <Card className={`w-full ${isFullscreen ? "h-full flex flex-col" : ""}`}>
           <CardHeader className="pb-4">
             <div className="flex flex-col space-y-3">
               {/* Title and Navigation Row */}
@@ -224,10 +224,10 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
         </div>
       </CardHeader>
       
-      <CardContent>
+      <CardContent className={`${isFullscreen ? "flex-1 overflow-auto" : ""}`}>
         <div className="space-y-4">
           {/* Day Headers */}
-          <div className={`grid gap-1 text-sm font-medium text-muted-foreground ${scheduleView.type === "month" ? "overflow-x-auto" : ""}`} style={{ gridTemplateColumns: scheduleView.type === "month" ? "200px repeat(30, minmax(40px, 1fr))" : "200px repeat(7, 1fr)" }}>
+          <div className={`grid gap-1 text-sm font-medium text-muted-foreground ${scheduleView.type === "month" || isFullscreen ? "overflow-x-auto" : ""}`} style={{ gridTemplateColumns: scheduleView.type === "month" ? "200px repeat(30, minmax(40px, 1fr))" : "200px repeat(7, 1fr)" }}>
             <div className="text-right pr-4 sticky left-0 bg-background z-10">Machine</div>
             {weekDays.map((day, index) => {
               const isWeekend = day.getDay() === 0 || day.getDay() === 6;
@@ -249,14 +249,14 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
           </div>
 
           {/* Machine Rows */}
-          <div className="space-y-2">
+          <div className={`space-y-2 ${isFullscreen ? "min-h-0" : ""}`}>
             {displayMachines.map((machine) => {
               const machineJobs = getMachineJobs(machine.id);
               const isWeekendOnly = machine.availableShifts.length === 1 && machine.availableShifts[0] === 1;
               
               return (
-                <div key={machine.id} className={`grid gap-1 items-center ${scheduleView.type === "month" ? "overflow-x-auto" : ""}`} style={{ gridTemplateColumns: scheduleView.type === "month" ? "200px repeat(30, minmax(40px, 1fr))" : "200px repeat(7, 1fr)" }}>
-                  <div className="text-sm font-medium text-right pr-4 min-w-0 sticky left-0 bg-background z-10">
+                <div key={machine.id} className={`grid gap-1 items-center ${scheduleView.type === "month" || isFullscreen ? "overflow-x-auto" : ""}`} style={{ gridTemplateColumns: scheduleView.type === "month" ? "200px repeat(30, minmax(40px, 1fr))" : "200px repeat(7, 1fr)" }}>
+                  <div className={`text-sm font-medium text-right pr-4 min-w-0 sticky left-0 z-10 ${isFullscreen ? "bg-card" : "bg-background"}`}>
                     <div className="flex items-center justify-end gap-1 mb-1">
                       <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium flex-shrink-0 ${
                         machine.type === 'LATHE' 
