@@ -457,7 +457,7 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
                     <ScheduleDropZone
                       key={dayIndex}
                       machineId={machine.id}
-                      date={days[dayIndex]}
+                      date={weekDays[dayIndex]}
                       shift={1} // TODO: Support shift selection
                       onDrop={handleJobDrop}
                     >
