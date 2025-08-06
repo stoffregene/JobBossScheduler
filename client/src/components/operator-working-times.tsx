@@ -304,7 +304,7 @@ export default function OperatorWorkingTimes({ scheduleView, isFullscreen }: Ope
                         }}
                       >
                         <div 
-                          className={`h-full ${segmentIndex === 0 ? 'rounded-l' : ''} ${segmentIndex === segments.length - 1 ? 'rounded-r' : ''} text-xs text-white font-medium flex items-center justify-center ${
+                          className={`h-full ${segments.length === 1 ? 'rounded' : (segmentIndex === 0 ? 'rounded-l' : 'rounded-r')} text-xs text-white font-medium flex items-center justify-center ${
                             workTime.type === 'unavailable' 
                               ? 'bg-red-500' 
                               : operator.shiftSchedule?.includes(1) 
@@ -314,13 +314,16 @@ export default function OperatorWorkingTimes({ scheduleView, isFullscreen }: Ope
                           title={
                             workTime.type === 'unavailable' 
                               ? `Unavailable: ${workTime.reason}` 
-                              : `Working: ${workTime.startTime} - ${workTime.endTime} ${segments.length > 1 ? `(segment ${segmentIndex + 1}/${segments.length})` : ''}`
+                              : `Working: ${workTime.startTime} - ${workTime.endTime}`
                           }
                         >
-                          {workTime.type === 'unavailable' ? (
-                            <AlertTriangle className="h-3 w-3" />
-                          ) : (
-                            <Clock className="h-3 w-3" />
+                          {/* Only show icon on the first segment to avoid duplication */}
+                          {segmentIndex === 0 && (
+                            workTime.type === 'unavailable' ? (
+                              <AlertTriangle className="h-3 w-3" />
+                            ) : (
+                              <Clock className="h-3 w-3" />
+                            )
                           )}
                         </div>
                       </div>
