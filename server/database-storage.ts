@@ -1987,6 +1987,9 @@ export class DatabaseStorage implements IStorage {
     
     console.log(`📋 DEBUG: Job ${job.jobNumber} has ${job.routing.length} operations`);
     
+    // Initialize multiDayEntries array for scheduling operations
+    const multiDayEntries: any[] = [];
+    
     // DEBUG: Check machine and resource availability
     const allMachines = await this.getMachines();
     const allResources = await this.getResources();
@@ -2301,7 +2304,6 @@ export class DatabaseStorage implements IStorage {
             }
             
             // ENHANCED MULTI-SHIFT JOB HANDLING: Properly bridge operations across shifts/days
-            const multiDayEntries: any[] = [];
             
             while (remainingHours > 0) {
               // ENHANCED: Skip days based on resource's custom work schedule
@@ -2515,6 +2517,7 @@ export class DatabaseStorage implements IStorage {
     
     return { success: true, scheduleEntries };
   }
+  }
 
   async manualScheduleJob(jobId: string, startDate: string): Promise<{ success: boolean; scheduleEntries?: ScheduleEntry[]; failureReason?: string }> {
     const job = await this.getJob(jobId);
@@ -2621,7 +2624,7 @@ export class DatabaseStorage implements IStorage {
         }
         
         if (!scheduled) {
-          currentDate = new Date(currentDate.getTime() + dayInMs);
+          manualCurrentDate = new Date(manualCurrentDate.getTime() + manualDayInMs);
           attempts++;
         }
       }
@@ -2637,7 +2640,7 @@ export class DatabaseStorage implements IStorage {
     // Update job status to scheduled
     await this.updateJob(jobId, { status: "Scheduled" });
     
-    return { success: true, scheduleEntries };
+    return { success: true, scheduleEntries: manualScheduleEntries };
   }
 
   async dragScheduleJob(jobId: string, machineId: string, startDate: string, shift: number): Promise<{ success: boolean; scheduleEntries?: ScheduleEntry[]; failureReason?: string }> {
