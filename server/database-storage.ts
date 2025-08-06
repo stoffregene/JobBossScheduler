@@ -2051,6 +2051,7 @@ export class DatabaseStorage implements IStorage {
     
     for (let i = 0; i < sortedOperations.length; i++) {
       const operation = sortedOperations[i];
+      console.log(`\n🔷 PROCESSING OPERATION ${i}/${sortedOperations.length}: sequence=${operation.sequence}, name=${operation.name || operation.machineType}, hours=${operation.estimatedHours}`);
       let scheduled = false;
       
       // Try to schedule within the 21-day window
@@ -2434,7 +2435,7 @@ export class DatabaseStorage implements IStorage {
 
                     try {
                       const scheduleEntry = await this.createScheduleEntry({
-                        jobId: "c4fe0466-f7f9-457f-899d-ddf92564ef90", // TEMP: Use specific job ID for testing
+                        jobId: job.id,
                         machineId: result.machine.id,
                         assignedResourceId: assignedResourceForEntry?.id || null,
                         operationSequence: operation.sequence,
@@ -2456,6 +2457,18 @@ export class DatabaseStorage implements IStorage {
                     
                     if (remainingHours <= 0) {
                       console.log(`   🎉 DIRECT COMPLETE: Operation fully scheduled!`);
+                      scheduled = true; // CRITICAL: Mark operation as scheduled so loop continues to next operation
+                      
+                      // Set currentDate for next operation (continuous flow or with lag)
+                      const isSawOrWaterjet = this.isSawOrWaterjetOperation(operation);
+                      if (isSawOrWaterjet) {
+                        // Add 24hr lag for saw/waterjet operations
+                        currentDate = new Date(segmentEndTime.getTime() + dayInMs);
+                      } else {
+                        // Schedule next operation immediately after this one (continuous flow)
+                        currentDate = new Date(segmentEndTime);
+                      }
+                      
                       break; // Exit the multi-shift loop
                     }
                   } else {
@@ -2668,6 +2681,8 @@ export class DatabaseStorage implements IStorage {
         };
       }
     }
+    
+    console.log(`✅ ALL OPERATIONS LOOP COMPLETE: Total operations=${sortedOperations.length}, Scheduled entries=${scheduleEntries.length}`);
     
     // Update job status to scheduled
     await this.updateJob(jobId, { status: "Scheduled" });
