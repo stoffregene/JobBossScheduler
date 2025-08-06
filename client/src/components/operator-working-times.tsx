@@ -107,7 +107,7 @@ export default function OperatorWorkingTimes({ scheduleView, isFullscreen }: Ope
 
     // Check custom schedule - ONLY use individual day entries
     const schedule = resource.workSchedule?.[dayName];
-    if (schedule && schedule.enabled && schedule.startTime && schedule.endTime) {
+    if (schedule?.enabled && schedule.startTime && schedule.endTime) {
       return {
         type: 'working',
         startTime: schedule.startTime,
@@ -141,7 +141,7 @@ export default function OperatorWorkingTimes({ scheduleView, isFullscreen }: Ope
     const dayName = dayNames[day.getDay()] as keyof Resource['workSchedule'];
     
     const schedule = resource.workSchedule?.[dayName];
-    if (schedule && schedule.enabled && schedule.startTime && schedule.endTime) {
+    if (schedule?.enabled && schedule.startTime && schedule.endTime) {
       return {
         startTime: schedule.startTime,
         endTime: schedule.endTime,

@@ -8,6 +8,15 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+**August 6, 2025** - OPERATOR UNAVAILABILITY VISUALIZATION FIXED: Operators marked as unavailable now display red "Unavailable" blocks during their scheduled work times instead of disappearing from the view:
+
+**🔴 UNAVAILABILITY DISPLAY ENHANCEMENT**:
+- **RED UNAVAILABLE BLOCKS**: When operators are marked out (vacation/sick), their normally scheduled work time now displays as red "Unavailable" blocks
+- **PROPER SCHEDULE PRESERVATION**: System shows operator's actual work schedule times in red rather than removing them completely
+- **CROSS-DAY SHIFT SUPPORT**: Unavailable blocks properly handle 2nd shift spans (3 PM to 3 AM next day) with correct multi-day visualization
+- **PARTIAL/FULL DAY HANDLING**: Supports both partial day unavailability (specific hours) and full day unavailability (entire scheduled shift)
+- **VISUAL CONSISTENCY**: Red blocks match legend and provide clear distinction from working time blocks (blue/green)
+
 **August 6, 2025** - CRITICAL INFINITE LOOP RESOLUTION: Completely eliminated all infinite loops in resource scheduling with comprehensive protection systems:
 
 **🛡️ COMPREHENSIVE LOOP PROTECTION**:
