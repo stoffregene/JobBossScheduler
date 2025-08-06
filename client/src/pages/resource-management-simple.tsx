@@ -42,7 +42,16 @@ export default function ResourceManagement() {
     isActive: true,
     shiftSchedule: [] as number[],
     workCenters: [] as string[],
-    skills: [] as string[]
+    skills: [] as string[],
+    workSchedule: {
+      monday: { enabled: true, startTime: "03:00", endTime: "15:00" },
+      tuesday: { enabled: true, startTime: "03:00", endTime: "15:00" },
+      wednesday: { enabled: true, startTime: "03:00", endTime: "15:00" },
+      thursday: { enabled: true, startTime: "03:00", endTime: "15:00" },
+      friday: { enabled: true, startTime: "03:00", endTime: "15:00" },
+      saturday: { enabled: false, startTime: "03:00", endTime: "15:00" },
+      sunday: { enabled: false, startTime: "03:00", endTime: "15:00" }
+    }
   });
   const { toast } = useToast();
 
@@ -111,7 +120,16 @@ export default function ResourceManagement() {
         isActive: true,
         shiftSchedule: [],
         workCenters: [],
-        skills: []
+        skills: [],
+        workSchedule: {
+          monday: { enabled: true, startTime: "03:00", endTime: "15:00" },
+          tuesday: { enabled: true, startTime: "03:00", endTime: "15:00" },
+          wednesday: { enabled: true, startTime: "03:00", endTime: "15:00" },
+          thursday: { enabled: true, startTime: "03:00", endTime: "15:00" },
+          friday: { enabled: true, startTime: "03:00", endTime: "15:00" },
+          saturday: { enabled: false, startTime: "03:00", endTime: "15:00" },
+          sunday: { enabled: false, startTime: "03:00", endTime: "15:00" }
+        }
       });
       toast({ title: "Resource created successfully" });
     },
@@ -143,7 +161,16 @@ export default function ResourceManagement() {
       isActive: resource.isActive,
       shiftSchedule: [...resource.shiftSchedule],
       workCenters: [...resource.workCenters],
-      skills: [...resource.skills]
+      skills: [...resource.skills],
+      workSchedule: resource.workSchedule || {
+        monday: { enabled: true, startTime: "03:00", endTime: "15:00" },
+        tuesday: { enabled: true, startTime: "03:00", endTime: "15:00" },
+        wednesday: { enabled: true, startTime: "03:00", endTime: "15:00" },
+        thursday: { enabled: true, startTime: "03:00", endTime: "15:00" },
+        friday: { enabled: true, startTime: "03:00", endTime: "15:00" },
+        saturday: { enabled: false, startTime: "03:00", endTime: "15:00" },
+        sunday: { enabled: false, startTime: "03:00", endTime: "15:00" }
+      }
     });
   };
 
@@ -181,7 +208,16 @@ export default function ResourceManagement() {
       isActive: true,
       shiftSchedule: [1],
       workCenters: [],
-      skills: []
+      skills: [],
+      workSchedule: {
+        monday: { enabled: true, startTime: "03:00", endTime: "15:00" },
+        tuesday: { enabled: true, startTime: "03:00", endTime: "15:00" },
+        wednesday: { enabled: true, startTime: "03:00", endTime: "15:00" },
+        thursday: { enabled: true, startTime: "03:00", endTime: "15:00" },
+        friday: { enabled: true, startTime: "03:00", endTime: "15:00" },
+        saturday: { enabled: false, startTime: "03:00", endTime: "15:00" },
+        sunday: { enabled: false, startTime: "03:00", endTime: "15:00" }
+      }
     });
     setShowAddDialog(true);
   };
@@ -298,6 +334,32 @@ export default function ResourceManagement() {
     setEditForm(prev => ({
       ...prev,
       skills: prev.skills.filter(s => s !== skill)
+    }));
+  };
+
+  const toggleWorkDay = (day: string, enabled: boolean) => {
+    setEditForm(prev => ({
+      ...prev,
+      workSchedule: {
+        ...prev.workSchedule,
+        [day]: {
+          ...prev.workSchedule[day as keyof typeof prev.workSchedule],
+          enabled
+        }
+      }
+    }));
+  };
+
+  const updateWorkTime = (day: string, timeType: 'startTime' | 'endTime', value: string) => {
+    setEditForm(prev => ({
+      ...prev,
+      workSchedule: {
+        ...prev.workSchedule,
+        [day]: {
+          ...prev.workSchedule[day as keyof typeof prev.workSchedule],
+          [timeType]: value
+        }
+      }
     }));
   };
 
@@ -770,6 +832,51 @@ export default function ResourceManagement() {
 
             <Separator />
 
+            {/* Custom Work Schedule */}
+            <div className="space-y-4">
+              <div>
+                <Label className="text-base font-medium">Custom Work Schedule</Label>
+                <p className="text-sm text-muted-foreground">Set specific days and times this resource works</p>
+              </div>
+              
+              {(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const).map((day) => (
+                <div key={day} className="border rounded-lg p-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-medium capitalize">{day}</Label>
+                    <Checkbox
+                      checked={editForm.workSchedule[day]?.enabled || false}
+                      onCheckedChange={(checked) => toggleWorkDay(day, !!checked)}
+                      data-testid={`work-${day}-enabled`}
+                    />
+                  </div>
+                  
+                  {editForm.workSchedule[day]?.enabled && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label className="text-sm">Start Time</Label>
+                        <Input
+                          type="time"
+                          value={editForm.workSchedule[day]?.startTime || "03:00"}
+                          onChange={(e) => updateWorkTime(day, 'startTime', e.target.value)}
+                          data-testid={`work-${day}-start`}
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-sm">End Time</Label>
+                        <Input
+                          type="time"
+                          value={editForm.workSchedule[day]?.endTime || "15:00"}
+                          onChange={(e) => updateWorkTime(day, 'endTime', e.target.value)}
+                          data-testid={`work-${day}-end`}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <Separator />
             {/* Work Center Assignments */}
             <div className="space-y-4">
               <div>
@@ -1159,6 +1266,51 @@ export default function ResourceManagement() {
                   </div>
                 ))}
               </div>
+            </div>
+
+            <Separator />
+            {/* Custom Work Schedule */}
+            <div className="space-y-4">
+              <div>
+                <Label className="text-base font-medium">Custom Work Schedule</Label>
+                <p className="text-sm text-muted-foreground">Set specific days and times this resource works</p>
+              </div>
+              
+              {(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const).map((day) => (
+                <div key={day} className="border rounded-lg p-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-medium capitalize">{day}</Label>
+                    <Checkbox
+                      checked={editForm.workSchedule[day]?.enabled || false}
+                      onCheckedChange={(checked) => toggleWorkDay(day, !!checked)}
+                      data-testid={`add-work-${day}-enabled`}
+                    />
+                  </div>
+                  
+                  {editForm.workSchedule[day]?.enabled && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label className="text-sm">Start Time</Label>
+                        <Input
+                          type="time"
+                          value={editForm.workSchedule[day]?.startTime || "03:00"}
+                          onChange={(e) => updateWorkTime(day, 'startTime', e.target.value)}
+                          data-testid={`add-work-${day}-start`}
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-sm">End Time</Label>
+                        <Input
+                          type="time"
+                          value={editForm.workSchedule[day]?.endTime || "15:00"}
+                          onChange={(e) => updateWorkTime(day, 'endTime', e.target.value)}
+                          data-testid={`add-work-${day}-end`}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
 
             <Separator />
