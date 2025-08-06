@@ -2315,13 +2315,22 @@ export class DatabaseStorage implements IStorage {
             }
             
             // ENHANCED MULTI-SHIFT JOB HANDLING: Properly bridge operations across shifts/days
+            let multiShiftAttempts = 0;
+            const maxMultiShiftAttempts = 50; // CRITICAL: Prevent infinite loops
             
-            while (remainingHours > 0) {
+            while (remainingHours > 0 && multiShiftAttempts < maxMultiShiftAttempts) {
+              multiShiftAttempts++;
               // ENHANCED: Skip days based on resource's custom work schedule
               if (assignedResource) {
-                // Skip days when resource doesn't work
-                while (!this.getResourceWorkTimes(assignedResource, operationStartTime)) {
+                // Skip days when resource doesn't work (with loop protection)
+                let daySkipCount = 0;
+                while (!this.getResourceWorkTimes(assignedResource, operationStartTime) && daySkipCount < 10) {
                   operationStartTime = new Date(operationStartTime.getTime() + dayInMs);
+                  daySkipCount++;
+                }
+                if (daySkipCount >= 10) {
+                  console.log(`❌ CRITICAL: Could not find working day for ${assignedResource.name} after 10 attempts`);
+                  break; // Exit the multi-shift loop
                 }
               } else {
                 // Fallback: Skip weekends (Friday-Sunday) for generic shifts
@@ -2466,6 +2475,13 @@ export class DatabaseStorage implements IStorage {
                   console.log(`   ⏩ Moving to next business day shift 1 (machine ${result.machine.machineId} only works shift ${result.machine.availableShifts?.join(',')})`);
                 }
               }
+            }
+            
+            // CRITICAL: Check if loop exited due to attempt limit
+            if (multiShiftAttempts >= maxMultiShiftAttempts) {
+              console.log(`❌ CRITICAL: Multi-shift scheduling exceeded maximum attempts (${maxMultiShiftAttempts}) for operation ${operation.name}`);
+              console.log(`   Remaining hours: ${remainingHours}, Entries created: ${multiDayEntries.length}`);
+              // Still continue with any entries we did create
             }
             
             // Create all the schedule entries for this multi-day operation
