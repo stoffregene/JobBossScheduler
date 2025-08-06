@@ -1825,6 +1825,7 @@ export class DatabaseStorage implements IStorage {
     }
     
     const allResources = await this.getResources();
+    console.log(`🔍 DEBUG: Total resources loaded: ${allResources.length}, checking for ${machine.machineId}`);
     
     if (operationType === 'INSPECT') {
       // INSPECT operations: Only assign Quality Inspectors
@@ -1875,6 +1876,7 @@ export class DatabaseStorage implements IStorage {
     
     // PRODUCTION operations: Assign Operators or Shift Leads
     const availableOperators = [];
+    console.log(`🔍 DEBUG: Starting resource loop for ${allResources.length} resources`);
     for (const resource of allResources) {
       const isActive = resource.isActive;
       const hasShift = resource.shiftSchedule?.includes(shift);
@@ -1893,13 +1895,16 @@ export class DatabaseStorage implements IStorage {
       
       if (isActive && hasShift && canOperateMachine && isOperator && isAvailable) {
         availableOperators.push(resource);
+        console.log(`   ✅ ADDED TO POOL: ${resource.name} qualified for ${machine.machineId}`);
       }
     }
     
     if (availableOperators.length > 0) {
+      console.log(`📋 QUALIFIED OPERATORS FOR ${machine.machineId}: ${availableOperators.map(r => r.name).join(', ')}`);
       // Prefer Shift Leads over regular Operators
       const shiftLeads = availableOperators.filter(r => r.role === 'Shift Lead');
       const selectedResource = shiftLeads.length > 0 ? shiftLeads[0] : availableOperators[0];
+      console.log(`📋 SHIFT LEADS: ${shiftLeads.map(r => r.name).join(', ') || 'None'}`);
       console.log(`⚙️ Assigned operator: ${selectedResource.name} to machine ${machine.machineId}`);
       return selectedResource;
     } else {
