@@ -1538,7 +1538,7 @@ export class DatabaseStorage implements IStorage {
     targetDate: Date,
     shift: number
   ) {
-    console.log(`🔀 Multi-shift finder: ${operation.operationName || operation.name} (${operation.estimatedHours}h)`);
+    console.log(`🔀 Multi-shift finder: ${operation.name} (${operation.estimatedHours}h)`);
     
     // Get all machines and apply basic filtering
     const allMachines = await this.getMachines();
@@ -2165,7 +2165,7 @@ export class DatabaseStorage implements IStorage {
                 percentage: ((i + 1) / sortedOperations.length) * 90,
                 status: `Operation ${i + 1} scheduled via priority displacement`,
                 stage: 'scheduled',
-                operationName: operation.operationName || operation.name,
+                operationName: operation.name,
                 currentOperation: i + 1,
                 totalOperations: sortedOperations.length
               });
@@ -2498,13 +2498,13 @@ export class DatabaseStorage implements IStorage {
         await this.createAlert({
           type: "warning",
           title: "Scheduling Conflict",
-          message: `Unable to schedule operation ${operation.sequence} (${operation.operationName || operation.name}) for job ${job.jobNumber}: ${failureDetail.reasons.join('; ')}`,
+          message: `Unable to schedule operation ${operation.sequence} (${operation.name}) for job ${job.jobNumber}: ${failureDetail.reasons.join('; ')}`,
           jobId: job.id
         });
         
         return { 
           success: false, 
-          failureReason: `Failed to schedule operation ${operation.sequence} (${operation.operationName || operation.name})`,
+          failureReason: `Failed to schedule operation ${operation.sequence} (${operation.name})`,
           failureDetails 
         };
       }
@@ -2537,23 +2537,23 @@ export class DatabaseStorage implements IStorage {
       };
     }
 
-    const scheduleEntries: ScheduleEntry[] = [];
-    let currentDate = new Date(startDateTime);
-    const dayInMs = 24 * 60 * 60 * 1000;
+    const manualScheduleEntries: ScheduleEntry[] = [];
+    let manualCurrentDate = new Date(startDateTime);
+    const manualDayInMs = 24 * 60 * 60 * 1000;
     
     // Sort operations by sequence
-    const sortedOperations = [...job.routing].sort((a, b) => a.sequence - b.sequence);
+    const manualSortedOperations = [...job.routing].sort((a, b) => a.sequence - b.sequence);
     
-    for (let i = 0; i < sortedOperations.length; i++) {
-      const operation = sortedOperations[i];
+    for (let i = 0; i < manualSortedOperations.length; i++) {
+      const operation = manualSortedOperations[i];
       let scheduled = false;
       let attempts = 0;
       const maxAttempts = 10; // Try up to 10 working days
       
       while (!scheduled && attempts < maxAttempts) {
         // Skip weekends (Fri-Sun) - only schedule Mon-Thu
-        if (currentDate.getDay() === 0 || currentDate.getDay() === 5 || currentDate.getDay() === 6) {
-          currentDate = new Date(currentDate.getTime() + dayInMs);
+        if (manualCurrentDate.getDay() === 0 || manualCurrentDate.getDay() === 5 || manualCurrentDate.getDay() === 6) {
+          manualCurrentDate = new Date(manualCurrentDate.getTime() + manualDayInMs);
           attempts++;
           continue;
         }
@@ -2568,27 +2568,27 @@ export class DatabaseStorage implements IStorage {
               jobId: job.id,
               machineId: outsourceMachine.id,
               operationSequence: operation.sequence,
-              startTime: currentDate,
-              endTime: new Date(currentDate.getTime() + (parseFloat(operation.estimatedHours) * 60 * 60 * 1000)),
+              startTime: manualCurrentDate,
+              endTime: new Date(manualCurrentDate.getTime() + (parseFloat(operation.estimatedHours.toString()) * 60 * 60 * 1000)),
               shift: 1,
               status: "Outsourced"
             });
-            scheduleEntries.push(scheduleEntry);
+            manualScheduleEntries.push(scheduleEntry);
             scheduled = true;
             // Move to next day for next operation
-            currentDate = new Date(currentDate.getTime() + dayInMs);
+            manualCurrentDate = new Date(manualCurrentDate.getTime() + manualDayInMs);
             break;
           }
         } else {
           // Try scheduling regular operations - prioritize shift 1, then shift 2
           for (const shift of [1, 2]) {
-            const machineResult = await this.findBestMachineForOperation(operation, currentDate, shift);
+            const machineResult = await this.findBestMachineForOperation(operation, manualCurrentDate, shift);
             
             if (machineResult) {
               const operationDurationMs = machineResult.adjustedHours * 60 * 60 * 1000;
               const shiftStartHour = shift === 1 ? 6 : 18; // 6 AM or 6 PM
               
-              const startTime = new Date(currentDate);
+              const startTime = new Date(manualCurrentDate);
               startTime.setHours(shiftStartHour, 0, 0, 0);
               
               const endTime = new Date(startTime.getTime() + operationDurationMs);
@@ -2607,13 +2607,13 @@ export class DatabaseStorage implements IStorage {
                   status: "Scheduled"
                 });
                 
-                scheduleEntries.push(scheduleEntry);
+                manualScheduleEntries.push(scheduleEntry);
                 scheduled = true;
                 
                 // Calculate next start date - if operation ends same day, next operation can start next day
                 // If operation spans multiple days, next operation starts day after completion
                 const daysToAdd = Math.ceil(machineResult.adjustedHours / 8) || 1; // Assume 8-hour shifts
-                currentDate = new Date(currentDate.getTime() + (daysToAdd * dayInMs));
+                manualCurrentDate = new Date(manualCurrentDate.getTime() + (daysToAdd * manualDayInMs));
                 break;
               }
             }
@@ -2629,7 +2629,7 @@ export class DatabaseStorage implements IStorage {
       if (!scheduled) {
         return {
           success: false,
-          failureReason: `Failed to schedule operation ${operation.sequence} (${operation.name || operation.operationName}) - no available machines found`
+          failureReason: `Failed to schedule operation ${operation.sequence} (${operation.name}) - no available machines found`
         };
       }
     }
@@ -2801,7 +2801,7 @@ export class DatabaseStorage implements IStorage {
       if (!scheduled) {
         return {
           success: false,
-          failureReason: `Failed to schedule operation ${operation.sequence} (${operation.name || operation.operationName})`
+          failureReason: `Failed to schedule operation ${operation.sequence} (${operation.name})`
         };
       }
     }
