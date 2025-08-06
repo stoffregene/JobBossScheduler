@@ -189,7 +189,11 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
     if (!scheduleEntries || !jobs) return [];
     
     return scheduleEntries
-      .filter(entry => entry.machineId === machineId)
+      .filter(entry => {
+        // Only show schedule entries for jobs that are actually "Scheduled"
+        const job = jobs.find(j => j.id === entry.jobId);
+        return entry.machineId === machineId && job?.status === "Scheduled";
+      })
       .map(entry => {
         const job = jobs.find(j => j.id === entry.jobId);
         return { ...entry, job };

@@ -8,6 +8,15 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+**August 6, 2025** - CRITICAL SCHEDULING ALGORITHM FIXES: Fixed status filtering and implemented custom work schedule support to eliminate incorrect job times:
+
+**🔧 CUSTOM WORK SCHEDULE IMPLEMENTATION**:
+- **STATUS FILTERING**: Fixed schedule view to only display jobs with "Scheduled" status (eliminated "Open" jobs appearing on calendar)
+- **CUSTOM WORK TIMES**: Added `getResourceWorkTimes()` function to extract individual resource work schedules (e.g., Mike's 5:00 AM - 4:00 PM)
+- **ENHANCED SCHEDULING**: Updated algorithm to use custom work schedule times instead of generic 3:00 AM - 3:00 PM shift times
+- **MULTI-DAY JOBS**: Enhanced multi-day job logic to span consecutive days within custom work windows (26.7-hour jobs use daily 11-hour segments)
+- **WEEKEND SKIPPING**: Updated day-skipping logic to respect individual resource availability (Mike works Monday-Thursday only)
+
 **August 5, 2025** - CRITICAL RESOURCE ALLOCATION BUG FIXED: Eliminated resource double-booking in auto-scheduler to enforce fundamental manufacturing constraint:
 
 **🔧 RESOURCE CONFLICT RESOLUTION**:

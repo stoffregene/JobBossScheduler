@@ -1900,6 +1900,32 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  // CRITICAL: Get custom work schedule start/end times for a resource on a specific day
+  private getResourceWorkTimes(resource: Resource, date: Date): { startTime: Date; endTime: Date } | null {
+    const dayOfWeek = date.getDay(); // 0=Sunday, 1=Monday, ..., 6=Saturday
+    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const dayName = dayNames[dayOfWeek] as keyof typeof resource.workSchedule;
+    
+    const workDay = resource.workSchedule?.[dayName];
+    if (!workDay?.enabled) {
+      return null; // Resource doesn't work on this day
+    }
+    
+    const startTime = new Date(date);
+    const endTime = new Date(date);
+    
+    // Parse the time strings (e.g., "05:00", "16:00")
+    const [startHour, startMin] = (workDay.startTime || "03:00").split(':').map(Number);
+    const [endHour, endMin] = (workDay.endTime || "15:00").split(':').map(Number);
+    
+    startTime.setHours(startHour, startMin, 0, 0);
+    endTime.setHours(endHour, endMin, 0, 0);
+    
+    console.log(`📅 ${resource.name} work schedule on ${dayName}: ${startTime.toLocaleTimeString()} - ${endTime.toLocaleTimeString()}`);
+    
+    return { startTime, endTime };
+  }
+
   // CRITICAL: Check if a resource is available at a specific time (no conflicts with other assignments)
   private async isResourceAvailableAtTime(resourceId: string, startTime: Date, endTime: Date): Promise<boolean> {
     const scheduleEntries = await this.getCachedScheduleEntries();
@@ -2062,7 +2088,7 @@ export class DatabaseStorage implements IStorage {
           
           // CRITICAL: Ensure we're scheduling at proper shift start time in Central timezone  
           const centralStartTime = new Date(currentDate);
-          centralStartTime.setHours(3, 0, 0, 0); // 3:00 AM Central = Shift 1 start
+          centralStartTime.setHours(3, 0, 0, 0); // 3:00 AM Central = Shift 1 start (fallback for OUTSOURCE/INSPECT)
           const centralEndTime = new Date(centralStartTime.getTime() + (parseFloat(operation.estimatedHours) * 60 * 60 * 1000));
           
           console.log(`📅 OUTSOURCE/INSPECT scheduling: ${centralStartTime.toLocaleString('en-US', {timeZone: 'America/Chicago'})} to ${centralEndTime.toLocaleString('en-US', {timeZone: 'America/Chicago'})}`);
@@ -2144,14 +2170,21 @@ export class DatabaseStorage implements IStorage {
                 totalOperations: sortedOperations.length
               });
               
-              // Check if this is a saw/waterjet operation - add 24hr lag to next operation
-              const isSawOrWaterjet = this.isSawOrWaterjetOperation(operation);
-              if (isSawOrWaterjet) {
-                currentDate = new Date(currentDate.getTime() + dayInMs); // Add 24hr lag for saw/waterjet
+              // ENHANCED: Update currentDate based on when this operation ends
+              if (multiDayEntries.length > 0) {
+                // Use the end time of the last entry for complex multi-day operations
+                const lastEntry = multiDayEntries[multiDayEntries.length - 1];
+                currentDate = new Date(lastEntry.endTime);
               } else {
-                // For other operations, schedule next operation immediately after (by hours, not days)
-                const operationHours = parseFloat(operation.estimatedHours);
-                currentDate = new Date(currentDate.getTime() + (operationHours * 60 * 60 * 1000));
+                // Check if this is a saw/waterjet operation - add 24hr lag to next operation
+                const isSawOrWaterjet = this.isSawOrWaterjetOperation(operation);
+                if (isSawOrWaterjet) {
+                  currentDate = new Date(currentDate.getTime() + dayInMs); // Add 24hr lag for saw/waterjet
+                } else {
+                  // For other operations, schedule next operation immediately after (by hours, not days)
+                  const operationHours = parseFloat(operation.estimatedHours);
+                  currentDate = new Date(currentDate.getTime() + (operationHours * 60 * 60 * 1000));
+                }
               }
               scheduled = true;
               break;
@@ -2212,9 +2245,30 @@ export class DatabaseStorage implements IStorage {
             const shiftHoursPerDay = 8;
             let remainingHours = result.adjustedHours;
             let operationStartTime = new Date(currentDate);
-            // Set to shift start time - FIXED: 3am-3pm for shift 1
-            operationStartTime.setHours(currentShift === 1 ? 3 : 15, 0, 0, 0);
-            console.log(`🕐 Initial operation start time set to: ${operationStartTime.toLocaleString()} (Shift ${currentShift})`);
+            
+            // CRITICAL: Assign resource with proper timing to avoid conflicts
+            const operationType = result.machine.type === 'OUTSOURCE' ? 'OUTSOURCE' : 
+                                 result.machine.type === 'INSPECT' ? 'INSPECT' : 'PRODUCTION';
+            const assignedResource = operationType === 'OUTSOURCE' ? null : 
+                                   await this.assignOptimalResource(result.machine, currentShift, operationType);
+            
+            // ENHANCED: Use custom work schedule if resource is assigned, fallback to generic shifts
+            if (assignedResource) {
+              const workTimes = this.getResourceWorkTimes(assignedResource, currentDate);
+              if (workTimes) {
+                operationStartTime = new Date(workTimes.startTime);
+                console.log(`🕐 Using ${assignedResource.name}'s custom schedule: ${operationStartTime.toLocaleString()} (${workTimes.startTime.toLocaleTimeString()} - ${workTimes.endTime.toLocaleTimeString()})`);
+              } else {
+                // Resource doesn't work on this day - skip to next day
+                console.log(`❌ ${assignedResource.name} doesn't work on ${currentDate.toDateString()}, moving to next day`);
+                currentDate = new Date(currentDate.getTime() + dayInMs);
+                continue;
+              }
+            } else {
+              // Fallback to generic shift times when no resource assigned
+              operationStartTime.setHours(currentShift === 1 ? 3 : 15, 0, 0, 0);
+              console.log(`🕐 Using generic shift time: ${operationStartTime.toLocaleString()} (Shift ${currentShift})`);
+            }
             
             // If this is not the first operation and not a saw/waterjet, start immediately after previous
             if (i > 0 && !this.isSawOrWaterjetOperation(operation)) {
@@ -2250,31 +2304,66 @@ export class DatabaseStorage implements IStorage {
             const multiDayEntries: any[] = [];
             
             while (remainingHours > 0) {
-              // Skip weekends (Friday-Sunday) before scheduling any segment
-              while (operationStartTime.getDay() === 0 || operationStartTime.getDay() === 5 || operationStartTime.getDay() === 6) {
-                operationStartTime = new Date(operationStartTime.getTime() + dayInMs);
-                operationStartTime.setHours(3, 0, 0, 0); // Start at 3am on next business day
-                currentShift = 1;
+              // ENHANCED: Skip days based on resource's custom work schedule
+              if (assignedResource) {
+                // Skip days when resource doesn't work
+                while (!this.getResourceWorkTimes(assignedResource, operationStartTime)) {
+                  operationStartTime = new Date(operationStartTime.getTime() + dayInMs);
+                }
+              } else {
+                // Fallback: Skip weekends (Friday-Sunday) for generic shifts
+                while (operationStartTime.getDay() === 0 || operationStartTime.getDay() === 5 || operationStartTime.getDay() === 6) {
+                  operationStartTime = new Date(operationStartTime.getTime() + dayInMs);
+                  operationStartTime.setHours(3, 0, 0, 0); // Start at 3am on next business day
+                  currentShift = 1;
+                }
               }
               
-              // Calculate available hours in current shift
+              // ENHANCED: Calculate available hours in current work schedule (custom or generic)
               const currentHour = operationStartTime.getHours();
               let availableHoursInShift = 0;
+              let workEndTime: Date;
               
-              if (currentShift === 1) {
-                // Shift 1: 3am-3pm (12 hours)
-                if (currentHour < 3) {
-                  operationStartTime.setHours(3, 0, 0, 0);
-                  availableHoursInShift = 12;
-                } else if (currentHour < 15) {
-                  availableHoursInShift = 15 - currentHour;
-                } else {
-                  // Past shift 1, move to shift 2 if machine supports it
-                  if (result.machine.availableShifts?.includes(2)) {
-                    operationStartTime.setHours(15, 0, 0, 0);
-                    currentShift = 2;
-                    availableHoursInShift = 8;
+              if (assignedResource) {
+                // Use resource's custom work schedule
+                const workTimes = this.getResourceWorkTimes(assignedResource, operationStartTime);
+                if (workTimes) {
+                  workEndTime = workTimes.endTime;
+                  const workStartHour = workTimes.startTime.getHours();
+                  const workEndHour = workTimes.endTime.getHours();
+                  
+                  if (currentHour < workStartHour) {
+                    operationStartTime = new Date(workTimes.startTime);
+                    availableHoursInShift = workEndHour - workStartHour;
+                  } else if (currentHour < workEndHour) {
+                    availableHoursInShift = workEndHour - currentHour;
                   } else {
+                    // Past work hours, move to next working day
+                    operationStartTime = new Date(operationStartTime.getTime() + dayInMs);
+                    continue;
+                  }
+                  console.log(`📅 ${assignedResource.name} has ${availableHoursInShift}h available on ${operationStartTime.toDateString()}`);
+                } else {
+                  // Resource doesn't work on this day
+                  operationStartTime = new Date(operationStartTime.getTime() + dayInMs);
+                  continue;
+                }
+              } else {
+                // Fallback to generic shift logic
+                if (currentShift === 1) {
+                  // Shift 1: 3am-3pm (12 hours)
+                  if (currentHour < 3) {
+                    operationStartTime.setHours(3, 0, 0, 0);
+                    availableHoursInShift = 12;
+                  } else if (currentHour < 15) {
+                    availableHoursInShift = 15 - currentHour;
+                  } else {
+                    // Past shift 1, move to shift 2 if machine supports it
+                    if (result.machine.availableShifts?.includes(2)) {
+                      operationStartTime.setHours(15, 0, 0, 0);
+                      currentShift = 2;
+                      availableHoursInShift = 8;
+                    } else {
                     // Move to next day
                     operationStartTime = new Date(operationStartTime.getTime() + dayInMs);
                     operationStartTime.setHours(3, 0, 0, 0);
