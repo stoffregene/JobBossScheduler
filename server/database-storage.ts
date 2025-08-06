@@ -2374,12 +2374,12 @@ export class DatabaseStorage implements IStorage {
                   }
                 }
               } else {
-                // Shift 2: 3pm-11pm (8 hours), but treating as 3pm to 3am (12 hours over midnight)
+                // Shift 2: 3pm-11pm (8 hours)
                 if (currentHour < 15) {
                   operationStartTime.setHours(15, 0, 0, 0);
-                  availableHoursInShift = 12; // 3pm to 3am next day
-                } else if (currentHour < 3) {
-                  availableHoursInShift = 3 - currentHour + 24; // Hours until 3am
+                  availableHoursInShift = 8; // 3pm to 11pm same day
+                } else if (currentHour < 23) {
+                  availableHoursInShift = 23 - currentHour; // Hours until 11pm
                 } else {
                   // Past shift 2, move to next day
                   operationStartTime = new Date(operationStartTime.getTime() + dayInMs);
@@ -2409,10 +2409,17 @@ export class DatabaseStorage implements IStorage {
                 continue;
               }
               
+              // Ensure segment starts at proper shift time
               const segmentStartTime = new Date(operationStartTime);
+              if (currentShift === 1) {
+                segmentStartTime.setHours(3, 0, 0, 0); // 3:00 AM for Shift 1
+              } else if (currentShift === 2) {
+                segmentStartTime.setHours(15, 0, 0, 0); // 3:00 PM for Shift 2
+              }
+              
               const segmentEndTime = new Date(segmentStartTime.getTime() + (hoursThisShift * 60 * 60 * 1000));
               
-              console.log(`   📅 Scheduling ${hoursThisShift.toFixed(1)}h segment from ${segmentStartTime.toLocaleString()} to ${segmentEndTime.toLocaleString()} (Shift ${currentShift})`);
+              console.log(`   📅 Scheduling ${hoursThisShift.toFixed(1)}h segment from ${segmentStartTime.toLocaleString('en-US', {timeZone: 'America/Chicago'})} to ${segmentEndTime.toLocaleString('en-US', {timeZone: 'America/Chicago'})} (Shift ${currentShift})`);
               
               // CRITICAL: Assign resource with proper timing to avoid conflicts
               const operationType = result.machine.type === 'OUTSOURCE' ? 'OUTSOURCE' : 
@@ -2724,7 +2731,7 @@ export class DatabaseStorage implements IStorage {
           // Calculate operation duration and timing
           const operationHours = parseFloat(operation.estimatedHours);
           const operationDurationMs = operationHours * 60 * 60 * 1000;
-          const shiftStartHour = shift === 1 ? 6 : 18; // 6 AM or 6 PM
+          const shiftStartHour = shift === 1 ? 3 : 15; // 3 AM or 3 PM Central
           
           const startTime = new Date(currentDate);
           startTime.setHours(shiftStartHour, 0, 0, 0);
