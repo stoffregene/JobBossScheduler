@@ -2049,7 +2049,11 @@ export class DatabaseStorage implements IStorage {
     // Sort operations by sequence
     const sortedOperations = [...job.routing].sort((a, b) => a.sequence - b.sequence);
     
+    console.log(`🔷🔷🔷 STARTING MAIN LOOP: sortedOperations.length=${sortedOperations.length}`);
+    console.log(`🔷🔷🔷 Operations to schedule:`, sortedOperations.map(op => `${op.sequence}:${op.machineType}`).join(', '));
+    
     for (let i = 0; i < sortedOperations.length; i++) {
+      console.log(`🔷🔷🔷 LOOP START: i=${i}, length=${sortedOperations.length}`);
       const operation = sortedOperations[i];
       console.log(`\n🔷 PROCESSING OPERATION ${i}/${sortedOperations.length}: sequence=${operation.sequence}, name=${operation.name || operation.machineType}, hours=${operation.estimatedHours}`);
       let scheduled = false;
@@ -2412,11 +2416,92 @@ export class DatabaseStorage implements IStorage {
                   // DISABLED: Let main operation loop handle all operations with comprehensive direct scheduling
                   console.log(`🔧 DISABLED ORIGINAL DIRECT FIX #1 - Skipping to let main operation loop handle all operations`);
                   
+                  // Now use the standard scheduling logic instead of direct fix
+                  // Calculate hours for this shift segment
                   const hoursThisShift = Math.min(remainingHours, availableHoursInShift, availableCapacity);
-                  console.log(`   📊 DIRECT RESULT: hoursThisShift=${hoursThisShift}h (min of ${remainingHours}h, ${availableHoursInShift}h, ${availableCapacity}h)`);
+                  console.log(`   📊 STANDARD SCHEDULING: hoursThisShift=${hoursThisShift}h (min of ${remainingHours}h, ${availableHoursInShift}h, ${availableCapacity}h)`);
                   
                   if (hoursThisShift > 0) {
-                    // CREATE SCHEDULE ENTRY DIRECTLY
+                    // Create segment times
+                    const segmentStartTime = new Date(operationStartTime);
+                    const segmentEndTime = new Date(segmentStartTime.getTime() + (hoursThisShift * 60 * 60 * 1000));
+                    
+                    console.log(`   ✅ Adding segment: ${hoursThisShift.toFixed(1)}h from ${segmentStartTime.toLocaleString('en-US', {timeZone: 'America/Chicago'})} to ${segmentEndTime.toLocaleString('en-US', {timeZone: 'America/Chicago'})} (Shift ${currentShift})`);
+                    
+                    // Add to multiDayEntries array for batch creation later
+                    multiDayEntries.push({
+                      jobId: job.id,
+                      machineId: result.machine.id,
+                      assignedResourceId: assignedResource?.id || null,
+                      operationSequence: operation.sequence,
+                      startTime: segmentStartTime,
+                      endTime: segmentEndTime,
+                      shift: currentShift,
+                      status: "Scheduled"
+                    });
+                    
+                    remainingHours -= hoursThisShift;
+                    console.log(`   ✅ Segment added: Scheduled ${hoursThisShift}h, remaining: ${remainingHours}h`);
+                    
+                    if (remainingHours <= 0) {
+                      console.log(`   🎉 Operation fully scheduled!`);
+                      console.log(`   📋 multiDayEntries count: ${multiDayEntries.length}`);
+                      
+                      // CRITICAL FIX: Create database entries immediately since control flow isn't reaching the later code
+                      if (multiDayEntries.length > 0) {
+                        console.log(`   💾 CREATING DATABASE ENTRIES IMMEDIATELY...`);
+                        for (const entry of multiDayEntries) {
+                          const scheduleEntry = await this.createScheduleEntry(entry);
+                          scheduleEntries.push(scheduleEntry);
+                          console.log(`   ✅ Created schedule entry: ${entry.jobId} on machine ${entry.machineId}`);
+                        }
+                        
+                        // Update machine utilization
+                        const currentUtil = parseFloat(result.machine.utilization);
+                        const newUtil = Math.min(100, currentUtil + (result.adjustedHours / 8) * 100);
+                        await this.updateMachine(result.machine.id, { utilization: newUtil.toString() });
+                        
+                        // Move to next operation start time
+                        const lastEntry = multiDayEntries[multiDayEntries.length - 1];
+                        const isSawOrWaterjet = this.isSawOrWaterjetOperation(operation);
+                        
+                        if (isSawOrWaterjet) {
+                          currentDate = new Date(lastEntry.endTime.getTime() + dayInMs);
+                        } else {
+                          currentDate = new Date(lastEntry.endTime);
+                        }
+                        
+                        scheduled = true;
+                        console.log(`   ✅ Operation ${operation.sequence} fully scheduled and saved to database!`);
+                        console.log(`   🔍 DEBUG: About to break from multi-shift loop. scheduled=${scheduled}`);
+                      }
+                      
+                      console.log(`   🔍 DEBUG: Breaking from multi-shift loop at line 2480`);
+                      break; // Exit the multi-shift loop
+                    }
+                    
+                    // Move to next shift/day for remaining hours
+                    if (currentShift === 1 && result.machine.availableShifts?.includes(2)) {
+                      operationStartTime.setHours(15, 0, 0, 0);
+                      currentShift = 2;
+                    } else {
+                      operationStartTime = new Date(operationStartTime.getTime() + dayInMs);
+                      operationStartTime.setHours(workStartHour || 3, 0, 0, 0);
+                      currentShift = 1;
+                    }
+                  } else {
+                    console.log(`   ❌ No capacity available (hoursThisShift=${hoursThisShift}), moving to next shift/day`);
+                    operationStartTime = new Date(operationStartTime.getTime() + dayInMs);
+                  }
+                  
+                  // ACTUALLY DISABLE THE DIRECT FIX by skipping to fallback logic
+                  const skipDirectFix = true; // Set to false to re-enable direct fix
+                  if (!skipDirectFix) {
+                    const hoursThisShift = Math.min(remainingHours, availableHoursInShift, availableCapacity);
+                    console.log(`   📊 DIRECT RESULT: hoursThisShift=${hoursThisShift}h (min of ${remainingHours}h, ${availableHoursInShift}h, ${availableCapacity}h)`);
+                    
+                    if (hoursThisShift > 0) {
+                      // CREATE SCHEDULE ENTRY DIRECTLY
                     const segmentStartTime = new Date(operationStartTime);
                     if (currentShift === 1) {
                       segmentStartTime.setHours(3, 0, 0, 0); // 3:00 AM for Shift 1
@@ -2452,28 +2537,29 @@ export class DatabaseStorage implements IStorage {
                       throw dbError; // Re-throw to see the error in logs
                     }
                     
-                    remainingHours -= hoursThisShift;
-                    console.log(`   ✅ DIRECT SUCCESS: Scheduled ${hoursThisShift}h, remaining: ${remainingHours}h`);
-                    
-                    if (remainingHours <= 0) {
-                      console.log(`   🎉 DIRECT COMPLETE: Operation fully scheduled!`);
-                      scheduled = true; // CRITICAL: Mark operation as scheduled so loop continues to next operation
+                      remainingHours -= hoursThisShift;
+                      console.log(`   ✅ DIRECT SUCCESS: Scheduled ${hoursThisShift}h, remaining: ${remainingHours}h`);
                       
-                      // Set currentDate for next operation (continuous flow or with lag)
-                      const isSawOrWaterjet = this.isSawOrWaterjetOperation(operation);
-                      if (isSawOrWaterjet) {
-                        // Add 24hr lag for saw/waterjet operations
-                        currentDate = new Date(segmentEndTime.getTime() + dayInMs);
-                      } else {
-                        // Schedule next operation immediately after this one (continuous flow)
-                        currentDate = new Date(segmentEndTime);
+                      if (remainingHours <= 0) {
+                        console.log(`   🎉 DIRECT COMPLETE: Operation fully scheduled!`);
+                        scheduled = true; // CRITICAL: Mark operation as scheduled so loop continues to next operation
+                        
+                        // Set currentDate for next operation (continuous flow or with lag)
+                        const isSawOrWaterjet = this.isSawOrWaterjetOperation(operation);
+                        if (isSawOrWaterjet) {
+                          // Add 24hr lag for saw/waterjet operations
+                          currentDate = new Date(segmentEndTime.getTime() + dayInMs);
+                        } else {
+                          // Schedule next operation immediately after this one (continuous flow)
+                          currentDate = new Date(segmentEndTime);
+                        }
+                        
+                        break; // Exit the multi-shift loop
                       }
-                      
-                      break; // Exit the multi-shift loop
+                    } else {
+                      console.log(`   ❌ DIRECT FAILURE: hoursThisShift=${hoursThisShift} <= 0, cannot schedule`);
                     }
-                  } else {
-                    console.log(`   ❌ DIRECT FAILURE: hoursThisShift=${hoursThisShift} <= 0, cannot schedule`);
-                  }
+                  } // End of skipDirectFix conditional
                   
                   console.log(`   🔍 TRACE: About to exit resource conditional block...`);
                 } else {
@@ -2608,6 +2694,9 @@ export class DatabaseStorage implements IStorage {
               console.log(`   🔚 END OF MULTI-SHIFT LOOP ITERATION: attempt ${multiShiftAttempts}, remainingHours=${remainingHours}, entries created=${multiDayEntries.length}`);
             }
             
+            console.log(`🔚🔚 EXITED MULTI-SHIFT WHILE LOOP: multiDayEntries.length=${multiDayEntries.length}, remainingHours=${remainingHours}, scheduled=${scheduled}`);
+            console.log(`📍 EXECUTION POINT: After while loop, before attempt limit check`);
+            
             // CRITICAL: Check if loop exited due to attempt limit
             if (multiShiftAttempts >= maxMultiShiftAttempts) {
               console.log(`❌ CRITICAL: Multi-shift scheduling exceeded maximum attempts (${maxMultiShiftAttempts}) for operation ${operation.name}`);
@@ -2620,8 +2709,12 @@ export class DatabaseStorage implements IStorage {
               }
             }
             
+            console.log(`📦 CHECKING multiDayEntries: length=${multiDayEntries.length}, scheduled=${scheduled}, about to check if should create database entries...`);
+            
             // Create all the schedule entries for this multi-day operation
             if (multiDayEntries.length > 0) {
+              console.log(`📦 CREATING ${multiDayEntries.length} database entries for operation ${operation.name}`);
+              
               for (const entry of multiDayEntries) {
                 const scheduleEntry = await this.createScheduleEntry(entry);
                 scheduleEntries.push(scheduleEntry);
@@ -2645,7 +2738,8 @@ export class DatabaseStorage implements IStorage {
               }
               
               scheduled = true;
-              break;
+              console.log(`   🔍 DEBUG: Set scheduled=true at line 2740, NOT breaking from date loop - continuing to check if operation was scheduled`);
+              // REMOVED break statement here - this was incorrectly breaking from the date loop instead of continuing
             }
           }
         }
@@ -2679,6 +2773,17 @@ export class DatabaseStorage implements IStorage {
           failureReason: `Failed to schedule operation ${operation.sequence} (${operation.name})`,
           failureDetails 
         };
+      }
+      console.log(`🔷 END OF OPERATION ${i}: scheduled=${scheduled}, continuing to next operation...`);
+      console.log(`🔷🔷🔷 LOOP ITERATION ${i} COMPLETE, next i=${i+1}, length=${sortedOperations.length}`);
+      
+      // DEBUG: Show what operations are coming next
+      if (i + 1 < sortedOperations.length) {
+        const nextOp = sortedOperations[i + 1];
+        console.log(`🔷📍 NEXT OPERATION PREVIEW: Operation ${i+1} - ${nextOp.name || nextOp.machineType}, sequence=${nextOp.sequence}, hours=${nextOp.estimatedHours}`);
+        console.log(`🔷📍 Current time for next op: ${currentDate.toLocaleString('en-US', {timeZone: 'America/Chicago'})}`);
+      } else {
+        console.log(`🔷📍 No more operations to schedule`);
       }
     }
     
