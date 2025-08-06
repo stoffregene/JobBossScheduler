@@ -108,11 +108,21 @@ export default function OperatorWorkingTimes({ scheduleView, isFullscreen }: Ope
     // Check custom schedule
     const schedule = resource.workSchedule?.[dayName];
     if (schedule && schedule.enabled) {
-      return {
-        type: 'working',
-        startTime: schedule.startTime,
-        endTime: schedule.endTime,
-      };
+      // Handle missing startTime by using shift-based defaults
+      let startTime = schedule.startTime;
+      if (!startTime) {
+        // Default to shift 1 time if no startTime specified
+        startTime = resource.shiftSchedule?.includes(1) ? '05:00' : 
+                   resource.shiftSchedule?.includes(2) ? '15:00' : '08:00';
+      }
+      
+      if (schedule.endTime) {
+        return {
+          type: 'working',
+          startTime: startTime,
+          endTime: schedule.endTime,
+        };
+      }
     }
 
     // Default shift schedule
@@ -137,7 +147,7 @@ export default function OperatorWorkingTimes({ scheduleView, isFullscreen }: Ope
 
   // Calculate working hours percentage for visual bar
   const getWorkingHoursPercentage = (workTime: any) => {
-    if (workTime.type !== 'working') return 0;
+    if (workTime.type !== 'working' || !workTime.startTime || !workTime.endTime) return 0;
     
     const start = workTime.startTime.split(':').map(Number);
     const end = workTime.endTime.split(':').map(Number);
@@ -153,7 +163,7 @@ export default function OperatorWorkingTimes({ scheduleView, isFullscreen }: Ope
 
   // Get bar position for timeline
   const getTimelinePosition = (workTime: any) => {
-    if (workTime.type !== 'working') return { left: 0, width: 0 };
+    if (workTime.type !== 'working' || !workTime.startTime || !workTime.endTime) return { left: 0, width: 0 };
     
     const start = workTime.startTime.split(':').map(Number);
     const end = workTime.endTime.split(':').map(Number);
