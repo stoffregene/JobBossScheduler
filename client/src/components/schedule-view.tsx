@@ -6,16 +6,17 @@ import { Download, Filter, Maximize2, ChevronLeft, ChevronRight } from "lucide-r
 import { useState } from "react";
 import type { Job, Machine, ScheduleEntry } from "@shared/schema";
 import JobDetailsModal from "./job-details-modal";
+import OperatorWorkingTimes from "./operator-working-times";
 // Removed drag and drop imports
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
 interface ScheduleViewProps {
   scheduleView: {
-    type: "hour" | "day" | "week" | "month";
+    type: "hour" | "day" | "week" | "month" | "operators";
     date: Date;
   };
-  onScheduleViewChange: (view: { type: "hour" | "day" | "week" | "month"; date: Date }) => void;
+  onScheduleViewChange: (view: { type: "hour" | "day" | "week" | "month" | "operators"; date: Date }) => void;
 }
 
 // Drag and drop functionality removed
@@ -285,7 +286,7 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
             </Select>
             {/* View Type Selector */}
             <div className="flex items-center gap-1 border rounded-md p-1">
-              {["hour", "day", "week", "month"].map((viewType) => (
+              {["hour", "day", "week", "month", "operators"].map((viewType) => (
                 <Button
                   key={viewType}
                   variant={scheduleView.type === viewType ? "default" : "ghost"}
@@ -330,10 +331,13 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
       </CardHeader>
       
       <CardContent className={`${isFullscreen ? "flex-1 overflow-auto" : ""}`}>
-        <div className="space-y-4">
-          {/* Time Headers */}
-          <div className={`flex gap-0 text-sm font-medium text-muted-foreground ${(scheduleView.type === "month" || scheduleView.type === "hour") || isFullscreen ? "overflow-x-auto" : ""}`}>
-            <div className="text-right pr-4 sticky left-0 bg-background z-10 w-48 flex-shrink-0">Machine</div>
+        {scheduleView.type === "operators" ? (
+          <OperatorWorkingTimes scheduleView={scheduleView} isFullscreen={isFullscreen} />
+        ) : (
+          <div className="space-y-4">
+            {/* Time Headers */}
+            <div className={`flex gap-0 text-sm font-medium text-muted-foreground ${(scheduleView.type === "month" || scheduleView.type === "hour") || isFullscreen ? "overflow-x-auto" : ""}`}>
+              <div className="text-right pr-4 sticky left-0 bg-background z-10 w-48 flex-shrink-0">Machine</div>
             <div className="flex flex-1" style={{ minWidth: '600px' }}>
               {weekDays.map((day, index) => {
                 let displayText = '';
@@ -603,6 +607,7 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
             </div>
           </div>
         </div>
+        )}
       </CardContent>
         
         {/* Job Details Modal */}
