@@ -2903,13 +2903,12 @@ export class DatabaseStorage implements IStorage {
       console.log(`🔷🔚🔚 REACHED END OF FOR LOOP ITERATION ${i} - About to increment i and check loop condition`);
     }
     
-    console.log(`✅ ALL OPERATIONS LOOP COMPLETE: Total operations=${sortedOperations.length}, Scheduled entries=${scheduleEntries.length}`);
+    console.log(`ALL OPERATIONS LOOP COMPLETE: Total operations=${sortedOperations.length}, Scheduled entries=${scheduleEntries.length}`);
     
     // Update job status to scheduled
     await this.updateJob(jobId, { status: "Scheduled" });
     
     return { success: true, scheduleEntries };
-  }
   }
 
   async manualScheduleJob(jobId: string, startDate: string): Promise<{ success: boolean; scheduleEntries?: ScheduleEntry[]; failureReason?: string }> {
