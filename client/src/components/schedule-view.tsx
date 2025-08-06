@@ -492,6 +492,16 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
                         const leftPercent = (blockStartMs / totalTimelineMs) * 100;
                         const widthPercent = (blockDurationMs / totalTimelineMs) * 100;
                         
+                        // Debug log for compressed bars
+                        if (widthPercent > 0 && widthPercent < 5) {
+                          console.log(`🔍 COMPRESSED JOB: ${block.job?.jobNumber}, Duration: ${blockDurationMs/1000/60/60}h, Width: ${widthPercent}%`, {
+                            startDate: block.startDate,
+                            endDate: block.endDate,
+                            blockDurationMs,
+                            totalTimelineMs
+                          });
+                        }
+                        
                         if (widthPercent <= 0) return null;
                         
                         // Determine vertical position based on shift
