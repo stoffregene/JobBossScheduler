@@ -135,7 +135,7 @@ export default function OperatorWorkingTimes({ scheduleView, isFullscreen }: Ope
     return Math.min((workingMinutes / maxWorkingMinutes) * 100, 100);
   };
 
-  // Get bar position for timeline
+  // Get bar position for timeline (within a single day column)
   const getTimelinePosition = (workTime: any) => {
     if (workTime.type !== 'working' || !workTime.startTime || !workTime.endTime) return { left: 0, width: 0 };
     
@@ -146,6 +146,7 @@ export default function OperatorWorkingTimes({ scheduleView, isFullscreen }: Ope
     const endMinutes = end[0] * 60 + end[1];
     
     const dayMinutes = 24 * 60;
+    // Calculate percentage within the day (0-100% of one day)
     const leftPercent = (startMinutes / dayMinutes) * 100;
     const widthPercent = ((endMinutes - startMinutes) / dayMinutes) * 100;
     
@@ -260,8 +261,8 @@ export default function OperatorWorkingTimes({ scheduleView, isFullscreen }: Ope
                       key={dayIndex}
                       className="absolute h-11"
                       style={{
-                        left: `${(dayIndex / 7) * 100 + (position.left / 7)}%`,
-                        width: `${position.width / 7}%`,
+                        left: `${(dayIndex / 7) * 100 + (position.left * (1/7))}%`,
+                        width: `${position.width * (1/7)}%`,
                         top: '2px'
                       }}
                     >
