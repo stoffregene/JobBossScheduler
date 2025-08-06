@@ -1322,8 +1322,96 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
 
 
+  // Operator Availability API routes - Year-round scheduling integration
+  app.get("/api/operator-availability/:operatorId/check", async (req, res) => {
+    try {
+      const { operatorId } = req.params;
+      const targetDate = new Date(req.query.date as string);
+      const shift = req.query.shift ? parseInt(req.query.shift as string) : undefined;
+      
+      const isAvailable = await storage.checkOperatorAvailability(operatorId, targetDate, shift);
+      res.json({ isAvailable, operatorId, targetDate, shift });
+    } catch (error) {
+      console.error('Error checking operator availability:', error);
+      res.status(500).json({ message: "Failed to check operator availability" });
+    }
+  });
 
+  app.get("/api/operators/available", async (req, res) => {
+    try {
+      const targetDate = new Date(req.query.date as string);
+      const shift = parseInt(req.query.shift as string);
+      const requiredRole = req.query.role as string | undefined;
+      const requiredWorkCenters = req.query.workCenters ? 
+        (req.query.workCenters as string).split(',') : undefined;
+      
+      const availableOperators = await storage.getAvailableOperatorsForDate(
+        targetDate, 
+        shift, 
+        requiredRole, 
+        requiredWorkCenters
+      );
+      
+      res.json(availableOperators);
+    } catch (error) {
+      console.error('Error getting available operators:', error);
+      res.status(500).json({ message: "Failed to get available operators" });
+    }
+  });
 
+  app.get("/api/operator-availability/:operatorId/working-hours", async (req, res) => {
+    try {
+      const { operatorId } = req.params;
+      const targetDate = new Date(req.query.date as string);
+      
+      const workingHours = await storage.getOperatorWorkingHours(operatorId, targetDate);
+      res.json(workingHours);
+    } catch (error) {
+      console.error('Error getting operator working hours:', error);
+      res.status(500).json({ message: "Failed to get operator working hours" });
+    }
+  });
+
+  app.get("/api/operator-availability/:operatorId/next-available", async (req, res) => {
+    try {
+      const { operatorId } = req.params;
+      const afterDate = new Date(req.query.afterDate as string);
+      
+      const nextAvailableDay = await storage.getOperatorNextAvailableDay(operatorId, afterDate);
+      res.json({ nextAvailableDay });
+    } catch (error) {
+      console.error('Error getting operator next available day:', error);
+      res.status(500).json({ message: "Failed to get operator next available day" });
+    }
+  });
+
+  app.get("/api/operator-availability/:operatorId/schedule", async (req, res) => {
+    try {
+      const { operatorId } = req.params;
+      const startDate = new Date(req.query.startDate as string);
+      const endDate = new Date(req.query.endDate as string);
+      
+      const schedule = await storage.getOperatorScheduleForDateRange(operatorId, startDate, endDate);
+      res.json(schedule);
+    } catch (error) {
+      console.error('Error getting operator schedule:', error);
+      res.status(500).json({ message: "Failed to get operator schedule" });
+    }
+  });
+
+  app.get("/api/operator-availability/:operatorId/available-hours", async (req, res) => {
+    try {
+      const { operatorId } = req.params;
+      const startDate = new Date(req.query.startDate as string);
+      const endDate = new Date(req.query.endDate as string);
+      
+      const availableHours = await storage.calculateOperatorAvailableHours(operatorId, startDate, endDate);
+      res.json({ availableHours, operatorId, startDate, endDate });
+    } catch (error) {
+      console.error('Error calculating operator available hours:', error);
+      res.status(500).json({ message: "Failed to calculate operator available hours" });
+    }
+  });
 
   return httpServer;
 }

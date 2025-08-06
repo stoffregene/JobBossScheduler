@@ -20,6 +20,7 @@ import {
 import { eq, and, gte, lte, desc, isNull, sql } from "drizzle-orm";
 import type { IStorage } from "./storage-interface";
 import { barFeederService } from "./bar-feeder-service";
+import { OperatorAvailabilityManager, createOperatorAvailabilityManager } from './operator-availability';
 
 export class DatabaseStorage implements IStorage {
   // OPTIMIZATION: Cache frequently accessed data to improve performance
@@ -38,8 +39,33 @@ export class DatabaseStorage implements IStorage {
   // ANTI-SPAM: Prevent infinite logging in resource scheduling
   private schedulingLogCache: Set<string> = new Set();
 
+  // Year-round operator availability manager
+  private operatorAvailabilityManager: OperatorAvailabilityManager | null = null;
+
   constructor() {
     this.initializeDefaultData();
+  }
+
+  // Initialize or update the operator availability manager
+  private async ensureOperatorAvailabilityManager(): Promise<OperatorAvailabilityManager> {
+    if (!this.operatorAvailabilityManager) {
+      const resources = await this.getResources();
+      const unavailabilityEntries = await this.getResourceUnavailability();
+      this.operatorAvailabilityManager = await createOperatorAvailabilityManager(resources, unavailabilityEntries);
+    }
+    return this.operatorAvailabilityManager;
+  }
+
+  // Update the operator availability manager when data changes
+  private async refreshOperatorAvailabilityManager(): Promise<void> {
+    const resources = await this.getResources();
+    const unavailabilityEntries = await this.getResourceUnavailability();
+    
+    if (this.operatorAvailabilityManager) {
+      this.operatorAvailabilityManager.updateData(resources, unavailabilityEntries);
+    } else {
+      this.operatorAvailabilityManager = await createOperatorAvailabilityManager(resources, unavailabilityEntries);
+    }
   }
 
   private async initializeDefaultData() {
@@ -1840,6 +1866,12 @@ export class DatabaseStorage implements IStorage {
         if (startTime && endTime) {
           isAvailable = await this.isResourceAvailableAtTime(resource.id, startTime, endTime);
         }
+
+        // ENHANCED: Also check operator availability using the year-round system
+        const availabilityManager = await this.ensureOperatorAvailabilityManager();
+        const operatorAvailable = availabilityManager.isOperatorAvailable(resource.id, startTime || new Date(), shift);
+        
+        isAvailable = isAvailable && operatorAvailable;
         
         console.log(`🔍 INSPECT check ${resource.name}: active=${isActive}, shift=${hasShift}, machine=${canOperateMachine}, inspector=${isInspector}, available=${isAvailable}`);
         return isActive && hasShift && canOperateMachine && isInspector && isAvailable;
@@ -1857,8 +1889,14 @@ export class DatabaseStorage implements IStorage {
         if (startTime && endTime) {
           isAvailable = await this.isResourceAvailableAtTime(resource.id, startTime, endTime);
         }
+
+        // ENHANCED: Also check operator availability using the year-round system
+        const availabilityManager = await this.ensureOperatorAvailabilityManager();
+        const operatorAvailable = availabilityManager.isOperatorAvailable(resource.id, startTime || new Date(), shift);
         
-        console.log(`🔍 INSPECT check ${resource.name}: active=${isActive}, shift=${hasShift}, machine=${canOperateMachine}, inspector=${isInspector}, available=${isAvailable}`);
+        isAvailable = isAvailable && operatorAvailable;
+        
+        console.log(`🔍 INSPECT check ${resource.name}: active=${isActive}, shift=${hasShift}, machine=${canOperateMachine}, inspector=${isInspector}, available=${isAvailable}, yearRoundAvailable=${operatorAvailable}`);
         
         if (isActive && hasShift && canOperateMachine && isInspector && isAvailable) {
           availableInspectors.push(resource);
@@ -1888,8 +1926,14 @@ export class DatabaseStorage implements IStorage {
       if (startTime && endTime) {
         isAvailable = await this.isResourceAvailableAtTime(resource.id, startTime, endTime);
       }
+
+      // ENHANCED: Also check operator availability using the year-round system
+      const availabilityManager = await this.ensureOperatorAvailabilityManager();
+      const operatorAvailable = availabilityManager.isOperatorAvailable(resource.id, startTime || new Date(), shift);
       
-      console.log(`⚙️ PRODUCTION check ${resource.name}: active=${isActive}, shift=${hasShift}, machine=${canOperateMachine}, operator=${isOperator}, available=${isAvailable}`);
+      isAvailable = isAvailable && operatorAvailable;
+      
+      console.log(`⚙️ PRODUCTION check ${resource.name}: active=${isActive}, shift=${hasShift}, machine=${canOperateMachine}, operator=${isOperator}, available=${isAvailable}, yearRoundAvailable=${operatorAvailable}`);
       console.log(`   Resource work centers: ${resource.workCenters?.join(', ')}`);
       console.log(`   Target machine ID: ${machine.id}, Machine: ${machine.machineId}`);
       
@@ -3872,6 +3916,10 @@ export class DatabaseStorage implements IStorage {
 
   async createResource(insertResource: InsertResource): Promise<Resource> {
     const [resource] = await db.insert(resources).values(insertResource).returning();
+    
+    // Refresh operator availability manager when new resource is created
+    await this.refreshOperatorAvailabilityManager();
+    
     return resource;
   }
 
@@ -3881,6 +3929,12 @@ export class DatabaseStorage implements IStorage {
       .set(updates)
       .where(eq(resources.id, id))
       .returning();
+    
+    // Refresh operator availability manager when resource data changes
+    if (resource) {
+      await this.refreshOperatorAvailabilityManager();
+    }
+    
     return resource || undefined;
   }
 
@@ -3928,6 +3982,9 @@ export class DatabaseStorage implements IStorage {
       .insert(resourceUnavailability)
       .values(insertUnavailability)
       .returning();
+    
+    // Refresh operator availability manager when unavailability changes
+    await this.refreshOperatorAvailabilityManager();
     return unavailability;
   }
 
@@ -3937,12 +3994,22 @@ export class DatabaseStorage implements IStorage {
       .set(updates)
       .where(eq(resourceUnavailability.id, id))
       .returning();
+    
+    // Refresh operator availability manager when unavailability changes
+    if (unavailability) {
+      await this.refreshOperatorAvailabilityManager();
+    }
+    
     return unavailability || undefined;
   }
 
   async deleteResourceUnavailability(id: string): Promise<boolean> {
     try {
       await db.delete(resourceUnavailability).where(eq(resourceUnavailability.id, id));
+      
+      // Refresh operator availability manager when unavailability is deleted
+      await this.refreshOperatorAvailabilityManager();
+      
       return true;
     } catch (error) {
       console.error('Error deleting resource unavailability:', error);
@@ -3961,6 +4028,57 @@ export class DatabaseStorage implements IStorage {
         )
       )
       .orderBy(resourceUnavailability.startDate);
+  }
+
+  // Year-round operator availability API methods
+  async checkOperatorAvailability(operatorId: string, targetDate: Date, shift?: number): Promise<boolean> {
+    const availabilityManager = await this.ensureOperatorAvailabilityManager();
+    return availabilityManager.isOperatorAvailable(operatorId, targetDate, shift);
+  }
+
+  async getAvailableOperatorsForDate(
+    targetDate: Date,
+    shift: number,
+    requiredRole?: string,
+    requiredWorkCenters?: string[]
+  ): Promise<Resource[]> {
+    const availabilityManager = await this.ensureOperatorAvailabilityManager();
+    return availabilityManager.getAvailableOperators(targetDate, shift, requiredRole, requiredWorkCenters);
+  }
+
+  async getOperatorWorkingHours(operatorId: string, targetDate: Date): Promise<{ startTime: Date; endTime: Date } | null> {
+    const availabilityManager = await this.ensureOperatorAvailabilityManager();
+    return availabilityManager.getOperatorWorkingHours(operatorId, targetDate);
+  }
+
+  async getOperatorNextAvailableDay(operatorId: string, afterDate: Date): Promise<Date | null> {
+    const availabilityManager = await this.ensureOperatorAvailabilityManager();
+    return availabilityManager.getNextAvailableWorkingDay(operatorId, afterDate);
+  }
+
+  async getOperatorScheduleForDateRange(
+    operatorId: string,
+    startDate: Date,
+    endDate: Date
+  ): Promise<Array<{
+    operatorId: string;
+    date: Date;
+    workTime: {
+      type: 'working' | 'unavailable' | 'off';
+      startTime?: string;
+      endTime?: string;
+      reason?: string;
+      isPartialDay?: boolean;
+    };
+    shiftNumber?: number;
+  }>> {
+    const availabilityManager = await this.ensureOperatorAvailabilityManager();
+    return availabilityManager.getOperatorScheduleForRange(operatorId, startDate, endDate);
+  }
+
+  async calculateOperatorAvailableHours(operatorId: string, startDate: Date, endDate: Date): Promise<number> {
+    const availabilityManager = await this.ensureOperatorAvailabilityManager();
+    return availabilityManager.calculateAvailableHours(operatorId, startDate, endDate);
   }
 
   async getScheduleEntriesInDateRange(startDate: Date, endDate: Date): Promise<ScheduleEntry[]> {

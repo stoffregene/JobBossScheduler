@@ -8,6 +8,15 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+**August 6, 2025** - YEAR-ROUND OPERATOR AVAILABILITY SYSTEM COMPLETED: Implemented comprehensive year-round operator scheduling with full auto-scheduling algorithm integration:
+
+**🎯 COMPREHENSIVE AVAILABILITY SYSTEM**:
+- **OPERATORAVAILABILITYMANAGER**: New service class providing year-round operator scheduling logic with real-time availability checking
+- **AUTO-SCHEDULING INTEGRATION**: Scheduling algorithm now uses comprehensive operator availability instead of basic weekly patterns
+- **INTELLIGENT RESOURCE ASSIGNMENT**: Enhanced resource assignment with unavailability checking, custom work schedules, and shift compatibility
+- **API ENDPOINTS**: Complete RESTful API coverage for operator availability queries and schedule analysis
+- **DATABASE AUTO-REFRESH**: Automatic refresh of availability manager when resource or unavailability data changes
+
 **August 6, 2025** - OPERATOR UNAVAILABILITY VISUALIZATION FIXED: Operators marked as unavailable now display red "Unavailable" blocks during their scheduled work times instead of disappearing from the view:
 
 **🔴 UNAVAILABILITY DISPLAY ENHANCEMENT**:
@@ -92,7 +101,8 @@ Preferred communication style: Simple, everyday language.
     - Resource assignment: Role-based and machine-specific compatibility matrix enforcement (e.g., Quality Inspectors for INSPECT operations, Operators/Shift Leads for PRODUCTION). Outsource operations receive no internal resources.
     - Shift balancing: Utilizes both shifts with weekly capacity constraints, handling multi-day jobs across shifts and weekends.
     - Material tracking: Missing materials generate alerts but do not block scheduling.
-- **Resource Capacity Tracking**: Accounts for unavailability.
+    - **Year-Round Availability**: OperatorAvailabilityManager provides comprehensive operator scheduling with custom work schedules, unavailability periods, and real-time availability checks.
+- **Resource Capacity Tracking**: Accounts for unavailability with year-round scheduling precision.
 - **Migrations**: Drizzle Kit.
 
 ### Real-time Communication
