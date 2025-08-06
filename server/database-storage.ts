@@ -2059,6 +2059,7 @@ export class DatabaseStorage implements IStorage {
     
     for (let i = 0; i < sortedOperations.length; i++) {
       console.log(`🔷🔷🔷 LOOP START: i=${i}, length=${sortedOperations.length}`);
+      console.log(`🚀 STARTING OPERATION ${i}: ${sortedOperations[i].name || sortedOperations[i].machineType} (${sortedOperations[i].machineType}), sequence=${sortedOperations[i].sequence}`);
       const operation = sortedOperations[i];
       console.log(`\n🔷 PROCESSING OPERATION ${i}/${sortedOperations.length}: sequence=${operation.sequence}, name=${operation.name || operation.machineType}, hours=${operation.estimatedHours}`);
       let scheduled = false;
@@ -2067,6 +2068,7 @@ export class DatabaseStorage implements IStorage {
       let outerLoopAttempts = 0;
       const maxOuterLoopAttempts = 30; // CRITICAL: Prevent infinite date loops
       
+      console.log(`🔄 STARTING DATE LOOP for operation ${i}: currentDate=${currentDate.toLocaleString('en-US', {timeZone: 'America/Chicago'})}, maxDate=${maxDate.toLocaleString('en-US', {timeZone: 'America/Chicago'})}`);
       while (currentDate <= maxDate && !scheduled && outerLoopAttempts < maxOuterLoopAttempts) {
         outerLoopAttempts++;
         console.log(`📅 OUTER LOOP ${outerLoopAttempts}/${maxOuterLoopAttempts}: Trying date ${currentDate.toDateString()} for ${operation.name || operation.machineType}`);
@@ -2452,9 +2454,9 @@ export class DatabaseStorage implements IStorage {
                       console.log(`   🎉 Operation fully scheduled!`);
                       console.log(`   📋 multiDayEntries count: ${multiDayEntries.length}`);
                       
-                      // CRITICAL FIX: Create database entries immediately since control flow isn't reaching the later code
+                      // RE-ENABLED PATH 1: Create database entries immediately since the algorithm is working correctly
                       if (multiDayEntries.length > 0) {
-                        console.log(`   💾 CREATING DATABASE ENTRIES IMMEDIATELY...`);
+                        console.log(`   💾 CREATING DATABASE ENTRIES IMMEDIATELY (PATH 1)...`);
                         for (const entry of multiDayEntries) {
                           const scheduleEntry = await this.createScheduleEntry(entry);
                           scheduleEntries.push(scheduleEntry);
@@ -2478,10 +2480,7 @@ export class DatabaseStorage implements IStorage {
                         
                         scheduled = true;
                         console.log(`   ✅ Operation ${operation.sequence} fully scheduled and saved to database!`);
-                        console.log(`   🔍 DEBUG: About to break from multi-shift loop. scheduled=${scheduled}`);
                       }
-                      
-                      console.log(`   🔍 DEBUG: Breaking from multi-shift loop at line 2480`);
                       break; // Exit the multi-shift loop
                     }
                     
@@ -2557,6 +2556,20 @@ export class DatabaseStorage implements IStorage {
                         } else {
                           // Schedule next operation immediately after this one (continuous flow)
                           currentDate = new Date(segmentEndTime);
+                        }
+                        
+                        // CRITICAL FIX: Ensure next operation starts at reasonable work time
+                        const nextHour = currentDate.getHours();
+                        if (nextHour < 3 || nextHour >= 23) {
+                          // If next operation would start outside work hours (before 3am or after 11pm),
+                          // move to the next workday at 3am (start of shift 1)
+                          if (nextHour < 3) {
+                            currentDate.setHours(3, 0, 0, 0); // Same day, 3am
+                          } else {
+                            currentDate = new Date(currentDate.getTime() + dayInMs); // Next day
+                            currentDate.setHours(3, 0, 0, 0); // 3am next day
+                          }
+                          console.log(`   🕐 WORK HOURS FIX: Adjusted next operation start to ${currentDate.toLocaleString('en-US', {timeZone: 'America/Chicago'})}`);
                         }
                         
                         break; // Exit the multi-shift loop
@@ -2742,6 +2755,20 @@ export class DatabaseStorage implements IStorage {
                 currentDate = new Date(lastEntry.endTime);
               }
               
+              // CRITICAL FIX: Ensure next operation starts at reasonable work time
+              const nextHour = currentDate.getHours();
+              if (nextHour < 3 || nextHour >= 23) {
+                // If next operation would start outside work hours (before 3am or after 11pm),
+                // move to the next workday at 3am (start of shift 1)
+                if (nextHour < 3) {
+                  currentDate.setHours(3, 0, 0, 0); // Same day, 3am
+                } else {
+                  currentDate = new Date(currentDate.getTime() + dayInMs); // Next day
+                  currentDate.setHours(3, 0, 0, 0); // 3am next day
+                }
+                console.log(`   🕐 WORK HOURS FIX: Adjusted next operation start to ${currentDate.toLocaleString('en-US', {timeZone: 'America/Chicago'})}`);
+              }
+              
               scheduled = true;
               console.log(`   🔍 DEBUG: Set scheduled=true at line 2740, NOT breaking from date loop - continuing to check if operation was scheduled`);
               // REMOVED break statement here - this was incorrectly breaking from the date loop instead of continuing
@@ -2787,9 +2814,14 @@ export class DatabaseStorage implements IStorage {
         const nextOp = sortedOperations[i + 1];
         console.log(`🔷📍 NEXT OPERATION PREVIEW: Operation ${i+1} - ${nextOp.name || nextOp.machineType}, sequence=${nextOp.sequence}, hours=${nextOp.estimatedHours}`);
         console.log(`🔷📍 Current time for next op: ${currentDate.toLocaleString('en-US', {timeZone: 'America/Chicago'})}`);
+        console.log(`🔷🔍 ABOUT TO CONTINUE TO NEXT ITERATION: i=${i}, will increment to ${i+1}`);
       } else {
         console.log(`🔷📍 No more operations to schedule`);
       }
+      
+      console.log(`🔷🔚 END OF MAIN OPERATION ${i} BLOCK - Loop will continue to next iteration...`);
+      // NOTE: No break, return, or continue statements here - loop should naturally continue
+      console.log(`🔷🔚🔚 REACHED END OF FOR LOOP ITERATION ${i} - About to increment i and check loop condition`);
     }
     
     console.log(`✅ ALL OPERATIONS LOOP COMPLETE: Total operations=${sortedOperations.length}, Scheduled entries=${scheduleEntries.length}`);
@@ -2973,6 +3005,8 @@ export class DatabaseStorage implements IStorage {
     // Try to schedule the first operation on the specified machine/date/shift
     for (let i = 0; i < sortedOperations.length; i++) {
       const operation = sortedOperations[i];
+      console.log(`🔷🔷🔷 STARTING OPERATION ${i}: ${operation.name || operation.machineType}, sequence=${operation.sequence}, hours=${operation.estimatedHours}`);
+      console.log(`🔷📅 Current date for this operation: ${currentDate.toLocaleString('en-US', {timeZone: 'America/Chicago'})}`);
       let scheduled = false;
       let attempts = 0;
       const maxAttempts = 10;
