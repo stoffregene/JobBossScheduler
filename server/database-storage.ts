@@ -34,6 +34,9 @@ export class DatabaseStorage implements IStorage {
     maxHours: number;
     capabilities: string[];
   }> = new Map();
+  
+  // ANTI-SPAM: Prevent infinite logging in resource scheduling
+  private schedulingLogCache: Set<string> = new Set();
 
   constructor() {
     this.initializeDefaultData();
@@ -1921,7 +1924,15 @@ export class DatabaseStorage implements IStorage {
     startTime.setHours(startHour, startMin, 0, 0);
     endTime.setHours(endHour, endMin, 0, 0);
     
-    console.log(`📅 ${resource.name} work schedule on ${dayName}: ${startTime.toLocaleTimeString()} - ${endTime.toLocaleTimeString()}`);
+    // REDUCED LOGGING: Only log once per unique resource-date combination to prevent infinite log spam
+    const logKey = `${resource.name}-${dayName}-${date.toDateString()}`;
+    if (!this.schedulingLogCache) {
+      this.schedulingLogCache = new Set();
+    }
+    if (!this.schedulingLogCache.has(logKey)) {
+      console.log(`📅 ${resource.name} work schedule on ${dayName}: ${startTime.toLocaleTimeString()} - ${endTime.toLocaleTimeString()}`);
+      this.schedulingLogCache.add(logKey);
+    }
     
     return { startTime, endTime };
   }
@@ -3338,12 +3349,28 @@ export class DatabaseStorage implements IStorage {
               const maxAttempts = 20; // Prevent infinite loops
               
               while (!segmentResult && attempts < maxAttempts) {
-                // Skip weekends (Friday-Sunday)
-                while ((segmentDate.getDay() < 1 || segmentDate.getDay() > 4)) {
+                // CRITICAL: Skip weekends (Friday-Sunday) with loop protection
+                let weekendSkipCount = 0;
+                while ((segmentDate.getDay() < 1 || segmentDate.getDay() > 4) && weekendSkipCount < 10) {
                   segmentDate = new Date(segmentDate.getTime() + dayInMs);
+                  weekendSkipCount++;
                 }
                 
+                if (weekendSkipCount >= 10) {
+                  console.log(`❌ CRITICAL: Weekend skip loop exceeded maximum attempts`);
+                  break; // Exit segment loop to prevent infinite iterations
+                }
+                
+                console.log(`🔍 Multi-day segment ${segment.segmentNumber}: Checking ${segmentDate.toDateString()} (attempt ${attempts + 1})`);
+                
                 const availableShifts = await this.getShiftsOrderedByLoad(segmentDate, operation as any);
+                if (availableShifts.length === 0) {
+                  console.log(`❌ No available shifts on ${segmentDate.toDateString()}, moving to next day`);
+                  segmentDate = new Date(segmentDate.getTime() + dayInMs);
+                  attempts++;
+                  continue;
+                }
+                
                 for (const shift of availableShifts) {
                   const tempResult = await this.findBestMachineForOperation(operation as any, segmentDate, shift);
                   if (tempResult) {
@@ -3351,12 +3378,14 @@ export class DatabaseStorage implements IStorage {
                     const capacity = await this.getMachineCapacityInfo(tempResult.machine.id, segmentDate, shift);
                     if (capacity.currentHours + segment.hours <= capacity.maxHours) {
                       segmentResult = { ...tempResult, adjustedHours: segment.hours, shift };
+                      console.log(`✅ Found segment result: ${tempResult.machine.machineId} on ${segmentDate.toDateString()} shift ${shift}`);
                       break;
                     }
                   }
                 }
                 
                 if (!segmentResult) {
+                  console.log(`❌ No suitable machine for segment ${segment.segmentNumber} on ${segmentDate.toDateString()}, trying next day`);
                   segmentDate = new Date(segmentDate.getTime() + dayInMs);
                   attempts++;
                 }
