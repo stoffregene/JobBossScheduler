@@ -135,9 +135,9 @@ export default function OperatorWorkingTimes({ scheduleView, isFullscreen }: Ope
     return Math.min((workingMinutes / maxWorkingMinutes) * 100, 100);
   };
 
-  // Get bar position for timeline (within a single day column)
-  const getTimelinePosition = (workTime: any) => {
-    if (workTime.type !== 'working' || !workTime.startTime || !workTime.endTime) return { left: 0, width: 0 };
+  // Get bar position for timeline with cross-day shift support
+  const getTimelinePosition = (workTime: any, dayIndex: number) => {
+    if (workTime.type !== 'working' || !workTime.startTime || !workTime.endTime) return [];
     
     const start = workTime.startTime.split(':').map(Number);
     const end = workTime.endTime.split(':').map(Number);
@@ -146,11 +146,42 @@ export default function OperatorWorkingTimes({ scheduleView, isFullscreen }: Ope
     const endMinutes = end[0] * 60 + end[1];
     
     const dayMinutes = 24 * 60;
-    // Calculate percentage within the day (0-100% of one day)
-    const leftPercent = (startMinutes / dayMinutes) * 100;
-    const widthPercent = ((endMinutes - startMinutes) / dayMinutes) * 100;
     
-    return { left: leftPercent, width: widthPercent };
+    // Check if this is a cross-day shift (end time is next day)
+    if (endMinutes < startMinutes) {
+      // This is a cross-day shift (e.g., 3:00 PM to 3:00 AM next day)
+      const segments = [];
+      
+      // First segment: start time to end of day (e.g., 3:00 PM to 11:59 PM)
+      const firstSegmentLeft = (startMinutes / dayMinutes) * 100;
+      const firstSegmentWidth = ((dayMinutes - startMinutes) / dayMinutes) * 100;
+      segments.push({
+        left: firstSegmentLeft,
+        width: firstSegmentWidth,
+        dayOffset: 0 // Current day
+      });
+      
+      // Second segment: start of next day to end time (e.g., 12:00 AM to 3:00 AM)
+      const secondSegmentLeft = 0;
+      const secondSegmentWidth = (endMinutes / dayMinutes) * 100;
+      segments.push({
+        left: secondSegmentLeft,
+        width: secondSegmentWidth,
+        dayOffset: 1 // Next day
+      });
+      
+      return segments;
+    } else {
+      // Normal same-day shift
+      const leftPercent = (startMinutes / dayMinutes) * 100;
+      const widthPercent = ((endMinutes - startMinutes) / dayMinutes) * 100;
+      
+      return [{
+        left: leftPercent,
+        width: widthPercent,
+        dayOffset: 0
+      }];
+    }
   };
 
   const activeOperators = resources.filter(r => r.isActive && (r.role === 'Operator' || r.role === 'Shift Lead'));
@@ -252,42 +283,49 @@ export default function OperatorWorkingTimes({ scheduleView, isFullscreen }: Ope
               <div className="absolute inset-0 p-0.5">
                 {weekDays.map((day, dayIndex) => {
                   const workTime = getOperatorWorkTime(operator, day);
-                  const position = getTimelinePosition(workTime);
+                  const segments = getTimelinePosition(workTime, dayIndex);
                   
                   if (workTime.type === 'off') return null;
                   
-                  return (
-                    <div
-                      key={dayIndex}
-                      className="absolute h-11"
-                      style={{
-                        left: `${(dayIndex / 7) * 100 + (position.left * (1/7))}%`,
-                        width: `${position.width * (1/7)}%`,
-                        top: '2px'
-                      }}
-                    >
-                      <div 
-                        className={`h-full rounded text-xs text-white font-medium flex items-center justify-center ${
-                          workTime.type === 'unavailable' 
-                            ? 'bg-red-500' 
-                            : operator.shiftSchedule?.includes(1) 
-                              ? 'bg-blue-500' 
-                              : 'bg-green-500'
-                        }`}
-                        title={
-                          workTime.type === 'unavailable' 
-                            ? `Unavailable: ${workTime.reason}` 
-                            : `Working: ${workTime.startTime} - ${workTime.endTime}`
-                        }
+                  return segments.map((segment, segmentIndex) => {
+                    const targetDayIndex = dayIndex + segment.dayOffset;
+                    
+                    // Don't render if the target day is outside our week view
+                    if (targetDayIndex >= 7) return null;
+                    
+                    return (
+                      <div
+                        key={`${dayIndex}-${segmentIndex}`}
+                        className="absolute h-11"
+                        style={{
+                          left: `${(targetDayIndex / 7) * 100 + (segment.left * (1/7))}%`,
+                          width: `${segment.width * (1/7)}%`,
+                          top: '2px'
+                        }}
                       >
-                        {workTime.type === 'unavailable' ? (
-                          <AlertTriangle className="h-3 w-3" />
-                        ) : (
-                          <Clock className="h-3 w-3" />
-                        )}
+                        <div 
+                          className={`h-full ${segmentIndex === 0 ? 'rounded-l' : ''} ${segmentIndex === segments.length - 1 ? 'rounded-r' : ''} text-xs text-white font-medium flex items-center justify-center ${
+                            workTime.type === 'unavailable' 
+                              ? 'bg-red-500' 
+                              : operator.shiftSchedule?.includes(1) 
+                                ? 'bg-blue-500' 
+                                : 'bg-green-500'
+                          }`}
+                          title={
+                            workTime.type === 'unavailable' 
+                              ? `Unavailable: ${workTime.reason}` 
+                              : `Working: ${workTime.startTime} - ${workTime.endTime} ${segments.length > 1 ? `(segment ${segmentIndex + 1}/${segments.length})` : ''}`
+                          }
+                        >
+                          {workTime.type === 'unavailable' ? (
+                            <AlertTriangle className="h-3 w-3" />
+                          ) : (
+                            <Clock className="h-3 w-3" />
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  );
+                    );
+                  });
                 })}
               </div>
             </div>
