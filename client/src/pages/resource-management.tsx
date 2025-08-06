@@ -22,7 +22,16 @@ import { z } from "zod";
 const resourceFormSchema = insertResourceSchema.extend({
   workCenters: z.array(z.string()).default([]),
   skills: z.array(z.string()).default([]),
-  shiftSchedule: z.array(z.number()).min(1, "At least one shift must be selected")
+  shiftSchedule: z.array(z.number()).min(1, "At least one shift must be selected"),
+  workSchedule: z.object({
+    monday: z.object({ enabled: z.boolean(), startTime: z.string(), endTime: z.string() }).optional(),
+    tuesday: z.object({ enabled: z.boolean(), startTime: z.string(), endTime: z.string() }).optional(),
+    wednesday: z.object({ enabled: z.boolean(), startTime: z.string(), endTime: z.string() }).optional(),
+    thursday: z.object({ enabled: z.boolean(), startTime: z.string(), endTime: z.string() }).optional(),
+    friday: z.object({ enabled: z.boolean(), startTime: z.string(), endTime: z.string() }).optional(),
+    saturday: z.object({ enabled: z.boolean(), startTime: z.string(), endTime: z.string() }).optional(),
+    sunday: z.object({ enabled: z.boolean(), startTime: z.string(), endTime: z.string() }).optional(),
+  }).optional()
 });
 
 type ResourceFormData = z.infer<typeof resourceFormSchema>;
@@ -57,13 +66,26 @@ export default function ResourceManagement() {
       workCenters: [],
       skills: [],
       shiftSchedule: [1],
+      workSchedule: {
+        monday: { enabled: true, startTime: "03:00", endTime: "15:00" },
+        tuesday: { enabled: true, startTime: "03:00", endTime: "15:00" },
+        wednesday: { enabled: true, startTime: "03:00", endTime: "15:00" },
+        thursday: { enabled: true, startTime: "03:00", endTime: "15:00" },
+        friday: { enabled: true, startTime: "03:00", endTime: "15:00" },
+        saturday: { enabled: false, startTime: "03:00", endTime: "15:00" },
+        sunday: { enabled: false, startTime: "03:00", endTime: "15:00" }
+      },
       isActive: true
     }
   });
 
   // Mutations
   const createResourceMutation = useMutation({
-    mutationFn: (data: ResourceFormData) => apiRequest('/api/resources', { method: 'POST', body: data }),
+    mutationFn: (data: ResourceFormData) => apiRequest('/api/resources', { 
+      method: 'POST', 
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data) 
+    }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/resources'] });
       setShowResourceForm(false);
@@ -73,7 +95,11 @@ export default function ResourceManagement() {
 
   const updateResourceMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<ResourceFormData> }) => 
-      apiRequest(`/api/resources/${id}`, { method: 'PATCH', body: data }),
+      apiRequest(`/api/resources/${id}`, { 
+        method: 'PATCH', 
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data) 
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/resources'] });
       setShowResourceForm(false);
@@ -83,7 +109,10 @@ export default function ResourceManagement() {
   });
 
   const deleteResourceMutation = useMutation({
-    mutationFn: (id: string) => apiRequest(`/api/resources/${id}`, { method: 'DELETE' }),
+    mutationFn: (id: string) => apiRequest(`/api/resources/${id}`, { 
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' }
+    }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/resources'] });
     }
@@ -99,6 +128,15 @@ export default function ResourceManagement() {
       workCenters: resource.workCenters,
       skills: resource.skills,
       shiftSchedule: resource.shiftSchedule,
+      workSchedule: resource.workSchedule || {
+        monday: { enabled: true, startTime: "03:00", endTime: "15:00" },
+        tuesday: { enabled: true, startTime: "03:00", endTime: "15:00" },
+        wednesday: { enabled: true, startTime: "03:00", endTime: "15:00" },
+        thursday: { enabled: true, startTime: "03:00", endTime: "15:00" },
+        friday: { enabled: true, startTime: "03:00", endTime: "15:00" },
+        saturday: { enabled: false, startTime: "03:00", endTime: "15:00" },
+        sunday: { enabled: false, startTime: "03:00", endTime: "15:00" }
+      },
       isActive: resource.isActive
     });
     setShowResourceForm(true);
@@ -357,6 +395,76 @@ export default function ResourceManagement() {
                 )}
               />
 
+              {/* Custom Work Schedule */}
+              <div className="space-y-4">
+                <div>
+                  <Label className="text-base font-semibold">Custom Work Schedule</Label>
+                  <p className="text-sm text-muted-foreground">Set specific days and times this resource works</p>
+                </div>
+                
+                {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map((day) => (
+                  <div key={day} className="border rounded-lg p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm font-medium capitalize">{day}</Label>
+                      <FormField
+                        control={form.control}
+                        name={`workSchedule.${day}.enabled` as any}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value || false}
+                                onCheckedChange={field.onChange}
+                                data-testid={`work-${day}-enabled`}
+                              />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                    
+                    {form.watch(`workSchedule.${day}.enabled` as any) && (
+                      <div className="grid grid-cols-2 gap-4">
+                        <FormField
+                          control={form.control}
+                          name={`workSchedule.${day}.startTime` as any}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Start Time</FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="time"
+                                  {...field}
+                                  value={field.value || "03:00"}
+                                  data-testid={`work-${day}-start`}
+                                />
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name={`workSchedule.${day}.endTime` as any}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>End Time</FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="time"
+                                  {...field}
+                                  value={field.value || "15:00"}
+                                  data-testid={`work-${day}-end`}
+                                />
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
               <FormField
                 control={form.control}
                 name="isActive"
@@ -433,7 +541,7 @@ export default function ResourceManagement() {
                           <div className="text-xs text-muted-foreground">{resource.email}</div>
                         </div>
                       </div>
-                      <div className="flex gap-2 mt-2">
+                      <div className="flex gap-2 mt-2 flex-wrap">
                         <Badge variant="outline">
                           {resource.shiftSchedule.map(s => `Shift ${s}`).join(', ')}
                         </Badge>
@@ -443,6 +551,17 @@ export default function ResourceManagement() {
                         <Badge variant="outline">
                           {resource.skills.length} skills
                         </Badge>
+                        {resource.workSchedule && Object.entries(resource.workSchedule).some(([_, day]) => day?.enabled) && (
+                          <Badge variant="outline" className="text-xs">
+                            <Clock className="w-3 h-3 mr-1" />
+                            {Object.entries(resource.workSchedule)
+                              .filter(([_, day]) => day?.enabled)
+                              .map(([dayName, day]) => dayName.slice(0, 3))
+                              .join(', ')} • {Object.entries(resource.workSchedule)
+                                .find(([_, day]) => day?.enabled)?.[1]?.startTime || '03:00'}-{Object.entries(resource.workSchedule)
+                                .find(([_, day]) => day?.enabled)?.[1]?.endTime || '15:00'}
+                          </Badge>
+                        )}
                         <Badge variant={resource.isActive ? "default" : "secondary"}>
                           {resource.isActive ? "Active" : "Inactive"}
                         </Badge>

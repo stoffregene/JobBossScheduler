@@ -399,7 +399,7 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
               const machineJobs = getMachineJobs(machine.id);
               
               // Group jobs into continuous blocks across multiple days
-              const jobBlocks = [];
+              const jobBlocks: Array<any> = [];
               const processedJobs = new Set();
               
               machineJobs.forEach(entry => {

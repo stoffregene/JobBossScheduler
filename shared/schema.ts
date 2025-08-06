@@ -3,6 +3,23 @@ import { pgTable, text, varchar, integer, timestamp, boolean, decimal, jsonb } f
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// Resource work schedule types
+export type ResourceWorkDay = {
+  enabled: boolean;
+  startTime: string; // "03:00" in 24-hour format
+  endTime: string; // "15:00" in 24-hour format
+};
+
+export type ResourceWorkSchedule = {
+  monday?: ResourceWorkDay;
+  tuesday?: ResourceWorkDay;
+  wednesday?: ResourceWorkDay;
+  thursday?: ResourceWorkDay;
+  friday?: ResourceWorkDay;
+  saturday?: ResourceWorkDay;
+  sunday?: ResourceWorkDay;
+};
+
 export const jobs = pgTable("jobs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   jobNumber: text("job_number").notNull().unique(),
@@ -78,7 +95,8 @@ export const resources = pgTable("resources", {
   role: text("role").notNull(), // Operator, Technician, Inspector, etc.
   workCenters: jsonb("work_centers").$type<string[]>().notNull().default([]), // Machine IDs they can operate
   skills: jsonb("skills").$type<string[]>().notNull().default([]), // Skill sets
-  shiftSchedule: jsonb("shift_schedule").$type<number[]>().notNull().default([1]), // Normal shifts
+  shiftSchedule: jsonb("shift_schedule").$type<number[]>().notNull().default([1]), // Normal shifts (legacy)
+  workSchedule: jsonb("work_schedule").$type<ResourceWorkSchedule>().notNull().default({}), // Custom work schedule
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
