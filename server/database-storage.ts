@@ -2903,7 +2903,7 @@ export class DatabaseStorage implements IStorage {
             
             if (machineResult) {
               const operationDurationMs = machineResult.adjustedHours * 60 * 60 * 1000;
-              const shiftStartHour = shift === 1 ? 6 : 18; // 6 AM or 6 PM
+              const shiftStartHour = shift === 1 ? 3 : 15; // 3 AM or 3 PM Central
               
               const startTime = new Date(manualCurrentDate);
               startTime.setHours(shiftStartHour, 0, 0, 0);
@@ -3080,12 +3080,24 @@ export class DatabaseStorage implements IStorage {
             
             if (machineResult) {
               const operationDurationMs = machineResult.adjustedHours * 60 * 60 * 1000;
-              const shiftStartHour = tryShift === 1 ? 6 : 18;
+              const shiftStartHour = tryShift === 1 ? 3 : 15; // 3 AM or 3 PM Central
               
               const startTime = new Date(currentDate);
               startTime.setHours(shiftStartHour, 0, 0, 0);
               
-              const endTime = new Date(startTime.getTime() + operationDurationMs);
+              // Handle cross-day logic for Shift 2 (3 PM to 3 AM next day)
+              let endTime = new Date(startTime.getTime() + operationDurationMs);
+              
+              // For Shift 2, if operation extends past 3 AM next day, cap it
+              if (tryShift === 2) {
+                const nextDay3AM = new Date(startTime);
+                nextDay3AM.setDate(nextDay3AM.getDate() + 1);
+                nextDay3AM.setHours(3, 0, 0, 0);
+                
+                if (endTime > nextDay3AM) {
+                  endTime = nextDay3AM;
+                }
+              }
               
               const hasConflicts = await this.checkScheduleConflicts(machineResult.machine.id, startTime, endTime);
               
