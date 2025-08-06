@@ -383,10 +383,30 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
           <div className={`space-y-2 ${isFullscreen ? "min-h-0" : ""}`}>
             {displayMachines.map((machine) => {
               const machineJobs = getMachineJobs(machine.id);
-              const isWeekendOnly = machine.availableShifts.length === 1 && machine.availableShifts[0] === 1;
+              
+              // Group jobs into continuous blocks across multiple days
+              const jobBlocks = [];
+              const processedJobs = new Set();
+              
+              machineJobs.forEach(entry => {
+                const blockKey = `${entry.jobId}-${entry.operationSequence}`;
+                if (processedJobs.has(blockKey)) return;
+                
+                processedJobs.add(blockKey);
+                const startDate = new Date(entry.startTime);
+                const endDate = new Date(entry.endTime);
+                
+                jobBlocks.push({
+                  ...entry,
+                  blockKey,
+                  startDate,
+                  endDate,
+                  daySpan: Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
+                });
+              });
               
               return (
-                <div key={machine.id} className={`flex gap-1 items-center ${(scheduleView.type === "month" || scheduleView.type === "hour") || isFullscreen ? "overflow-x-auto" : ""}`}>
+                <div key={machine.id} className={`flex gap-0 items-center ${(scheduleView.type === "month" || scheduleView.type === "hour") || isFullscreen ? "overflow-x-auto" : ""}`}>
                   <div className={`text-sm font-medium text-right pr-4 min-w-0 sticky left-0 z-10 w-48 flex-shrink-0 ${isFullscreen ? "bg-card" : "bg-background"}`}>
                     <div className="flex items-center justify-end gap-1 mb-1">
                       <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium flex-shrink-0 ${
@@ -405,139 +425,74 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
                     <div className="text-xs text-muted-foreground truncate">{machine.name}</div>
                   </div>
                   
-                  <div className="flex gap-1 flex-1">
-                    {weekDays.map((day, dayIndex) => {
-                      // Since we're filtering out weekends in getTimeSlots, these should only be business days
-                      const isUnavailable = false; // Business days only, so no unavailable days
-                      
-                      // Find jobs scheduled for this day (including multi-day jobs)
-                      const dayJobs = machineJobs.filter(entry => {
-                      const startDate = new Date(entry.startTime);
-                      const endDate = new Date(entry.endTime);
-                      
-                      // Use UTC dates for consistent comparison across timezones
-                      const dayStartUTC = new Date(Date.UTC(day.getFullYear(), day.getMonth(), day.getDate(), 0, 0, 0));
-                      const dayEndUTC = new Date(Date.UTC(day.getFullYear(), day.getMonth(), day.getDate(), 23, 59, 59));
-                      
-                      // Convert schedule times to UTC midnight boundaries for comparison
-                      const scheduleStartDay = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), startDate.getUTCDate()));
-                      const scheduleEndDay = new Date(Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth(), endDate.getUTCDate()));
-                      
-                      // Job spans this day if it overlaps with the day's UTC range
-                      return scheduleStartDay <= dayEndUTC && scheduleEndDay >= dayStartUTC;
-                      });
-                      
-                      const dayKey = `${machine.id}-${day.toDateString()}`;
-                      const isExpanded = expandedDays.has(dayKey);
-                      const displayLimit = isExpanded ? dayJobs.length : 2;
-                      
-                      const toggleExpansion = () => {
-                        const newExpanded = new Set(expandedDays);
-                        if (isExpanded) {
-                          newExpanded.delete(dayKey);
-                        } else {
-                          newExpanded.add(dayKey);
-                        }
-                        setExpandedDays(newExpanded);
-                      };
-
-                      const flexBasis = scheduleView.type === "hour" ? "60px" :
-                                      scheduleView.type === "day" ? "100%" :
-                                      scheduleView.type === "week" ? "1fr" :
-                                      "40px"; // month
-
-                      return (
-                        <div key={dayIndex} className="flex-shrink-0" style={{ flexBasis }}>
-                          <div 
-                            className={`${isExpanded ? 'h-auto min-h-12' : 'h-12'} rounded relative flex items-center justify-center ${
-                              isUnavailable 
-                                ? 'bg-gray-200 dark:bg-gray-700 opacity-60' 
-                                : 'bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-600'
-                            }`}
+                  {/* Continuous timeline container */}
+                  <div className="flex flex-1 relative h-12" style={{ minWidth: '600px' }}>
+                    {/* Shift background shading */}
+                    <div className="absolute inset-0 flex">
+                      {weekDays.map((day, dayIndex) => {
+                        const flexBasis = scheduleView.type === "hour" ? "60px" :
+                                        scheduleView.type === "day" ? "100%" :
+                                        scheduleView.type === "week" ? "1fr" :
+                                        "40px"; // month
+                        
+                        return (
+                          <div key={dayIndex} className="flex-shrink-0 border-r border-gray-200 dark:border-gray-600" style={{ flexBasis }}>
+                            {/* 1st shift background (lighter) */}
+                            <div className="h-6 bg-blue-50 dark:bg-blue-950/30 border-b border-gray-100 dark:border-gray-700"></div>
+                            {/* 2nd shift background (darker) */}
+                            <div className="h-6 bg-blue-100 dark:bg-blue-900/50"></div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    
+                    {/* Continuous job blocks */}
+                    <div className="absolute inset-0 p-0.5">
+                      {jobBlocks.map((block, blockIndex) => {
+                        const timelineStart = weekDays[0];
+                        const timelineEnd = new Date(weekDays[weekDays.length - 1]);
+                        timelineEnd.setHours(23, 59, 59, 999);
+                        
+                        const totalTimelineMs = timelineEnd.getTime() - timelineStart.getTime();
+                        const blockStartMs = Math.max(0, block.startDate.getTime() - timelineStart.getTime());
+                        const blockDurationMs = Math.min(
+                          block.endDate.getTime() - block.startDate.getTime(),
+                          timelineEnd.getTime() - Math.max(block.startDate.getTime(), timelineStart.getTime())
+                        );
+                        
+                        const leftPercent = (blockStartMs / totalTimelineMs) * 100;
+                        const widthPercent = (blockDurationMs / totalTimelineMs) * 100;
+                        
+                        if (widthPercent <= 0) return null;
+                        
+                        // Determine vertical position based on shift
+                        const topOffset = block.shift === 1 ? '2px' : '50%';
+                        const height = 'calc(50% - 4px)';
+                        
+                        return (
+                          <button
+                            key={blockIndex}
+                            className={`absolute rounded text-xs px-2 flex items-center font-medium cursor-pointer hover:opacity-80 transition-opacity overflow-hidden border ${
+                              getJobColor(block.job?.priority || 'Normal', block.shift)
+                            } ${block.job?.routingModified ? 'border-2 border-dashed border-yellow-400 dark:border-yellow-300' : 'border-gray-300 dark:border-gray-600'}`}
+                            style={{
+                              left: `${leftPercent}%`,
+                              width: `${widthPercent}%`,
+                              top: topOffset,
+                              height: height,
+                              minWidth: '80px'
+                            }}
+                            onClick={() => setSelectedJobId(block.job?.id || null)}
+                            data-testid={`schedule-job-${block.job?.jobNumber}`}
+                            title={`Shift ${block.shift} - ${block.job?.jobNumber} (Op${block.operationSequence}) - ${block.startDate.toLocaleDateString()} to ${block.endDate.toLocaleDateString()}${block.job?.routingModified ? ' - Modified Routing' : ''}`}
                           >
-                        {dayJobs.length > 0 && (
-                          <div className="absolute inset-0 flex flex-col gap-0.5 p-0.5">
-                            {dayJobs.slice(0, displayLimit).map((entry, idx) => {
-                              const startDate = new Date(entry.startTime);
-                              const endDate = new Date(entry.endTime);
-                              const isMultiDay = startDate.toDateString() !== endDate.toDateString();
-                              const isStart = startDate.toDateString() === day.toDateString();
-                              const isEnd = endDate.toDateString() === day.toDateString();
-                              const isContinuation = isMultiDay && !isStart && !isEnd;
-                              
-                              // Calculate position for staggered start visualization
-                              let leftOffset = 0;
-                              let rightOffset = 0;
-                              let borderRadius = 'rounded';
-                              
-                              if (isMultiDay) {
-                                if (isStart) {
-                                  // Start day - calculate partial width based on start time
-                                  const dayStartTime = new Date(startDate);
-                                  dayStartTime.setHours(0, 0, 0, 0);
-                                  const startMinutes = (startDate.getTime() - dayStartTime.getTime()) / (1000 * 60);
-                                  leftOffset = Math.max(0, (startMinutes / (24 * 60)) * 100);
-                                  borderRadius = 'rounded-l-md rounded-r-none';
-                                } else if (isEnd) {
-                                  // End day - calculate partial width based on end time
-                                  const dayStartTime = new Date(endDate);
-                                  dayStartTime.setHours(0, 0, 0, 0);
-                                  const endMinutes = (endDate.getTime() - dayStartTime.getTime()) / (1000 * 60);
-                                  rightOffset = Math.max(0, 100 - (endMinutes / (24 * 60)) * 100);
-                                  borderRadius = 'rounded-r-md rounded-l-none';
-                                } else if (isContinuation) {
-                                  // Continuation day - full width
-                                  borderRadius = 'rounded-none';
-                                }
-                              }
-                              
-                              return (
-                                <button
-                                  key={idx}
-                                  className={`${isExpanded ? 'h-6' : 'flex-1'} ${borderRadius} text-xs px-1 flex items-center justify-center font-medium cursor-pointer hover:opacity-80 transition-opacity relative overflow-hidden ${
-                                    getJobColor(entry.job?.priority || 'Normal', entry.shift)
-                                  } ${entry.job?.routingModified ? 'border-2 border-dashed border-yellow-400 dark:border-yellow-300' : ''}`}
-                                  style={{
-                                    marginLeft: `${leftOffset}%`,
-                                    marginRight: `${rightOffset}%`,
-                                    width: `${100 - leftOffset - rightOffset}%`
-                                  }}
-                                  onClick={() => setSelectedJobId(entry.job?.id || null)}
-                                  data-testid={`schedule-job-${entry.job?.jobNumber}`}
-                                  title={`Shift ${entry.shift} - ${entry.job?.jobNumber} (Op${entry.operationSequence})${isMultiDay ? ' - Multi-day job' : ''}${entry.job?.routingModified ? ' - Modified Routing' : ''}`}
-                                >
-                                  {/* Multi-day visual indicator */}
-                                  {isMultiDay && (
-                                    <div className={`absolute inset-y-0 ${
-                                      isStart ? 'right-0 w-2' :
-                                      isEnd ? 'left-0 w-2' :
-                                      'left-0 right-0'
-                                    } bg-black/20 dark:bg-white/20`} />
-                                  )}
-                                  <span className="truncate relative z-10 text-[10px]">
-                                    {entry.job?.jobNumber} (Op{entry.operationSequence})
-                                    {(dayJobs.length > 1 || isExpanded) && ` S${entry.shift}`}
-                                    {isStart && ' ▶'}
-                                    {isEnd && ' ◀'}
-                                    {isContinuation && ' ◆'}
-                                  </span>
-                                </button>
-                              );
-                            })}
-                            {dayJobs.length > displayLimit && (
-                              <button
-                                onClick={toggleExpansion}
-                                className="text-[9px] text-center text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 cursor-pointer py-1"
-                              >
-                                {isExpanded ? 'Show less' : `+${dayJobs.length - displayLimit} more`}
-                              </button>
-                            )}
-                          </div>
-                        )}
-                          </div>
-                        </div>
-                      );
-                    })}
+                            <span className="truncate text-[10px] font-medium">
+                              {block.job?.jobNumber} (Op{block.operationSequence}) S{block.shift}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               );
