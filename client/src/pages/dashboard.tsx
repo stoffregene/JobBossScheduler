@@ -3,7 +3,7 @@ import { useWebSocket } from "@/hooks/use-websocket";
 import { queryClient } from "@/lib/queryClient";
 import DashboardOverview from "../components/dashboard-overview";
 import JobQueue from "../components/job-queue";
-import ScheduleView from "../components/schedule-view";
+// import ScheduleView from "../components/schedule-view";
 import MachineStatus from "../components/machine-status";
 import ResourceAllocation from "../components/resource-allocation";
 
@@ -166,10 +166,11 @@ export default function Dashboard() {
 
         {/* Production Schedule - Full Width */}
         <div className="mb-8">
-          <ScheduleView 
-            scheduleView={scheduleView}
-            onScheduleViewChange={(view) => setScheduleView(view)}
-          />
+          {/* Temporarily disabled while fixing layout issues */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <h2 className="text-lg font-semibold mb-4">Production Schedule</h2>
+            <p className="text-gray-500">Schedule view temporarily disabled for maintenance...</p>
+          </div>
         </div>
 
         {/* Secondary Content Grid */}
