@@ -4,12 +4,8 @@ import { queryClient } from "@/lib/queryClient";
 import DashboardOverview from "../components/dashboard-overview";
 import JobQueue from "../components/job-queue";
 import ScheduleView from "../components/schedule-view";
-import MachineStatus from "../components/machine-status";
 import ResourceAllocation from "../components/resource-allocation";
-
 import JobDetailsModal from "../components/job-details-modal";
-import MaterialOrdersWidget from "../components/material-orders-widget";
-import JobsAwaitingMaterialWidget from "../components/jobs-awaiting-material-widget";
 import { EfficiencyImpactWidget } from "../components/efficiency-impact-widget";
 import { SchedulingFailuresWidget } from "../components/scheduling-failures-widget";
 import { SchedulingStatusDashboard } from "../components/scheduling-status-dashboard";
@@ -185,14 +181,7 @@ export default function Dashboard() {
           {/* Alerts, Materials & Work Center Status */}
           <div className="xl:col-span-2 lg:col-span-1 space-y-6">
             <SchedulingFailuresWidget />
-            <MaterialOrdersWidget />
-            <JobsAwaitingMaterialWidget />
-            <EfficiencyImpactWidget />
-            
-            {/* Work Center Status - Minimized and lower priority */}
-            <div className="mt-8">
-              <MachineStatus minimized={true} />
-            </div>            
+            <EfficiencyImpactWidget />            
           </div>
         </div>
       </div>

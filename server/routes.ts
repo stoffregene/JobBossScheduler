@@ -69,15 +69,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get jobs awaiting material - must be before /:id route
-  app.get("/api/jobs/awaiting-material", async (req, res) => {
-    try {
-      const jobsAwaitingMaterial = await storage.getJobsAwaitingMaterial();
-      res.json(jobsAwaitingMaterial);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch jobs awaiting material" });
-    }
-  });
+
 
   app.get("/api/jobs/:id", async (req, res) => {
     try {
@@ -1327,119 +1319,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Material tracking endpoints
-  app.get("/api/materials", async (req, res) => {
-    try {
-      const materials = await storage.getMaterialOrders();
-      res.json(materials);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch material orders" });
-    }
-  });
 
-  app.get("/api/material-orders", async (req, res) => {
-    try {
-      const orders = await storage.getMaterialOrders();
-      res.json(orders);
-    } catch (error) {
-      console.error('Error fetching material orders:', error);
-      res.status(500).json({ error: 'Failed to fetch material orders' });
-    }
-  });
-
-  app.post("/api/material-orders", async (req, res) => {
-    try {
-      // Pre-process dates for validation
-      const materialData = {
-        ...req.body,
-        orderDate: new Date(req.body.orderDate),
-        dueDate: new Date(req.body.dueDate),
-      };
-
-      const validatedData = insertMaterialOrderSchema.parse(materialData);
-      const material = await storage.createMaterialOrder(validatedData);
-      broadcast({ type: 'material_order_created', data: material });
-      res.status(201).json(material);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Invalid material order data", errors: error.errors });
-      }
-      console.error('Error creating material order:', error);
-      res.status(500).json({ message: "Failed to create material order" });
-    }
-  });
-
-  app.get("/api/materials/job/:jobId", async (req, res) => {
-    try {
-      const materials = await storage.getMaterialOrdersForJob(req.params.jobId);
-      res.json(materials);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch material orders for job" });
-    }
-  });
-
-  app.post("/api/materials", async (req, res) => {
-    try {
-      const materialData = insertMaterialOrderSchema.parse(req.body);
-      const material = await storage.createMaterialOrder(materialData);
-      broadcast({ type: 'material_order_created', data: material });
-      res.status(201).json(material);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Invalid material order data", errors: error.errors });
-      }
-      res.status(500).json({ message: "Failed to create material order" });
-    }
-  });
-
-  app.put("/api/materials/:id", async (req, res) => {
-    try {
-      const updates = req.body;
-      const material = await storage.updateMaterialOrder(req.params.id, updates);
-      if (!material) {
-        return res.status(404).json({ message: "Material order not found" });
-      }
-      broadcast({ type: 'material_order_updated', data: material });
-      res.json(material);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to update material order" });
-    }
-  });
-
-  app.post("/api/materials/:id/receive", async (req, res) => {
-    try {
-      const material = await storage.markMaterialReceived(req.params.id);
-      if (!material) {
-        return res.status(404).json({ message: "Material order not found" });
-      }
-      broadcast({ type: 'material_received', data: material });
-      res.json(material);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to mark material as received" });
-    }
-  });
-
-  app.delete("/api/material-orders/all", async (req, res) => {
-    try {
-      const deletedCount = await storage.deleteAllMaterialOrders();
-      broadcast({ type: 'all_material_orders_deleted' });
-      res.json({ success: true, deletedCount });
-    } catch (error) {
-      console.error('Error deleting all material orders:', error);
-      res.status(500).json({ message: "Failed to delete all material orders" });
-    }
-  });
-
-  app.delete("/api/jobs/awaiting-material/all", async (req, res) => {
-    try {
-      const deletedCount = await storage.deleteAllJobsAwaitingMaterial();
-      broadcast({ type: 'all_jobs_awaiting_material_deleted' });
-      res.json({ success: true, deletedCount });
-    } catch (error) {
-      console.error('Error deleting all jobs awaiting material:', error);
-      res.status(500).json({ message: "Failed to delete all jobs awaiting material" });
-    }
-  });
 
   app.get("/api/jobs/:id/readiness", async (req, res) => {
     try {

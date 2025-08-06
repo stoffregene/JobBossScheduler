@@ -7,7 +7,7 @@ import {
   type Resource, type InsertResource,
   type ResourceUnavailability, type InsertResourceUnavailability,
   type InsertRoutingOperation,
-  type MaterialOrder, type InsertMaterialOrder,
+
   type OutsourcedOperation, type InsertOutsourcedOperation
 } from "@shared/schema";
 
