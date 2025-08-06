@@ -1920,16 +1920,16 @@ export class DatabaseStorage implements IStorage {
     const dayName = dayNames[dayOfWeek] as keyof typeof resource.workSchedule;
     
     const workDay = resource.workSchedule?.[dayName];
-    if (!workDay?.enabled) {
-      return null; // Resource doesn't work on this day
+    if (!workDay?.enabled || !workDay.startTime || !workDay.endTime) {
+      return null; // Resource doesn't work on this day or has incomplete schedule
     }
     
     const startTime = new Date(date);
     const endTime = new Date(date);
     
     // Parse the time strings (e.g., "05:00", "16:00")
-    const [startHour, startMin] = (workDay.startTime || "03:00").split(':').map(Number);
-    const [endHour, endMin] = (workDay.endTime || "15:00").split(':').map(Number);
+    const [startHour, startMin] = workDay.startTime.split(':').map(Number);
+    const [endHour, endMin] = workDay.endTime.split(':').map(Number);
     
     startTime.setHours(startHour, startMin, 0, 0);
     endTime.setHours(endHour, endMin, 0, 0);

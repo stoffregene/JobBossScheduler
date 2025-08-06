@@ -105,43 +105,17 @@ export default function OperatorWorkingTimes({ scheduleView, isFullscreen }: Ope
       };
     }
 
-    // Check custom schedule
+    // Check custom schedule - ONLY use individual day entries
     const schedule = resource.workSchedule?.[dayName];
-    if (schedule && schedule.enabled) {
-      // Handle missing startTime by using shift-based defaults
-      let startTime = schedule.startTime;
-      if (!startTime) {
-        // Default to shift 1 time if no startTime specified
-        startTime = resource.shiftSchedule?.includes(1) ? '05:00' : 
-                   resource.shiftSchedule?.includes(2) ? '15:00' : '08:00';
-      }
-      
-      if (schedule.endTime) {
-        return {
-          type: 'working',
-          startTime: startTime,
-          endTime: schedule.endTime,
-        };
-      }
-    }
-
-    // Default shift schedule
-    if (resource.shiftSchedule?.includes(1)) {
+    if (schedule && schedule.enabled && schedule.startTime && schedule.endTime) {
       return {
         type: 'working',
-        startTime: '03:00',
-        endTime: '15:00',
-        shift: 1
-      };
-    } else if (resource.shiftSchedule?.includes(2)) {
-      return {
-        type: 'working',
-        startTime: '15:00',
-        endTime: '23:00',
-        shift: 2
+        startTime: schedule.startTime,
+        endTime: schedule.endTime,
       };
     }
 
+    // If no custom schedule for this day, operator is off
     return { type: 'off' };
   };
 
@@ -295,7 +269,7 @@ export default function OperatorWorkingTimes({ scheduleView, isFullscreen }: Ope
                         className={`h-full rounded text-xs text-white font-medium flex items-center justify-center ${
                           workTime.type === 'unavailable' 
                             ? 'bg-red-500' 
-                            : workTime.shift === 1 
+                            : operator.shiftSchedule?.includes(1) 
                               ? 'bg-blue-500' 
                               : 'bg-green-500'
                         }`}
