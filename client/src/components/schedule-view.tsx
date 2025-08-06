@@ -384,8 +384,8 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
                     </div>
                     {/* Shift time indicators */}
                     <div className="flex h-4 text-[9px] text-gray-500 dark:text-gray-400">
-                      <div className="flex-1 text-center border-r border-gray-200 dark:border-gray-600">6A</div>
-                      <div className="flex-1 text-center">6P</div>
+                      <div className="flex-1 text-center border-r border-gray-200 dark:border-gray-600">3A</div>
+                      <div className="flex-1 text-center">3P</div>
                     </div>
                   </div>
                 );
