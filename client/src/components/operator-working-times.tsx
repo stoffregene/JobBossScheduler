@@ -135,8 +135,102 @@ export default function OperatorWorkingTimes({ scheduleView, isFullscreen }: Ope
     return Math.min((workingMinutes / maxWorkingMinutes) * 100, 100);
   };
 
+  // Get the operator's normal work schedule for unavailable days
+  const getOperatorNormalSchedule = (resource: Resource, day: Date) => {
+    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const dayName = dayNames[day.getDay()] as keyof Resource['workSchedule'];
+    
+    const schedule = resource.workSchedule?.[dayName];
+    if (schedule && schedule.enabled && schedule.startTime && schedule.endTime) {
+      return {
+        startTime: schedule.startTime,
+        endTime: schedule.endTime,
+      };
+    }
+    return null;
+  };
+
   // Get bar position for timeline with cross-day shift support
-  const getTimelinePosition = (workTime: any, dayIndex: number) => {
+  const getTimelinePosition = (workTime: any, resource: Resource, day: Date, dayIndex: number) => {
+    // Handle both working and unavailable time blocks
+    if (workTime.type === 'unavailable') {
+      // For unavailable blocks, show the operator's normally scheduled working time in red
+      const normalSchedule = getOperatorNormalSchedule(resource, day);
+      
+      // If partial day unavailability, use the specific times
+      if (workTime.isPartialDay && workTime.startTime && workTime.endTime) {
+        const start = workTime.startTime.split(':').map(Number);
+        const end = workTime.endTime.split(':').map(Number);
+        const startMinutes = start[0] * 60 + start[1];
+        const endMinutes = end[0] * 60 + end[1];
+        const dayMinutes = 24 * 60;
+        
+        const leftPercent = (startMinutes / dayMinutes) * 100;
+        const widthPercent = ((endMinutes - startMinutes) / dayMinutes) * 100;
+        
+        return [{
+          left: leftPercent,
+          width: widthPercent,
+          dayOffset: 0
+        }];
+      } else if (normalSchedule) {
+        // Full day unavailability - show the operator's normal scheduled time in red
+        const start = normalSchedule.startTime.split(':').map(Number);
+        const end = normalSchedule.endTime.split(':').map(Number);
+        const startMinutes = start[0] * 60 + start[1];
+        const endMinutes = end[0] * 60 + end[1];
+        const dayMinutes = 24 * 60;
+        
+        // Handle cross-day shifts for unavailable time too
+        if (endMinutes < startMinutes) {
+          const segments = [];
+          // First segment: start time to end of day
+          const firstSegmentLeft = (startMinutes / dayMinutes) * 100;
+          const firstSegmentWidth = ((dayMinutes - startMinutes) / dayMinutes) * 100;
+          segments.push({
+            left: firstSegmentLeft,
+            width: firstSegmentWidth,
+            dayOffset: 0
+          });
+          
+          // Second segment: start of next day to end time
+          const secondSegmentLeft = 0;
+          const secondSegmentWidth = (endMinutes / dayMinutes) * 100;
+          segments.push({
+            left: secondSegmentLeft,
+            width: secondSegmentWidth,
+            dayOffset: 1
+          });
+          
+          return segments;
+        } else {
+          // Normal same-day shift
+          const leftPercent = (startMinutes / dayMinutes) * 100;
+          const widthPercent = ((endMinutes - startMinutes) / dayMinutes) * 100;
+          
+          return [{
+            left: leftPercent,
+            width: widthPercent,
+            dayOffset: 0
+          }];
+        }
+      } else {
+        // No normal schedule - show a default 8-hour block
+        const dayMinutes = 24 * 60;
+        const startMinutes = 6 * 60; // 6 AM
+        const endMinutes = 14 * 60; // 2 PM
+        
+        const leftPercent = (startMinutes / dayMinutes) * 100;
+        const widthPercent = ((endMinutes - startMinutes) / dayMinutes) * 100;
+        
+        return [{
+          left: leftPercent,
+          width: widthPercent,
+          dayOffset: 0
+        }];
+      }
+    }
+    
     if (workTime.type !== 'working' || !workTime.startTime || !workTime.endTime) return [];
     
     const start = workTime.startTime.split(':').map(Number);
@@ -283,8 +377,9 @@ export default function OperatorWorkingTimes({ scheduleView, isFullscreen }: Ope
               <div className="absolute inset-0 p-0.5">
                 {weekDays.map((day, dayIndex) => {
                   const workTime = getOperatorWorkTime(operator, day);
-                  const segments = getTimelinePosition(workTime, dayIndex);
+                  const segments = getTimelinePosition(workTime, operator, day, dayIndex);
                   
+                  // Only skip rendering if it's truly off (not unavailable)
                   if (workTime.type === 'off') return null;
                   
                   return segments.map((segment, segmentIndex) => {
