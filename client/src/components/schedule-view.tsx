@@ -70,28 +70,36 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
         break;
         
       case "week":
-        // Show current week - start from Monday
+        // Show current week - start from Monday, only business days (Mon-Thu)
         const dayOfWeek = current.getDay();
         const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
         current.setDate(current.getDate() - daysFromMonday);
         current.setHours(0, 0, 0, 0);
         
         for (let i = 0; i < 7; i++) {
-          timeSlots.push(new Date(current));
+          const dayNum = current.getDay();
+          // Only add Monday (1), Tuesday (2), Wednesday (3), Thursday (4)
+          if (dayNum >= 1 && dayNum <= 4) {
+            timeSlots.push(new Date(current));
+          }
           current.setDate(current.getDate() + 1);
         }
         break;
         
       case "month":
-        // Show current month - first Sunday of display
+        // Show current month - first Sunday of display, filter to business days only
         current.setDate(1);
         current.setHours(0, 0, 0, 0);
         const firstDayOfMonth = current.getDay();
         current.setDate(current.getDate() - firstDayOfMonth);
         
-        // Get 35 days (5 weeks) to show full month
+        // Get 35 days (5 weeks) but only show business days (Mon-Thu)
         for (let i = 0; i < 35; i++) {
-          timeSlots.push(new Date(current));
+          const dayNum = current.getDay();
+          // Only add Monday (1), Tuesday (2), Wednesday (3), Thursday (4)
+          if (dayNum >= 1 && dayNum <= 4) {
+            timeSlots.push(new Date(current));
+          }
           current.setDate(current.getDate() + 1);
         }
         break;
@@ -320,59 +328,55 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
       <CardContent className={`${isFullscreen ? "flex-1 overflow-auto" : ""}`}>
         <div className="space-y-4">
           {/* Time Headers */}
-          <div className={`grid gap-1 text-sm font-medium text-muted-foreground ${(scheduleView.type === "month" || scheduleView.type === "hour") || isFullscreen ? "overflow-x-auto" : ""}`} 
-               style={{ 
-                 gridTemplateColumns: 
-                   scheduleView.type === "hour" ? "200px repeat(24, minmax(60px, 1fr))" :
-                   scheduleView.type === "day" ? "200px 1fr" :
-                   scheduleView.type === "week" ? "200px repeat(7, 1fr)" :
-                   "200px repeat(35, minmax(40px, 1fr))" // month
-               }}>
-            <div className="text-right pr-4 sticky left-0 bg-background z-10">Machine</div>
-            {weekDays.map((day, index) => {
-              const isWeekend = day.getDay() === 0 || day.getDay() === 6;
-              const isFriday = day.getDay() === 5;
-              const isUnavailable = isWeekend || isFriday;
-              
-              let displayText = '';
-              switch (scheduleView.type) {
-                case "hour":
-                  displayText = day.toLocaleTimeString('en-US', { 
-                    hour: 'numeric', 
-                    hour12: true 
-                  });
-                  break;
-                case "day":
-                  displayText = day.toLocaleDateString('en-US', { 
-                    weekday: 'long', 
-                    month: 'long', 
-                    day: 'numeric' 
-                  });
-                  break;
-                case "week":
-                  displayText = day.toLocaleDateString('en-US', { 
-                    weekday: 'short', 
-                    month: 'short',
-                    day: 'numeric'
-                  });
-                  break;
-                case "month":
-                  displayText = day.getDate().toString();
-                  break;
-              }
-              
-              return (
-                <div key={index} className={`text-center text-xs ${isUnavailable ? 'text-gray-400' : ''}`}>
-                  {scheduleView.type === "month" ? 
-                    <div className="flex flex-col">
-                      <span>{displayText}</span>
-                      <span className="text-xs">{day.toLocaleDateString('en-US', { weekday: 'short' }).substring(0, 1)}</span>
-                    </div> :
-                    displayText
-                  }
-                </div>
-              );
-            })}
+          <div className={`flex gap-1 text-sm font-medium text-muted-foreground ${(scheduleView.type === "month" || scheduleView.type === "hour") || isFullscreen ? "overflow-x-auto" : ""}`}>
+            <div className="text-right pr-4 sticky left-0 bg-background z-10 w-48 flex-shrink-0">Machine</div>
+            <div className="flex gap-1 flex-1">
+              {weekDays.map((day, index) => {
+                let displayText = '';
+                switch (scheduleView.type) {
+                  case "hour":
+                    displayText = day.toLocaleTimeString('en-US', { 
+                      hour: 'numeric', 
+                      hour12: true 
+                    });
+                    break;
+                  case "day":
+                    displayText = day.toLocaleDateString('en-US', { 
+                      weekday: 'long', 
+                      month: 'long', 
+                      day: 'numeric' 
+                    });
+                    break;
+                  case "week":
+                    displayText = day.toLocaleDateString('en-US', { 
+                      weekday: 'short', 
+                      month: 'short',
+                      day: 'numeric'
+                    });
+                    break;
+                  case "month":
+                    displayText = day.getDate().toString();
+                    break;
+                }
+                
+                const flexBasis = scheduleView.type === "hour" ? "60px" :
+                                scheduleView.type === "day" ? "100%" :
+                                scheduleView.type === "week" ? "1fr" :
+                                "40px"; // month
+                
+                return (
+                  <div key={index} className="text-center text-xs flex-shrink-0" style={{ flexBasis }}>
+                    {scheduleView.type === "month" ? 
+                      <div className="flex flex-col">
+                        <span>{displayText}</span>
+                        <span className="text-xs">{day.toLocaleDateString('en-US', { weekday: 'short' }).substring(0, 1)}</span>
+                      </div> :
+                      displayText
+                    }
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
           {/* Machine Rows */}
@@ -382,15 +386,8 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
               const isWeekendOnly = machine.availableShifts.length === 1 && machine.availableShifts[0] === 1;
               
               return (
-                <div key={machine.id} className={`grid gap-1 items-center ${(scheduleView.type === "month" || scheduleView.type === "hour") || isFullscreen ? "overflow-x-auto" : ""}`} 
-                     style={{ 
-                       gridTemplateColumns: 
-                         scheduleView.type === "hour" ? "200px repeat(24, minmax(60px, 1fr))" :
-                         scheduleView.type === "day" ? "200px 1fr" :
-                         scheduleView.type === "week" ? "200px repeat(7, 1fr)" :
-                         "200px repeat(35, minmax(40px, 1fr))" // month
-                     }}>
-                  <div className={`text-sm font-medium text-right pr-4 min-w-0 sticky left-0 z-10 ${isFullscreen ? "bg-card" : "bg-background"}`}>
+                <div key={machine.id} className={`flex gap-1 items-center ${(scheduleView.type === "month" || scheduleView.type === "hour") || isFullscreen ? "overflow-x-auto" : ""}`}>
+                  <div className={`text-sm font-medium text-right pr-4 min-w-0 sticky left-0 z-10 w-48 flex-shrink-0 ${isFullscreen ? "bg-card" : "bg-background"}`}>
                     <div className="flex items-center justify-end gap-1 mb-1">
                       <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium flex-shrink-0 ${
                         machine.type === 'LATHE' 
@@ -408,11 +405,10 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
                     <div className="text-xs text-muted-foreground truncate">{machine.name}</div>
                   </div>
                   
-                  {weekDays.map((day, dayIndex) => {
-                    const isWeekend = day.getDay() === 0 || day.getDay() === 6; // Saturday = 6, Sunday = 0
-                    const isFriday = day.getDay() === 5; // Friday = 5
-                    const isWeekendOrFriday = isWeekend || isFriday;
-                    const isUnavailable = isWeekendOrFriday; // All machines should be unavailable on Fri-Sun
+                  <div className="flex gap-1 flex-1">
+                    {weekDays.map((day, dayIndex) => {
+                      // Since we're filtering out weekends in getTimeSlots, these should only be business days
+                      const isUnavailable = false; // Business days only, so no unavailable days
                     
                     // Find jobs scheduled for this day (including multi-day jobs)
                     const dayJobs = machineJobs.filter(entry => {
@@ -445,15 +441,20 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
                       setExpandedDays(newExpanded);
                     };
 
-                  return (
-                    <div key={dayIndex}>
-                      <div 
-                        className={`${isExpanded ? 'h-auto min-h-12' : 'h-12'} rounded relative flex items-center justify-center ${
-                          isUnavailable 
-                            ? 'bg-gray-200 dark:bg-gray-700 opacity-60' 
-                            : 'bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-600'
-                        }`}
-                      >
+                      const flexBasis = scheduleView.type === "hour" ? "60px" :
+                                      scheduleView.type === "day" ? "100%" :
+                                      scheduleView.type === "week" ? "1fr" :
+                                      "40px"; // month
+
+                      return (
+                        <div key={dayIndex} className="flex-shrink-0" style={{ flexBasis }}>
+                          <div 
+                            className={`${isExpanded ? 'h-auto min-h-12' : 'h-12'} rounded relative flex items-center justify-center ${
+                              isUnavailable 
+                                ? 'bg-gray-200 dark:bg-gray-700 opacity-60' 
+                                : 'bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-600'
+                            }`}
+                          >
                         {dayJobs.length > 0 && (
                           <div className="absolute inset-0 flex flex-col gap-0.5 p-0.5">
                             {dayJobs.slice(0, displayLimit).map((entry, idx) => {
@@ -533,10 +534,11 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
                             )}
                           </div>
                         )}
-                      </div>
-                    </div>
-                  );
-                  })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               );
             })}
