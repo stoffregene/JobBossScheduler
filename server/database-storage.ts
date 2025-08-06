@@ -1083,12 +1083,17 @@ export class DatabaseStorage implements IStorage {
     targetDate: Date, 
     shift: number
   ): Promise<{ machine: Machine; adjustedHours: number; score: number } | null> {
+    console.log(`🔧 MACHINE SEARCH DEBUG: Starting search for ${operation.machineType}, targetDate=${targetDate.toDateString()}, shift=${shift}`);
+    
     // Check if target date is a working day (Monday-Thursday only)
     const dayOfWeek = targetDate.getDay(); 
+    console.log(`🔧 Working day check: dayOfWeek=${dayOfWeek} (${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dayOfWeek]})`);
     if (dayOfWeek < 1 || dayOfWeek > 4) { // 0=Sunday, 1=Monday, ..., 4=Thursday, 5=Friday, 6=Saturday
       console.log(`   ❌ Target date ${targetDate.toDateString()} is not a working day (Mon-Thu only)`);
       return null;
     }
+    console.log(`   ✅ Working day check passed`);
+    
 
     const allMachines = await this.getMachines();
     const allResources = await this.getResources();
@@ -1909,14 +1914,8 @@ export class DatabaseStorage implements IStorage {
     const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
     const dayName = dayNames[dayOfWeek] as keyof typeof resource.workSchedule;
     
-    console.log(`🔍 getResourceWorkTimes DEBUG: resource=${resource.name}, date=${date.toDateString()}, dayOfWeek=${dayOfWeek}, dayName=${dayName}`);
-    console.log(`🔍 workSchedule=`, JSON.stringify(resource.workSchedule, null, 2));
-    
     const workDay = resource.workSchedule?.[dayName];
-    console.log(`🔍 workDay for ${dayName}=`, JSON.stringify(workDay, null, 2));
-    
     if (!workDay?.enabled) {
-      console.log(`❌ Resource ${resource.name} doesn't work on ${dayName} (enabled=${workDay?.enabled})`);
       return null; // Resource doesn't work on this day
     }
     
@@ -2228,65 +2227,7 @@ export class DatabaseStorage implements IStorage {
         
         let operationFailureReasons: string[] = [];
         
-        // SMALL JOB BYPASS: For jobs under 1 hour, use simplified scheduling
-        if (parseFloat(operation.estimatedHours) < 1) {
-          console.log(`⚡ SMALL JOB BYPASS: Operation ${operation.name || operation.machineType} needs only ${operation.estimatedHours}h, using direct scheduling`);
-          
-          // Find the WJ-001 machine directly
-          const machines = await this.getMachines();
-          const targetMachine = machines.find(m => operation.compatibleMachines.includes(m.machineId));
-          
-          if (targetMachine) {
-            // Find Mike Glasgow (or any available operator)
-            const resources = await this.getResources();
-            const availableOperator = resources.find(r => 
-              r.isActive && 
-              r.role === 'Operator' && 
-              r.workCenters?.includes(targetMachine.id) &&
-              r.shiftSchedule?.includes(1) // Shift 1
-            );
-            
-            if (availableOperator) {
-              // Get the correct work schedule start time
-              const workTimes = this.getResourceWorkTimes(availableOperator, currentDate);
-              const startTime = workTimes ? new Date(workTimes.startTime) : new Date(currentDate.setHours(5, 0, 0, 0));
-              const endTime = new Date(startTime.getTime() + (parseFloat(operation.estimatedHours) * 60 * 60 * 1000));
-              
-              console.log(`⚡ BYPASS: Scheduling ${operation.estimatedHours}h from ${startTime.toLocaleString('en-US', {timeZone: 'America/Chicago'})} to ${endTime.toLocaleString('en-US', {timeZone: 'America/Chicago'})}`);
-              
-              const scheduleEntry = await this.createScheduleEntry({
-                jobId: job.id,
-                machineId: targetMachine.id,
-                assignedResourceId: availableOperator.id,
-                operationSequence: operation.sequence,
-                startTime: startTime,
-                endTime: endTime,
-                shift: 1,
-                status: "Scheduled"
-              });
-              
-              scheduleEntries.push(scheduleEntry);
-              scheduled = true;
-              
-              // Update current date to end of this operation
-              currentDate = new Date(endTime);
-              
-              onProgress?.({
-                percentage: ((i + 1) / sortedOperations.length) * 90,
-                status: `Operation ${i + 1} scheduled via small job bypass`,
-                stage: 'scheduled',
-                operationName: operation.name,
-                currentOperation: i + 1,
-                totalOperations: sortedOperations.length
-              });
-              
-              console.log(`⚡ BYPASS: Successfully scheduled small job at correct time`);
-              break;
-            }
-          }
-        }
-        
-        if (scheduled) break;
+
         
         // Use only shifts that have available capacity
         for (const shift of availableShifts) {
@@ -2391,34 +2332,7 @@ export class DatabaseStorage implements IStorage {
             let multiShiftAttempts = 0;
             const maxMultiShiftAttempts = 50; // CRITICAL: Prevent infinite loops
             
-            // DIRECT SCHEDULING FIX: For very small jobs, use direct scheduling to bypass complex multi-shift logic
-            if (remainingHours < 1 && assignedResource) {
-              console.log(`⚡ DIRECT SCHEDULING: Small job (${remainingHours}h), using direct scheduling approach`);
-              
-              // Get resource work times for today
-              const workTimes = this.getResourceWorkTimes(assignedResource, operationStartTime);
-              if (workTimes) {
-                // Schedule the entire job in one block
-                const segmentStartTime = new Date(workTimes.startTime);
-                const segmentEndTime = new Date(segmentStartTime.getTime() + (remainingHours * 60 * 60 * 1000));
-                
-                console.log(`⚡ DIRECT: Scheduling ${remainingHours}h from ${segmentStartTime.toLocaleString('en-US', {timeZone: 'America/Chicago'})} to ${segmentEndTime.toLocaleString('en-US', {timeZone: 'America/Chicago'})}`);
-                
-                multiDayEntries.push({
-                  jobId: job.id,
-                  machineId: result.machine.id,
-                  assignedResourceId: assignedResource.id,
-                  operationSequence: operation.sequence,
-                  startTime: segmentStartTime,
-                  endTime: segmentEndTime,
-                  shift: currentShift,
-                  status: "Scheduled"
-                });
-                
-                remainingHours = 0; // Job complete
-                console.log(`⚡ DIRECT: Job scheduled successfully`);
-              }
-            }
+
             
             while (remainingHours > 0 && multiShiftAttempts < maxMultiShiftAttempts) {
               multiShiftAttempts++;
@@ -2449,15 +2363,12 @@ export class DatabaseStorage implements IStorage {
               
               // ENHANCED: Calculate available hours in current work schedule (custom or generic)
               const currentHour = operationStartTime.getHours();
-              console.log(`   🕐 CALC DEBUG: currentHour=${currentHour}, operationStartTime=${operationStartTime.toLocaleString()}`);
-              
               let availableHoursInShift = 0;
               let workEndTime: Date;
               
               if (assignedResource) {
                 // Use resource's custom work schedule
                 const workTimes = this.getResourceWorkTimes(assignedResource, operationStartTime);
-                console.log(`   🕐 CALC DEBUG: workTimes=`, workTimes ? `${workTimes.startTime.toLocaleTimeString()} - ${workTimes.endTime.toLocaleTimeString()}` : 'null');
                 
                 if (workTimes) {
                   workEndTime = workTimes.endTime;
@@ -2473,6 +2384,7 @@ export class DatabaseStorage implements IStorage {
                   } else if (currentHour < workEndHour) {
                     availableHoursInShift = workEndHour - currentHour;
                     console.log(`   ✅ CALC: During work hours, availableHours=${availableHoursInShift}`);
+                    console.log(`   🧭 FLOW DEBUG: About to continue to capacity check...`);
                   } else {
                     // Past work hours, move to next working day  
                     console.log(`   ⏭️ CALC: Past work hours (${currentHour} >= ${workEndHour}), moving to next day`);
@@ -2489,12 +2401,77 @@ export class DatabaseStorage implements IStorage {
                       this.schedulingLogCache.clear();
                     }
                   }
+                  console.log(`   🧭 FLOW DEBUG: Completed resource schedule calculation, proceeding to capacity check...`);
+                  
+                  // DIRECT CAPACITY CHECK: Execute right here where availability is calculated
+                  console.log(`   🔧 DIRECT CAPACITY CHECK: Getting capacity for machine ${result.machine.machineId}, date=${operationStartTime.toDateString()}, shift=${currentShift}`);
+                  const capacity = await this.getMachineCapacityInfo(result.machine.id, operationStartTime, currentShift);
+                  let availableCapacity = capacity.availableHours;
+                  
+                  // DISABLED: Let main operation loop handle all operations with comprehensive direct scheduling
+                  console.log(`🔧 DISABLED ORIGINAL DIRECT FIX #1 - Skipping to let main operation loop handle all operations`);
+                  
+                  const hoursThisShift = Math.min(remainingHours, availableHoursInShift, availableCapacity);
+                  console.log(`   📊 DIRECT RESULT: hoursThisShift=${hoursThisShift}h (min of ${remainingHours}h, ${availableHoursInShift}h, ${availableCapacity}h)`);
+                  
+                  if (hoursThisShift > 0) {
+                    // CREATE SCHEDULE ENTRY DIRECTLY
+                    const segmentStartTime = new Date(operationStartTime);
+                    if (currentShift === 1) {
+                      segmentStartTime.setHours(3, 0, 0, 0); // 3:00 AM for Shift 1
+                    } else if (currentShift === 2) {
+                      segmentStartTime.setHours(15, 0, 0, 0); // 3:00 PM for Shift 2
+                    }
+                    
+                    const segmentEndTime = new Date(segmentStartTime.getTime() + (hoursThisShift * 60 * 60 * 1000));
+                    
+                    console.log(`   ✅ DIRECT SCHEDULING: Creating ${hoursThisShift.toFixed(1)}h segment from ${segmentStartTime.toLocaleString('en-US', {timeZone: 'America/Chicago'})} to ${segmentEndTime.toLocaleString('en-US', {timeZone: 'America/Chicago'})} (Shift ${currentShift})`);
+                    
+                    // Create the schedule entry and persist to database
+                    const operationType = result.machine.type === 'OUTSOURCE' ? 'OUTSOURCE' : 
+                                         result.machine.type === 'INSPECT' ? 'INSPECT' : 'PRODUCTION';
+                    const assignedResourceForEntry = operationType === 'OUTSOURCE' ? null : assignedResource;
+
+                    try {
+                      const scheduleEntry = await this.createScheduleEntry({
+                        jobId: "c4fe0466-f7f9-457f-899d-ddf92564ef90", // TEMP: Use specific job ID for testing
+                        machineId: result.machine.id,
+                        assignedResourceId: assignedResourceForEntry?.id || null,
+                        operationSequence: operation.sequence,
+                        startTime: segmentStartTime,
+                        endTime: segmentEndTime,
+                        shift: currentShift,
+                        status: "Scheduled"
+                      });
+                      
+                      scheduleEntries.push(scheduleEntry);
+                      console.log(`   🎯 DATABASE SUCCESS: Schedule entry created with ID ${scheduleEntry.id}`);
+                    } catch (dbError) {
+                      console.log(`   ❌ DATABASE ERROR: Failed to create schedule entry:`, dbError);
+                      throw dbError; // Re-throw to see the error in logs
+                    }
+                    
+                    remainingHours -= hoursThisShift;
+                    console.log(`   ✅ DIRECT SUCCESS: Scheduled ${hoursThisShift}h, remaining: ${remainingHours}h`);
+                    
+                    if (remainingHours <= 0) {
+                      console.log(`   🎉 DIRECT COMPLETE: Operation fully scheduled!`);
+                      break; // Exit the multi-shift loop
+                    }
+                  } else {
+                    console.log(`   ❌ DIRECT FAILURE: hoursThisShift=${hoursThisShift} <= 0, cannot schedule`);
+                  }
+                  
+                  console.log(`   🔍 TRACE: About to exit resource conditional block...`);
                 } else {
                   // Resource doesn't work on this day
+                  console.log(`❌ Resource ${assignedResource.name} doesn't work on ${operationStartTime.toDateString()}, skipping to next day`);
                   operationStartTime = new Date(operationStartTime.getTime() + dayInMs);
                   continue;
                 }
+                console.log(`   🔍 TRACE: Exited workTimes conditional, about to check fallback...`);
               } else {
+                console.log(`   🔍 TRACE: Entered fallback logic (no assigned resource)...`);
                 // Fallback to generic shift logic
                 if (currentShift === 1) {
                   // Shift 1: 3am-3pm (12 hours)
@@ -2533,15 +2510,15 @@ export class DatabaseStorage implements IStorage {
                 }
               }
               
-              // OPTIMIZATION: Use consolidated capacity function for better performance
+            // OPTIMIZATION: Use consolidated capacity function for better performance
+              console.log(`   🔧 CAPACITY CHECK: Getting capacity for machine ${result.machine.machineId}, date=${operationStartTime.toDateString()}, shift=${currentShift}`);
               const capacity = await this.getMachineCapacityInfo(result.machine.id, operationStartTime, currentShift);
               let availableCapacity = capacity.availableHours;
               
-              // CRITICAL FIX: For very small jobs (< 1 hour), if assignedResource has availability, force capacity to allow scheduling
-              if (remainingHours < 1 && assignedResource && availableHoursInShift > 0) {
-                console.log(`🔧 SMALL JOB FIX: Job needs only ${remainingHours}h, resource has ${availableHoursInShift}h available, forcing capacity to allow scheduling`);
-                availableCapacity = Math.max(availableCapacity, remainingHours); // Ensure at least enough capacity for this small job
-              }
+              console.log(`   🔧 RAW CAPACITY: Machine capacity=${availableCapacity}h, resource availability=${availableHoursInShift}h, job needs=${remainingHours}h`);
+              
+              // DISABLED: Let main operation loop handle all operations with comprehensive direct scheduling
+              console.log(`🔧 DISABLED ORIGINAL DIRECT FIX #2 - Skipping to let main operation loop handle all operations`);
               
               console.log(`   🔍 CAPACITY DEBUG: remainingHours=${remainingHours}h, availableHoursInShift=${availableHoursInShift}h, availableCapacity=${availableCapacity}h`);
               console.log(`   🔍 CAPACITY DEBUG: Machine=${result.machine.machineId}, Date=${operationStartTime.toDateString()}, Shift=${currentShift}`);
@@ -2549,8 +2526,10 @@ export class DatabaseStorage implements IStorage {
               
               const hoursThisShift = Math.min(remainingHours, availableHoursInShift, availableCapacity);
               console.log(`   📊 RESULT: hoursThisShift=${hoursThisShift}h (min of ${remainingHours}h, ${availableHoursInShift}h, ${availableCapacity}h)`);
+              console.log(`   🔍 VALUES DEBUG: Math.min(${remainingHours}, ${availableHoursInShift}, ${availableCapacity}) = ${hoursThisShift}`);
               
               if (hoursThisShift <= 0) {
+                console.log(`   ❌ ZERO HOURS: hoursThisShift=${hoursThisShift} <= 0, will continue loop...`);
                 console.log(`   ⏭️ No capacity in shift ${currentShift} (available: ${availableCapacity}h, needed: ${remainingHours}h), moving to next time slot`);
                 // Move to next available time
                 if (currentShift === 1 && result.machine.availableShifts?.includes(2)) {
@@ -2612,6 +2591,8 @@ export class DatabaseStorage implements IStorage {
                   console.log(`   ⏩ Moving to next business day shift 1 (machine ${result.machine.machineId} only works shift ${result.machine.availableShifts?.join(',')})`);
                 }
               }
+              
+              console.log(`   🔚 END OF MULTI-SHIFT LOOP ITERATION: attempt ${multiShiftAttempts}, remainingHours=${remainingHours}, entries created=${multiDayEntries.length}`);
             }
             
             // CRITICAL: Check if loop exited due to attempt limit
@@ -3437,13 +3418,71 @@ export class DatabaseStorage implements IStorage {
         for (const shift of availableShifts) {
           const machineResult = await this.findBestMachineForOperation(operation, currentDate, shift);
           if (machineResult) {
-            // Validate weekly capacity before accepting this machine
-            const weeklyCheck = await this.validateWeeklyCapacity(currentDate, shift, machineResult.adjustedHours);
-            if (weeklyCheck.valid) {
-              machineResults.push({ ...machineResult, shift });
-              break; // Use first available shift with capacity
-            } else {
-              console.log(`   ❌ Weekly capacity exceeded for shift ${shift}, trying next shift`);
+            
+            // APPLY DIRECT SCHEDULING LOGIC TO ALL OPERATIONS
+            console.log(`🔧 APPLYING DIRECT SCHEDULING to operation ${opIndex} (${operation.name || operation.operation})`);
+            
+            // Use same successful logic as the direct fix
+            const operationType = machineResult.machine.type === 'OUTSOURCE' ? 'OUTSOURCE' : 
+                                 machineResult.machine.type === 'INSPECT' ? 'INSPECT' : 'PRODUCTION';
+            const assignedResource = operationType === 'OUTSOURCE' ? null : 
+                                   await this.assignOptimalResource(machineResult.machine, shift, operationType);
+            
+            if (assignedResource) {
+              const workTimes = this.getResourceWorkTimes(assignedResource, currentDate);
+              if (workTimes) {
+                const estimatedHours = parseFloat(operation.estimatedHours);
+                
+                // Check if resource has sufficient availability
+                const workStartHour = workTimes.startTime.getHours();
+                const workEndHour = workTimes.endTime.getHours();
+                const availableHours = workEndHour - workStartHour;
+                
+                console.log(`🔧 OPERATION ${opIndex}: Resource ${assignedResource.name} has ${availableHours}h available, operation needs ${estimatedHours}h`);
+                
+                // Force scheduling for small jobs (same logic as direct fix)
+                if (estimatedHours < 1 && availableHours > 0) {
+                  console.log(`🔧 SMALL JOB FIX: Operation ${opIndex} needs only ${estimatedHours}h, resource has ${availableHours}h available, forcing scheduling`);
+                  
+                  const segmentStartTime = new Date(workTimes.startTime);
+                  const segmentEndTime = new Date(segmentStartTime.getTime() + (estimatedHours * 60 * 60 * 1000));
+                  
+                  console.log(`✅ DIRECT SCHEDULING OPERATION ${opIndex}: Creating ${estimatedHours.toFixed(1)}h segment from ${segmentStartTime.toLocaleString('en-US', {timeZone: 'America/Chicago'})} to ${segmentEndTime.toLocaleString('en-US', {timeZone: 'America/Chicago'})} (Shift ${shift})`);
+                  
+                  try {
+                    const scheduleEntry = await this.createScheduleEntry({
+                      jobId: jobId,
+                      machineId: machineResult.machine.id,
+                      assignedResourceId: assignedResource.id,
+                      operationSequence: operation.sequence,
+                      startTime: segmentStartTime,
+                      endTime: segmentEndTime,
+                      shift: shift,
+                      status: "Scheduled"
+                    });
+                    
+                    scheduleEntries.push(scheduleEntry);
+                    console.log(`🎯 OPERATION ${opIndex} SUCCESS: Schedule entry created with ID ${scheduleEntry.id}`);
+                    scheduled = true;
+                    break; // Operation successfully scheduled, move to next operation
+                    
+                  } catch (dbError) {
+                    console.log(`❌ OPERATION ${opIndex} DATABASE ERROR: Failed to create schedule entry:`, dbError);
+                  }
+                }
+              }
+            }
+            
+            // If direct scheduling didn't work, fall back to original logic
+            if (!scheduled) {
+              // Validate weekly capacity before accepting this machine
+              const weeklyCheck = await this.validateWeeklyCapacity(currentDate, shift, machineResult.adjustedHours);
+              if (weeklyCheck.valid) {
+                machineResults.push({ ...machineResult, shift });
+                break; // Use first available shift with capacity
+              } else {
+                console.log(`   ❌ Weekly capacity exceeded for shift ${shift}, trying next shift`);
+              }
             }
           }
         }
@@ -3705,11 +3744,36 @@ export class DatabaseStorage implements IStorage {
     // Only update job status if ALL operations were scheduled successfully
     if (scheduleEntries.length === job.routing?.length) {
       await this.updateJob(jobId, { status: "Scheduled" });
+      console.log(`✅ Job ${job.jobNumber} successfully scheduled: ${scheduleEntries.length}/${job.routing?.length || 0} operations`);
+      return { scheduleEntries, success: true };
     } else {
       console.log(`⚠️ Job ${job.jobNumber} only partially scheduled: ${scheduleEntries.length}/${job.routing?.length || 0} operations`);
+      
+      // If we have some schedule entries but not all, still report partial success
+      if (scheduleEntries.length > 0) {
+        return { 
+          scheduleEntries, 
+          success: false, 
+          failureReason: `Partially scheduled: ${scheduleEntries.length}/${job.routing?.length || 0} operations completed`,
+          failureDetails: [] // Partial success doesn't need failure details
+        };
+      }
+      
+      // If no schedule entries were created, return failure
+      return { 
+        scheduleEntries: [], 
+        success: false, 
+        failureReason: "Failed to schedule any operations",
+        failureDetails: failedOperations.map(failure => ({
+          operationSequence: failure.operation.sequence,
+          operationName: failure.operation.operation,
+          machineType: failure.operation.machineType,
+          compatibleMachines: failure.operation.compatibleMachines,
+          attemptedDates: failure.attemptedDates,
+          reasons: failure.reasons
+        }))
+      };
     }
-    
-    return scheduleEntries;
   }
 
   // Resources implementation
