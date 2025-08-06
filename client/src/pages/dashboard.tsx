@@ -6,8 +6,7 @@ import JobQueue from "../components/job-queue";
 import ScheduleView from "../components/schedule-view";
 import ResourceAllocation from "../components/resource-allocation";
 import JobDetailsModal from "../components/job-details-modal";
-import { EfficiencyImpactWidget } from "../components/efficiency-impact-widget";
-import { SchedulingFailuresWidget } from "../components/scheduling-failures-widget";
+
 import { SchedulingStatusDashboard } from "../components/scheduling-status-dashboard";
 import { Building2, Clock, Users, Package, Upload, Moon, Sun } from "lucide-react";
 import { useState, useEffect } from "react";
@@ -178,10 +177,8 @@ export default function Dashboard() {
             <ResourceAllocation scheduleView={scheduleView} />
           </div>
 
-          {/* Alerts, Materials & Work Center Status */}
+          {/* Additional content can be added here if needed */}
           <div className="xl:col-span-2 lg:col-span-1 space-y-6">
-            <SchedulingFailuresWidget />
-            <EfficiencyImpactWidget />            
           </div>
         </div>
       </div>

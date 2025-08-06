@@ -4063,49 +4063,5 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getEfficiencyImpactData(): Promise<{
-    totalOperations: number;
-    substitutedOperations: number;
-    averageEfficiencyImpact: number;
-    worstImpacts: Array<{
-      jobNumber: string;
-      operationName: string;
-      originalMachine: string;
-      assignedMachine: string;
-      efficiencyImpact: number;
-    }>;
-  }> {
-    // For now, return mock data since we're using in-memory storage
-    // In a real implementation, this would query the routing operations table
-    const mockData = {
-      totalOperations: 15,
-      substitutedOperations: 4,
-      averageEfficiencyImpact: 12.5,
-      worstImpacts: [
-        {
-          jobNumber: "J240801-001",
-          operationName: "Rough Turn",
-          originalMachine: "HCN-5000",
-          assignedMachine: "MH-50", 
-          efficiencyImpact: 42.8
-        },
-        {
-          jobNumber: "J240801-003", 
-          operationName: "Finish Mill",
-          originalMachine: "VMC-850", 
-          assignedMachine: "VMC-4020",
-          efficiencyImpact: 18.5
-        },
-        {
-          jobNumber: "J240801-007",
-          operationName: "Drill & Tap",
-          originalMachine: "DMG-80",
-          assignedMachine: "HMC-001",
-          efficiencyImpact: 8.3
-        }
-      ]
-    };
 
-    return mockData;
-  }
 }

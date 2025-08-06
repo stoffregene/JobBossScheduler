@@ -81,33 +81,11 @@ export interface IStorage {
   dragScheduleJob(jobId: string, machineId: string, startDate: string, shift: number): Promise<{ success: boolean; scheduleEntries?: ScheduleEntry[]; failureReason?: string }>;
   getMachinesBySubstitutionGroup(substitutionGroup: string): Promise<Machine[]>;
   
-  // Efficiency tracking
-  getEfficiencyImpactData(): Promise<{
-    totalOperations: number;
-    substitutedOperations: number;
-    averageEfficiencyImpact: number;
-    worstImpacts: Array<{
-      jobNumber: string;
-      operationName: string;
-      originalMachine: string;
-      assignedMachine: string;
-      efficiencyImpact: number;
-    }>;
-  }>;
+
   getCompatibleMachines(capability: string, category?: string, tier?: "Tier 1" | "Standard" | "Budget"): Promise<Machine[]>;
   findOptimalMachineAssignment(routing: any[], priority: "Critical" | "High" | "Normal" | "Low"): Promise<any[]>;
 
-  // Material Orders
-  getMaterialOrders(): Promise<MaterialOrder[]>;
-  getMaterialOrdersForJob(jobId: string): Promise<MaterialOrder[]>;
-  createMaterialOrder(orderData: InsertMaterialOrder): Promise<MaterialOrder>;
-  updateMaterialOrder(orderId: string, updates: Partial<MaterialOrder>): Promise<MaterialOrder | null>;
-  markMaterialReceived(orderId: string): Promise<MaterialOrder | null>;
-  deleteAllMaterialOrders(): Promise<number>;
-  deleteAllJobsAwaitingMaterial(): Promise<number>;
-  getJobsAwaitingMaterial(): Promise<Array<Job & { materialOrders: MaterialOrder[] }>>;
-  isJobReadyForScheduling(jobId: string): Promise<{ ready: boolean; reason?: string; pendingMaterials?: MaterialOrder[] }>;
-  autoScheduleJobWithMaterialCheck(jobId: string): Promise<{ success: boolean; scheduleEntries?: ScheduleEntry[]; reason?: string; pendingItems?: any[] }>;
+
 
   // Outsourced Operations
   getOutsourcedOperations(): Promise<OutsourcedOperation[]>;

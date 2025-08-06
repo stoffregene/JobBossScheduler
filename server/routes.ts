@@ -1321,37 +1321,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
 
 
-  app.get("/api/jobs/:id/readiness", async (req, res) => {
-    try {
-      const readiness = await storage.isJobReadyForScheduling(req.params.id);
-      res.json(readiness);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to check job readiness" });
-    }
-  });
 
-  app.post("/api/jobs/:id/schedule-with-material-check", async (req, res) => {
-    try {
-      const result = await storage.autoScheduleJobWithMaterialCheck(req.params.id);
-      if (result.success && result.scheduleEntries) {
-        broadcast({ type: 'job_scheduled', data: { jobId: req.params.id, scheduleEntries: result.scheduleEntries } });
-      }
-      res.json(result);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to schedule job with material check" });
-    }
-  });
 
-  // Efficiency impact endpoint
-  app.get('/api/efficiency-impact', async (req, res) => {
-    try {
-      const efficiencyData = await storage.getEfficiencyImpactData();
-      res.json(efficiencyData);
-    } catch (error) {
-      console.error('Error fetching efficiency data:', error);
-      res.status(500).json({ error: 'Failed to fetch efficiency data' });
-    }
-  });
+
 
   return httpServer;
 }
