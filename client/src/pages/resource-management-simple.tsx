@@ -378,6 +378,24 @@ export default function ResourceManagement() {
     );
   }
 
+  // Sort resources alphabetically
+  const sortedResources = resources ? [...resources].sort((a, b) => a.name.localeCompare(b.name)) : [];
+
+  // Group machines by type for organized display
+  const machinesByType = machines?.reduce((acc, machine) => {
+    if (!acc[machine.type]) {
+      acc[machine.type] = [];
+    }
+    acc[machine.type].push(machine);
+    return acc;
+  }, {} as Record<string, typeof machines>) || {};
+
+  // Sort types alphabetically and machines within each type
+  const sortedMachineTypes = Object.keys(machinesByType).sort();
+  Object.keys(machinesByType).forEach(type => {
+    machinesByType[type].sort((a, b) => a.machineId.localeCompare(b.machineId));
+  });
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       {/* Navigation Header */}
@@ -478,9 +496,9 @@ export default function ResourceManagement() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-4">
-              {resources?.map(resource => (
-                <div key={resource.id} className="flex items-center justify-between p-4 border rounded-lg">
+            <div className="grid gap-3">
+              {sortedResources?.map(resource => (
+                <div key={resource.id} className="flex items-center justify-between p-3 border rounded-lg">
                   <div className="flex-1">
                     <div className="flex items-center gap-3">
                       <div>
@@ -878,27 +896,49 @@ export default function ResourceManagement() {
 
             <Separator />
             {/* Work Center Assignments */}
-            <div className="space-y-4">
+            <div className="space-y-3">
               <div>
                 <Label className="text-base font-medium">Work Center Assignments</Label>
                 <p className="text-sm text-muted-foreground">Select which machines this employee can operate</p>
               </div>
-              <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto">
-                {machines?.map(machine => (
-                  <div key={machine.id} className="flex items-center space-x-2 p-2 border rounded">
-                    <Checkbox
-                      id={`machine-${machine.id}`}
-                      checked={editForm.workCenters.includes(machine.id)}
-                      onCheckedChange={() => toggleWorkCenter(machine.id)}
-                      data-testid={`checkbox-edit-machine-${machine.machineId}`}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <Label htmlFor={`machine-${machine.id}`} className="text-sm font-medium">
-                        {machine.machineId}
-                      </Label>
-                      <div className="text-xs text-muted-foreground truncate">
-                        {machine.name} • {machine.type}
-                      </div>
+              <div className="max-h-60 overflow-y-auto space-y-3">
+                {sortedMachineTypes.map(machineType => (
+                  <div key={machineType} className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
+                        machineType === 'LATHE' 
+                          ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200' 
+                          : machineType === 'MILL'
+                          ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
+                          : machineType === 'OUTSOURCE'
+                          ? 'bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200'
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
+                      }`}>
+                        {machineType}
+                      </span>
+                      <span className="text-sm text-muted-foreground">
+                        {machinesByType[machineType]?.length || 0} machines
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 pl-4">
+                      {machinesByType[machineType]?.map(machine => (
+                        <div key={machine.id} className="flex items-center space-x-2 p-2 border rounded text-sm">
+                          <Checkbox
+                            id={`machine-${machine.id}`}
+                            checked={editForm.workCenters.includes(machine.id)}
+                            onCheckedChange={() => toggleWorkCenter(machine.id)}
+                            data-testid={`checkbox-edit-machine-${machine.machineId}`}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <Label htmlFor={`machine-${machine.id}`} className="text-sm font-medium">
+                              {machine.machineId}
+                            </Label>
+                            <div className="text-xs text-muted-foreground truncate">
+                              {machine.name}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 ))}
@@ -1180,9 +1220,9 @@ export default function ResourceManagement() {
             </DialogDescription>
           </DialogHeader>
           
-          <div className="grid gap-6">
+          <div className="grid gap-4">
             {/* Basic Information */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label htmlFor="add-name">Full Name</Label>
                 <Input
@@ -1316,27 +1356,49 @@ export default function ResourceManagement() {
             <Separator />
 
             {/* Work Center Assignments */}
-            <div className="space-y-4">
+            <div className="space-y-3">
               <div>
                 <Label className="text-base font-medium">Work Center Assignments</Label>
                 <p className="text-sm text-muted-foreground">Select which machines this employee can operate</p>
               </div>
-              <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto">
-                {machines?.map(machine => (
-                  <div key={machine.id} className="flex items-center space-x-2 p-2 border rounded">
-                    <Checkbox
-                      id={`add-machine-${machine.id}`}
-                      checked={editForm.workCenters.includes(machine.id)}
-                      onCheckedChange={() => toggleWorkCenter(machine.id)}
-                      data-testid={`checkbox-add-machine-${machine.machineId}`}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <Label htmlFor={`add-machine-${machine.id}`} className="text-sm font-medium">
-                        {machine.machineId}
-                      </Label>
-                      <div className="text-xs text-muted-foreground truncate">
-                        {machine.name} • {machine.type}
-                      </div>
+              <div className="max-h-60 overflow-y-auto space-y-3">
+                {sortedMachineTypes.map(machineType => (
+                  <div key={machineType} className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
+                        machineType === 'LATHE' 
+                          ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200' 
+                          : machineType === 'MILL'
+                          ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
+                          : machineType === 'OUTSOURCE'
+                          ? 'bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200'
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
+                      }`}>
+                        {machineType}
+                      </span>
+                      <span className="text-sm text-muted-foreground">
+                        {machinesByType[machineType]?.length || 0} machines
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 pl-4">
+                      {machinesByType[machineType]?.map(machine => (
+                        <div key={machine.id} className="flex items-center space-x-2 p-2 border rounded text-sm">
+                          <Checkbox
+                            id={`add-machine-${machine.id}`}
+                            checked={editForm.workCenters.includes(machine.id)}
+                            onCheckedChange={() => toggleWorkCenter(machine.id)}
+                            data-testid={`checkbox-add-machine-${machine.machineId}`}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <Label htmlFor={`add-machine-${machine.id}`} className="text-sm font-medium">
+                              {machine.machineId}
+                            </Label>
+                            <div className="text-xs text-muted-foreground truncate">
+                              {machine.name}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 ))}
