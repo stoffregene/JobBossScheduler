@@ -2049,9 +2049,16 @@ export class DatabaseStorage implements IStorage {
       let scheduled = false;
       
       // Try to schedule within the 21-day window
-      while (currentDate <= maxDate && !scheduled) {
+      let outerLoopAttempts = 0;
+      const maxOuterLoopAttempts = 30; // CRITICAL: Prevent infinite date loops
+      
+      while (currentDate <= maxDate && !scheduled && outerLoopAttempts < maxOuterLoopAttempts) {
+        outerLoopAttempts++;
+        console.log(`📅 OUTER LOOP ${outerLoopAttempts}/${maxOuterLoopAttempts}: Trying date ${currentDate.toDateString()} for ${operation.name || operation.machineType}`);
+        
         // Skip weekends (Friday-Sunday) for most operations
         if (currentDate.getDay() === 0 || currentDate.getDay() === 5 || currentDate.getDay() === 6) {
+          console.log(`   ⏭️ Skipping weekend: ${currentDate.toDateString()}`);
           currentDate = new Date(currentDate.getTime() + dayInMs);
           continue;
         }
@@ -2320,11 +2327,14 @@ export class DatabaseStorage implements IStorage {
             
             while (remainingHours > 0 && multiShiftAttempts < maxMultiShiftAttempts) {
               multiShiftAttempts++;
+              console.log(`   🔄 Multi-shift attempt ${multiShiftAttempts}/${maxMultiShiftAttempts}: remainingHours=${remainingHours}h, date=${operationStartTime.toDateString()}`);
+              
               // ENHANCED: Skip days based on resource's custom work schedule
               if (assignedResource) {
                 // Skip days when resource doesn't work (with loop protection)
                 let daySkipCount = 0;
                 while (!this.getResourceWorkTimes(assignedResource, operationStartTime) && daySkipCount < 10) {
+                  console.log(`   📅 ${assignedResource.name} not available on ${operationStartTime.toDateString()}, skipping to next day`);
                   operationStartTime = new Date(operationStartTime.getTime() + dayInMs);
                   daySkipCount++;
                 }
@@ -2332,6 +2342,7 @@ export class DatabaseStorage implements IStorage {
                   console.log(`❌ CRITICAL: Could not find working day for ${assignedResource.name} after 10 attempts`);
                   break; // Exit the multi-shift loop
                 }
+                console.log(`   ✅ Found working day for ${assignedResource.name} on ${operationStartTime.toDateString()}`);
               } else {
                 // Fallback: Skip weekends (Friday-Sunday) for generic shifts
                 while (operationStartTime.getDay() === 0 || operationStartTime.getDay() === 5 || operationStartTime.getDay() === 6) {
@@ -2364,7 +2375,16 @@ export class DatabaseStorage implements IStorage {
                     operationStartTime = new Date(operationStartTime.getTime() + dayInMs);
                     continue;
                   }
-                  console.log(`📅 ${assignedResource.name} has ${availableHoursInShift}h available on ${operationStartTime.toDateString()}`);
+                  // ANTI-SPAM: Cache this log message to prevent infinite console spam
+                  const logKey = `${assignedResource.name}-${availableHoursInShift}h-${operationStartTime.toDateString()}`;
+                  if (!this.schedulingLogCache.has(logKey)) {
+                    console.log(`📅 ${assignedResource.name} has ${availableHoursInShift}h available on ${operationStartTime.toDateString()}`);
+                    this.schedulingLogCache.add(logKey);
+                    // Clear cache periodically to prevent memory buildup
+                    if (this.schedulingLogCache.size > 1000) {
+                      this.schedulingLogCache.clear();
+                    }
+                  }
                 } else {
                   // Resource doesn't work on this day
                   operationStartTime = new Date(operationStartTime.getTime() + dayInMs);
@@ -2413,10 +2433,13 @@ export class DatabaseStorage implements IStorage {
               const capacity = await this.getMachineCapacityInfo(result.machine.id, operationStartTime, currentShift);
               const availableCapacity = capacity.availableHours;
               
+              console.log(`   🔍 Capacity analysis: remainingHours=${remainingHours}h, availableHoursInShift=${availableHoursInShift}h, availableCapacity=${availableCapacity}h`);
+              
               const hoursThisShift = Math.min(remainingHours, availableHoursInShift, availableCapacity);
+              console.log(`   📊 Calculated hoursThisShift: ${hoursThisShift}h (min of ${remainingHours}, ${availableHoursInShift}, ${availableCapacity})`);
               
               if (hoursThisShift <= 0) {
-                console.log(`   ⏭️ No capacity in shift ${currentShift}, moving to next time slot`);
+                console.log(`   ⏭️ No capacity in shift ${currentShift} (available: ${availableCapacity}h, needed: ${remainingHours}h), moving to next time slot`);
                 // Move to next available time
                 if (currentShift === 1 && result.machine.availableShifts?.includes(2)) {
                   operationStartTime.setHours(15, 0, 0, 0);
@@ -2428,6 +2451,8 @@ export class DatabaseStorage implements IStorage {
                 }
                 continue;
               }
+              
+              console.log(`   ✅ Scheduling ${hoursThisShift}h segment (remaining: ${remainingHours}h, available: ${availableCapacity}h)`);
               
               // Ensure segment starts at proper shift time
               const segmentStartTime = new Date(operationStartTime);
@@ -2481,7 +2506,12 @@ export class DatabaseStorage implements IStorage {
             if (multiShiftAttempts >= maxMultiShiftAttempts) {
               console.log(`❌ CRITICAL: Multi-shift scheduling exceeded maximum attempts (${maxMultiShiftAttempts}) for operation ${operation.name}`);
               console.log(`   Remaining hours: ${remainingHours}, Entries created: ${multiDayEntries.length}`);
-              // Still continue with any entries we did create
+              
+              // If no entries were created, this operation failed completely
+              if (multiDayEntries.length === 0) {
+                console.log(`❌ COMPLETE FAILURE: No schedule entries created for ${operation.name} after ${maxMultiShiftAttempts} attempts`);
+                break; // Exit the shift loop to try next date
+              }
             }
             
             // Create all the schedule entries for this multi-day operation
