@@ -409,9 +409,9 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
                     {weekDays.map((day, dayIndex) => {
                       // Since we're filtering out weekends in getTimeSlots, these should only be business days
                       const isUnavailable = false; // Business days only, so no unavailable days
-                    
-                    // Find jobs scheduled for this day (including multi-day jobs)
-                    const dayJobs = machineJobs.filter(entry => {
+                      
+                      // Find jobs scheduled for this day (including multi-day jobs)
+                      const dayJobs = machineJobs.filter(entry => {
                       const startDate = new Date(entry.startTime);
                       const endDate = new Date(entry.endTime);
                       
@@ -425,21 +425,21 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
                       
                       // Job spans this day if it overlaps with the day's UTC range
                       return scheduleStartDay <= dayEndUTC && scheduleEndDay >= dayStartUTC;
-                    });
-                    
-                    const dayKey = `${machine.id}-${day.toDateString()}`;
-                    const isExpanded = expandedDays.has(dayKey);
-                    const displayLimit = isExpanded ? dayJobs.length : 2;
-                    
-                    const toggleExpansion = () => {
-                      const newExpanded = new Set(expandedDays);
-                      if (isExpanded) {
-                        newExpanded.delete(dayKey);
-                      } else {
-                        newExpanded.add(dayKey);
-                      }
-                      setExpandedDays(newExpanded);
-                    };
+                      });
+                      
+                      const dayKey = `${machine.id}-${day.toDateString()}`;
+                      const isExpanded = expandedDays.has(dayKey);
+                      const displayLimit = isExpanded ? dayJobs.length : 2;
+                      
+                      const toggleExpansion = () => {
+                        const newExpanded = new Set(expandedDays);
+                        if (isExpanded) {
+                          newExpanded.delete(dayKey);
+                        } else {
+                          newExpanded.add(dayKey);
+                        }
+                        setExpandedDays(newExpanded);
+                      };
 
                       const flexBasis = scheduleView.type === "hour" ? "60px" :
                                       scheduleView.type === "day" ? "100%" :
