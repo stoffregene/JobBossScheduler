@@ -2361,18 +2361,53 @@ export class DatabaseStorage implements IStorage {
               if (lastScheduled) {
                 operationStartTime = new Date(lastScheduled.endTime);
                 
-                // Adjust to next available shift time if needed
-                const hour = operationStartTime.getHours();
-                if (hour < 3) {
-                  operationStartTime.setHours(3, 0, 0, 0); // Start of shift 1
-                  currentShift = 1;
-                } else if (hour >= 15 && hour < 15) {
-                  operationStartTime.setHours(15, 0, 0, 0); // Start of shift 2  
-                  currentShift = 2;
-                } else if (hour >= 15) {
-                  // Past shift 1, check if machine supports shift 2
-                  if (result.machine.availableShifts?.includes(2)) {
-                    operationStartTime.setHours(15, 0, 0, 0); // Start of shift 2
+                // CRITICAL FIX: If assigned resource has custom work schedule, ensure we start within their work hours
+                if (assignedResource) {
+                  const nextWorkTimes = this.getResourceWorkTimes(assignedResource, operationStartTime);
+                  if (nextWorkTimes) {
+                    const hour = operationStartTime.getHours();
+                    const workStartHour = nextWorkTimes.startTime.getHours();
+                    const workEndHour = nextWorkTimes.endTime.getHours();
+                    
+                    // If the end time is outside work hours, move to next available work time
+                    if (hour < workStartHour || hour >= workEndHour) {
+                      console.log(`🕐 WORK SCHEDULE FIX: Moving from ${operationStartTime.toLocaleString()} to ${assignedResource.name}'s next work time`);
+                      
+                      // If we're before work hours on the same day, start at work time
+                      if (hour < workStartHour) {
+                        operationStartTime = new Date(nextWorkTimes.startTime);
+                      } else {
+                        // We're after work hours, move to next working day
+                        const nextDay = new Date(operationStartTime.getTime() + dayInMs);
+                        const nextDayWorkTimes = this.getResourceWorkTimes(assignedResource, nextDay);
+                        if (nextDayWorkTimes) {
+                          operationStartTime = new Date(nextDayWorkTimes.startTime);
+                        }
+                      }
+                    }
+                  }
+                } else {
+                  // Fallback to generic shift logic for unassigned resources
+                  const hour = operationStartTime.getHours();
+                  if (hour < 3) {
+                    operationStartTime.setHours(3, 0, 0, 0); // Start of shift 1
+                    currentShift = 1;
+                  } else if (hour >= 3 && hour < 15) {
+                    // Already in shift 1 hours, keep current time
+                    currentShift = 1;
+                  } else if (hour >= 15) {
+                    // Past shift 1, check if machine supports shift 2
+                    if (result.machine.availableShifts?.includes(2)) {
+                      operationStartTime.setHours(15, 0, 0, 0); // Start of shift 2
+                      currentShift = 2;
+                    } else {
+                      // No shift 2 support, move to next day shift 1
+                      operationStartTime = new Date(operationStartTime.getTime() + dayInMs);
+                      operationStartTime.setHours(3, 0, 0, 0);
+                      currentShift = 1;
+                    }
+                  }
+                }
                     currentShift = 2;
                   } else {
                     // Move to next day shift 1
