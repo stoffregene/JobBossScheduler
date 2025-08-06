@@ -162,14 +162,42 @@ export default function ResourceManagement() {
       shiftSchedule: [...resource.shiftSchedule],
       workCenters: [...resource.workCenters],
       skills: [...resource.skills],
-      workSchedule: resource.workSchedule || {
-        monday: { enabled: true, startTime: "03:00", endTime: "15:00" },
-        tuesday: { enabled: true, startTime: "03:00", endTime: "15:00" },
-        wednesday: { enabled: true, startTime: "03:00", endTime: "15:00" },
-        thursday: { enabled: true, startTime: "03:00", endTime: "15:00" },
-        friday: { enabled: true, startTime: "03:00", endTime: "15:00" },
-        saturday: { enabled: false, startTime: "03:00", endTime: "15:00" },
-        sunday: { enabled: false, startTime: "03:00", endTime: "15:00" }
+      workSchedule: {
+        monday: { 
+          enabled: resource.workSchedule?.monday?.enabled ?? true, 
+          startTime: resource.workSchedule?.monday?.startTime ?? "03:00", 
+          endTime: resource.workSchedule?.monday?.endTime ?? "15:00" 
+        },
+        tuesday: { 
+          enabled: resource.workSchedule?.tuesday?.enabled ?? true, 
+          startTime: resource.workSchedule?.tuesday?.startTime ?? "03:00", 
+          endTime: resource.workSchedule?.tuesday?.endTime ?? "15:00" 
+        },
+        wednesday: { 
+          enabled: resource.workSchedule?.wednesday?.enabled ?? true, 
+          startTime: resource.workSchedule?.wednesday?.startTime ?? "03:00", 
+          endTime: resource.workSchedule?.wednesday?.endTime ?? "15:00" 
+        },
+        thursday: { 
+          enabled: resource.workSchedule?.thursday?.enabled ?? true, 
+          startTime: resource.workSchedule?.thursday?.startTime ?? "03:00", 
+          endTime: resource.workSchedule?.thursday?.endTime ?? "15:00" 
+        },
+        friday: { 
+          enabled: resource.workSchedule?.friday?.enabled ?? true, 
+          startTime: resource.workSchedule?.friday?.startTime ?? "03:00", 
+          endTime: resource.workSchedule?.friday?.endTime ?? "15:00" 
+        },
+        saturday: { 
+          enabled: resource.workSchedule?.saturday?.enabled ?? false, 
+          startTime: resource.workSchedule?.saturday?.startTime ?? "03:00", 
+          endTime: resource.workSchedule?.saturday?.endTime ?? "15:00" 
+        },
+        sunday: { 
+          enabled: resource.workSchedule?.sunday?.enabled ?? false, 
+          startTime: resource.workSchedule?.sunday?.startTime ?? "03:00", 
+          endTime: resource.workSchedule?.sunday?.endTime ?? "15:00" 
+        }
       }
     });
   };

@@ -1091,11 +1091,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/resources/:id", async (req, res) => {
     try {
       const updates = req.body;
+      console.log(`🔧 UPDATING RESOURCE ${req.params.id}:`, JSON.stringify(updates, null, 2));
       const resource = await storage.updateResource(req.params.id, updates);
       
       if (!resource) {
         return res.status(404).json({ message: "Resource not found" });
       }
+      
+      console.log(`✅ RESOURCE UPDATED:`, JSON.stringify(resource.workSchedule, null, 2));
       
       broadcast({ 
         type: 'resource_updated', 
