@@ -428,15 +428,22 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
                   {/* Continuous timeline container */}
                   <div className="flex flex-1 relative h-12" style={{ minWidth: '600px' }}>
                     {/* Shift background shading */}
-                    <div className="absolute inset-0 flex">
+                    <div className="absolute inset-0 flex flex-1">
                       {weekDays.map((day, dayIndex) => {
-                        const flexBasis = scheduleView.type === "hour" ? "60px" :
-                                        scheduleView.type === "day" ? "100%" :
-                                        scheduleView.type === "week" ? "1fr" :
-                                        "40px"; // month
+                        const isWeekView = scheduleView.type === "week";
                         
                         return (
-                          <div key={dayIndex} className="flex-shrink-0 border-r border-gray-200 dark:border-gray-600" style={{ flexBasis }}>
+                          <div 
+                            key={dayIndex} 
+                            className={`border-r border-gray-200 dark:border-gray-600 ${isWeekView ? 'flex-1' : 'flex-shrink-0'}`}
+                            style={{ 
+                              flexBasis: scheduleView.type === "hour" ? "60px" :
+                                        scheduleView.type === "day" ? "100%" :
+                                        scheduleView.type === "week" ? "0" :  // Let flex-1 handle the sizing
+                                        "40px", // month
+                              width: scheduleView.type === "week" ? "auto" : undefined
+                            }}
+                          >
                             {/* 1st shift background (lighter) */}
                             <div className="h-6 bg-blue-50 dark:bg-blue-950/30 border-b border-gray-100 dark:border-gray-700"></div>
                             {/* 2nd shift background (darker) */}
