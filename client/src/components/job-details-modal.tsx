@@ -171,7 +171,9 @@ export default function JobDetailsModal({ jobId, onClose }: JobDetailsModalProps
 
             <div>
               <label className="text-sm font-medium text-gray-700">Estimated Hours</label>
-              <div className="mt-1 text-sm text-gray-900">{parseFloat(job.estimatedHours).toFixed(1)} hours</div>
+              <div className="mt-1 text-sm text-gray-900">
+                {job.estimatedHours ? parseFloat(job.estimatedHours).toFixed(1) : 'Not calculated'} hours
+              </div>
             </div>
           </div>
 
@@ -263,7 +265,9 @@ export default function JobDetailsModal({ jobId, onClose }: JobDetailsModalProps
                             </div>
                           )}
                         </div>
-                        <div className="text-sm text-gray-700">{operation.estimatedHours.toFixed(1)} hours</div>
+                        <div className="text-sm text-gray-700">
+                          {operation.estimatedHours ? operation.estimatedHours.toFixed(1) : 'Not set'} hours
+                        </div>
                       </div>
                       {operation.notes && (
                         <div className="mt-2 text-xs text-gray-600">
