@@ -328,9 +328,9 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
       <CardContent className={`${isFullscreen ? "flex-1 overflow-auto" : ""}`}>
         <div className="space-y-4">
           {/* Time Headers */}
-          <div className={`flex gap-1 text-sm font-medium text-muted-foreground ${(scheduleView.type === "month" || scheduleView.type === "hour") || isFullscreen ? "overflow-x-auto" : ""}`}>
+          <div className={`flex gap-0 text-sm font-medium text-muted-foreground ${(scheduleView.type === "month" || scheduleView.type === "hour") || isFullscreen ? "overflow-x-auto" : ""}`}>
             <div className="text-right pr-4 sticky left-0 bg-background z-10 w-48 flex-shrink-0">Machine</div>
-            <div className="flex gap-1 flex-1">
+            <div className="flex flex-1" style={{ minWidth: '600px' }}>
               {weekDays.map((day, index) => {
                 let displayText = '';
                 switch (scheduleView.type) {
@@ -359,20 +359,34 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
                     break;
                 }
                 
-                const flexBasis = scheduleView.type === "hour" ? "60px" :
-                                scheduleView.type === "day" ? "100%" :
-                                scheduleView.type === "week" ? "1fr" :
-                                "40px"; // month
+                const isWeekView = scheduleView.type === "week";
                 
                 return (
-                  <div key={index} className="text-center text-xs flex-shrink-0" style={{ flexBasis }}>
-                    {scheduleView.type === "month" ? 
-                      <div className="flex flex-col">
-                        <span>{displayText}</span>
-                        <span className="text-xs">{day.toLocaleDateString('en-US', { weekday: 'short' }).substring(0, 1)}</span>
-                      </div> :
-                      displayText
-                    }
+                  <div 
+                    key={index} 
+                    className={`text-center text-xs border-r border-gray-200 dark:border-gray-600 ${isWeekView ? 'flex-1' : 'flex-shrink-0'}`}
+                    style={{ 
+                      flexBasis: scheduleView.type === "hour" ? "60px" :
+                                scheduleView.type === "day" ? "100%" :
+                                scheduleView.type === "week" ? "0" :  // Let flex-1 handle the sizing
+                                "40px", // month
+                      width: scheduleView.type === "week" ? "auto" : undefined
+                    }}
+                  >
+                    <div className="pb-1 border-b border-gray-100 dark:border-gray-700">
+                      {scheduleView.type === "month" ? 
+                        <div className="flex flex-col">
+                          <span>{displayText}</span>
+                          <span className="text-xs">{day.toLocaleDateString('en-US', { weekday: 'short' }).substring(0, 1)}</span>
+                        </div> :
+                        displayText
+                      }
+                    </div>
+                    {/* Shift time indicators */}
+                    <div className="flex h-4 text-[9px] text-gray-500 dark:text-gray-400">
+                      <div className="flex-1 text-center border-r border-gray-200 dark:border-gray-600">6A</div>
+                      <div className="flex-1 text-center">6P</div>
+                    </div>
                   </div>
                 );
               })}
