@@ -205,56 +205,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/jobs/schedule-all", async (req, res) => {
     try {
-      // Use existing storage instance
-
-      // 1. Fetch ALL data required by the services upfront
-      const allResources = await storage.getResources();
-      const allUnavailabilities = await storage.getResourceUnavailabilities();
-      const allScheduleEntries = await storage.getScheduleEntries();
+      // Get unscheduled jobs
       const jobsToSchedule = (await storage.getJobs()).filter(j => j.status === 'Open' || j.status === 'Unscheduled');
 
       if (jobsToSchedule.length === 0) {
         return res.json({ success: true, scheduled: 0, failed: 0, message: "No unscheduled jobs to process." });
       }
 
-      // 2. Initialize the services with the complete dataset
-      const { OperatorAvailabilityManager } = await import('./operator-availability');
-      const { JobScheduler } = await import('./scheduler');
-      const { ShiftCapacityManager } = await import('./shift-capacity-manager');
+      // Use the new auto-scheduler system
+      const result = await storage.scheduleJobsByPriority(jobsToSchedule.length);
       
-      const operatorManager = new OperatorAvailabilityManager(allResources, allUnavailabilities);
-      const shiftCapacityManager = new ShiftCapacityManager(allResources, allScheduleEntries);
-      const scheduler = new JobScheduler(storage, operatorManager, shiftCapacityManager);
-
-      let scheduledCount = 0;
-      let failedCount = 0;
-
-      // 3. Loop through and schedule each job
-      for (const job of jobsToSchedule) {
-        const result = await scheduler.scheduleJob(job.id);
-        
-        if (result.success && result.scheduledEntries.length > 0) {
-          // Save the new schedule entries to the database
-          for (const entry of result.scheduledEntries) {
-            await storage.createScheduleEntry(entry);
-          }
-          await storage.updateJob(job.id, { status: 'Scheduled' });
-          
-          // Update the capacity manager with the newly scheduled entries
-          shiftCapacityManager.addEntries(result.scheduledEntries);
-          
-          scheduledCount++;
-        } else {
-          failedCount++;
-          console.error(`Failed to schedule job ${job.jobNumber}: ${result.failureReason}`, result);
-        }
-      }
-
-      res.json({ success: true, scheduled: scheduledCount, failed: failedCount });
-
+      broadcast({ type: 'schedule_updated', data: { scheduled: result.scheduled, failed: result.failed } });
+      res.json({
+        success: true,
+        scheduled: result.scheduled,
+        failed: result.failed,
+        message: result.scheduled > 0 ? `Successfully scheduled ${result.scheduled} jobs, ${result.failed} failed.` : "No jobs were scheduled."
+      });
     } catch (error) {
-      console.error("Critical error during full scheduling run:", error);
-      res.status(500).json({ success: false, message: 'A critical error occurred during the scheduling run.' });
+      console.error('❌ Error in schedule-all:', error);
+      res.status(500).json({ success: false, message: "Internal server error during scheduling" });
     }
   });
 

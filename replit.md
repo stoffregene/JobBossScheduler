@@ -15,6 +15,16 @@ This update requires creating one new file, replacing one existing file, and upd
 
 ## Recent Changes
 
+**August 7, 2025** - AUTO-SCHEDULER BREAKTHROUGH: Completed comprehensive auto-scheduler implementation with machine type mapping and full job routing support:
+
+**🎯 COMPLETE AUTO-SCHEDULER SUCCESS**:
+- **IMPORT FIXES**: Resolved critical "require is not defined" error by converting all require() statements to ES module imports in operator-availability.ts
+- **MACHINE TYPE MAPPING**: Implemented intelligent machine type equivalency system (VMC→MILL, CNC→MILL, MC→MILL) for manufacturing compatibility
+- **FULL JOB SCHEDULING**: Auto-scheduler now successfully schedules complete jobs with all routing operations in proper sequence
+- **ROUTING DATA INTEGRATION**: Enhanced auto-scheduler to work with embedded job.routing JSON data containing operations, sequences, and machine types
+- **COMPREHENSIVE TESTING**: Verified end-to-end scheduling with 4-operation job (SAW→LATHE→LATHE→VMC/MILL) with proper time windows and resource allocation
+- **API RESPONSE SUCCESS**: Auto-scheduler now returns proper JSON with scheduled entries instead of error messages
+
 **August 7, 2025** - OPERATOR HIERARCHY AND UI FIXES: Fixed critical scheduler bug and enhanced chunked operation display:
 
 **🔧 OPERATOR SELECTION HIERARCHY**:

@@ -1,4 +1,6 @@
 import type { Resource, ResourceUnavailability } from '../shared/schema';
+import { DateTime } from 'luxon';
+import { roundToShiftStart, advancePastShiftEnd } from './shift-utils';
 
 /**
  * Year-round operator availability system for scheduling algorithm
@@ -122,8 +124,8 @@ export class OperatorAvailabilityManager {
         type: 'unavailable',
         reason: unavailable.reason,
         isPartialDay: unavailable.isPartialDay,
-        startTime: unavailable.startTime,
-        endTime: unavailable.endTime,
+        startTime: unavailable.startTime || undefined,
+        endTime: unavailable.endTime || undefined,
       };
     }
 
@@ -294,6 +296,105 @@ export class OperatorAvailabilityManager {
 
     return totalHours;
   }
+
+  /**
+   * Get the next available time window for an operator
+   * Returns the earliest available start and end time for the requested duration
+   */
+  getNextAvailableWindow(
+    operatorId: string,
+    durationHours: number,
+    earliestStart: Date
+  ): { start: Date; end: Date } | null {
+    console.log(`🔍 Finding available window for operator ${operatorId}, duration: ${durationHours}h, earliest: ${earliestStart.toISOString()}`);
+    
+    let dt = roundToShiftStart(DateTime.fromJSDate(earliestStart));
+    let attempts = 0;
+    const maxAttempts = 30; // Prevent infinite loops
+
+    while (attempts < maxAttempts) {
+      console.log(`  🔍 Attempt ${attempts + 1}: Checking time slot ${dt.toISO()}`);
+      
+      // Check if operator is available at this time for the full duration
+      if (this.isOperatorAvailableForDuration(operatorId, dt.toJSDate(), durationHours)) {
+        const end = dt.plus({ hours: durationHours });
+        console.log(`✅ Found available window: ${dt.toISO()} to ${end.toISO()}`);
+        return { 
+          start: dt.toUTC().toJSDate(), 
+          end: end.toUTC().toJSDate() 
+        };
+      }
+      
+      console.log(`  ❌ Time slot not available, moving to next shift`);
+      
+      // Move to next shift boundary
+      dt = advancePastShiftEnd(dt);
+      attempts++;
+    }
+
+    console.warn(`⚠️ Could not find available window for operator ${operatorId} after ${maxAttempts} attempts`);
+    return null;
+  }
+
+  /**
+   * Check if an operator is available for a specific duration starting at a given time
+   */
+  private isOperatorAvailableForDuration(
+    operatorId: string, 
+    startTime: Date, 
+    durationHours: number
+  ): boolean {
+    const endTime = new Date(startTime.getTime() + durationHours * 60 * 60 * 1000);
+    const checkInterval = 1; // Check every hour
+    
+    console.log(`    🔍 Checking operator ${operatorId} availability from ${startTime.toISOString()} for ${durationHours}h`);
+    
+    for (let hour = 0; hour < durationHours; hour += checkInterval) {
+      const checkTime = new Date(startTime.getTime() + hour * 60 * 60 * 1000);
+      const available = this.isOperatorAvailable(operatorId, checkTime);
+      
+      if (!available) {
+        console.log(`    ❌ Operator ${operatorId} not available at ${checkTime.toISOString()}`);
+        return false;
+      }
+    }
+    
+    console.log(`    ✅ Operator ${operatorId} available for full duration`);
+    return true;
+  }
+
+  /**
+   * Lock an operator until a specific time (for resource scheduling)
+   * This prevents double-booking during the scheduling process
+   */
+  lockOperatorUntil(operatorId: string, until: Date): void {
+    // For now, we'll store this in memory
+    // In a production system, this would be persisted to the database
+    const lockKey = `operator_lock_${operatorId}`;
+    
+    // Store the lock time
+    if (!this.operatorLocks) {
+      this.operatorLocks = new Map();
+    }
+    
+    this.operatorLocks.set(lockKey, until);
+    console.log(`🔒 Locked operator ${operatorId} until ${until.toISOString()}`);
+  }
+
+  /**
+   * Check if an operator is currently locked
+   */
+  private isOperatorLocked(operatorId: string, checkTime: Date): boolean {
+    if (!this.operatorLocks) return false;
+    
+    const lockKey = `operator_lock_${operatorId}`;
+    const lockUntil = this.operatorLocks.get(lockKey);
+    
+    return lockUntil ? checkTime < lockUntil : false;
+  }
+
+  // Private field to store operator locks
+  private operatorLocks?: Map<string, Date>;
 }
 
 /**

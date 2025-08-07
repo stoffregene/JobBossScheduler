@@ -21,6 +21,7 @@ import { eq, and, gte, lte, desc, isNull, sql } from "drizzle-orm";
 import type { IStorage } from "./storage-interface";
 import { barFeederService } from "./bar-feeder-service";
 import { OperatorAvailabilityManager, createOperatorAvailabilityManager } from './operator-availability';
+import { scheduleJobsByPriority as autoScheduleJobsByPriority, scheduleJob } from './auto-scheduler';
 
 export class DatabaseStorage implements IStorage {
   // OPTIMIZATION: Cache frequently accessed data to improve performance
@@ -166,6 +167,14 @@ export class DatabaseStorage implements IStorage {
 
   async getJob(id: string): Promise<Job | undefined> {
     const [job] = await db.select().from(jobs).where(eq(jobs.id, id));
+    
+    if (job) {
+      console.log(`🔍 Retrieved job ${job.jobNumber} from DB. Routing field type:`, typeof job.routing, 'Length:', Array.isArray(job.routing) ? job.routing.length : 'not array');
+      console.log(`🔍 Raw routing data:`, JSON.stringify(job.routing));
+    } else {
+      console.log(`❌ Job with ID ${id} not found in database`);
+    }
+    
     return job || undefined;
   }
 
@@ -603,18 +612,136 @@ export class DatabaseStorage implements IStorage {
   }
 
   async scheduleJobsByPriority(maxJobs: number = 100): Promise<{ scheduled: number, failed: number, results: any[] }> {
-    // Basic implementation - can be enhanced
-    return { scheduled: 0, failed: 0, results: [] };
+    try {
+      await this.ensureOperatorAvailabilityManager();
+      
+      // Get unscheduled jobs
+      const unscheduledJobs = await db
+        .select()
+        .from(jobs)
+        .where(eq(jobs.status, 'Unscheduled'))
+        .limit(maxJobs);
+
+      if (unscheduledJobs.length === 0) {
+        return { scheduled: 0, failed: 0, results: [] };
+      }
+
+      const result = await autoScheduleJobsByPriority(unscheduledJobs, this.operatorAvailabilityManager!);
+      
+      return { 
+        scheduled: result.scheduled.length, 
+        failed: result.failed.length, 
+        results: result.scheduled 
+      };
+    } catch (error) {
+      console.error('Error in scheduleJobsByPriority:', error);
+      return { scheduled: 0, failed: 1, results: [] };
+    }
   }
 
   async autoScheduleJob(jobId: string, progressCallback?: (progress: any) => void): Promise<{ success: boolean; scheduleEntries?: ScheduleEntry[]; failureReason?: string; failureDetails?: any }> {
-    // Basic implementation - can be enhanced
-    return { success: false, failureReason: "Auto-scheduling not fully implemented" };
+    try {
+      await this.ensureOperatorAvailabilityManager();
+      
+      // Get the job
+      const job = await this.getJob(jobId);
+      console.log(`🔍 autoScheduleJob: Retrieved job for ID ${jobId}:`, job ? `${job.jobNumber}` : 'NOT FOUND');
+      
+      if (!job) {
+        return { success: false, failureReason: "Job not found" };
+      }
+
+      console.log(`🔍 Job ${job.jobNumber} routing data:`, job.routing);
+
+      // Get routing operations from job.routing (embedded JSON)
+      const routingOps = job.routing || [];
+
+      if (routingOps.length === 0) {
+        console.log(`❌ No routing operations found for job ${job.jobNumber}. Routing field:`, job.routing);
+        return { success: false, failureReason: "No routing operations found for job" };
+      }
+
+      console.log(`✅ Found ${routingOps.length} routing operations for job ${job.jobNumber}`);
+      routingOps.forEach((op, i) => {
+        console.log(`  Operation ${i}: ${op.name} (${op.machineType}) - ${op.estimatedHours}h`);
+      });
+
+      // Use auto-scheduler to schedule this job
+      const { scheduleJobsByPriority: autoScheduler } = await import('./auto-scheduler');
+      const result = await autoScheduler([job], this.operatorAvailabilityManager!);
+
+      console.log(`📊 Auto-scheduler result for job ${job.jobNumber}:`, { 
+        scheduled: result.scheduled.length, 
+        failed: result.failed.length,
+        failedJobs: result.failed
+      });
+
+      if (result.failed.includes(job.jobNumber)) {
+        return { 
+          success: false, 
+          failureReason: "Failed to find suitable time slots for job operations",
+          failureDetails: { job: job.jobNumber, operations: routingOps.length }
+        };
+      }
+
+      const jobScheduleEntries = result.scheduled.filter(entry => entry.jobId === jobId);
+      return { 
+        success: true, 
+        scheduleEntries: jobScheduleEntries
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return { 
+        success: false, 
+        failureReason: "Scheduling error occurred",
+        failureDetails: { error: errorMessage }
+      };
+    }
   }
 
   async manualScheduleJob(jobId: string, startDate: string): Promise<{ success: boolean; scheduleEntries?: ScheduleEntry[]; failureReason?: string }> {
-    // Basic implementation - can be enhanced
-    return { success: false, failureReason: "Manual scheduling not fully implemented" };
+    try {
+      await this.ensureOperatorAvailabilityManager();
+      
+      // Get the job
+      const job = await this.getJob(jobId);
+      if (!job) {
+        return { success: false, failureReason: "Job not found" };
+      }
+
+      // Get routing operations from job.routing (embedded JSON)
+      const routingOps = job.routing || [];
+
+      if (routingOps.length === 0) {
+        return { success: false, failureReason: "No routing operations found for job" };
+      }
+
+      // Update job with manual start date preference
+      const manualStartDate = new Date(startDate);
+      await this.updateJob(jobId, { createdDate: manualStartDate });
+
+      // Use auto-scheduler with the manual start date
+      const { scheduleJobsByPriority: autoScheduler } = await import('./auto-scheduler');
+      const result = await autoScheduler([job], this.operatorAvailabilityManager!);
+
+      if (result.failed.includes(job.jobNumber)) {
+        return { 
+          success: false, 
+          failureReason: "Failed to schedule job at the requested start date"
+        };
+      }
+
+      return { 
+        success: true, 
+        scheduleEntries: result.scheduled.filter(entry => entry.jobId === jobId)
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return { 
+        success: false, 
+        failureReason: errorMessage
+      };
+    }
   }
 
   async dragScheduleJob(jobId: string, machineId: string, startDate: string, shift: number): Promise<{ success: boolean; scheduleEntries?: ScheduleEntry[]; failureReason?: string }> {
