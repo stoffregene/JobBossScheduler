@@ -211,7 +211,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const allResources = await storage.getResources();
       const allUnavailabilities = await storage.getResourceUnavailabilities();
       const allScheduleEntries = await storage.getScheduleEntries();
-      const jobsToSchedule = (await storage.getJobs()).filter(j => j.status === 'Unscheduled');
+      const jobsToSchedule = (await storage.getJobs()).filter(j => j.status === 'Open' || j.status === 'Unscheduled');
 
       if (jobsToSchedule.length === 0) {
         return res.json({ success: true, scheduled: 0, failed: 0, message: "No unscheduled jobs to process." });
@@ -231,7 +231,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const job of jobsToSchedule) {
         const result = await scheduler.scheduleJob(job.id);
         
-        if (result.success && result.scheduledEntries.length > 0) {
+        if (result.success) {
           // Save the new schedule entries to the database
           for (const entry of result.scheduledEntries) {
             await storage.createScheduleEntry(entry);
