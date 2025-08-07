@@ -1,8 +1,13 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, Clock, Package } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertTriangle, Clock, Package, Edit, Trash2, Save, X } from "lucide-react";
 import { format } from "date-fns";
+import { useState } from "react";
+import { apiRequest } from "@/lib/queryClient";
 
 interface OutsourcedOperationData {
   id: string;
@@ -20,9 +25,74 @@ interface OutsourcedOperationData {
 }
 
 export function OutsourcedOperationsWidget() {
+  const queryClient = useQueryClient();
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDates, setEditDates] = useState<{ orderDate: string; dueDate: string }>({
+    orderDate: '',
+    dueDate: ''
+  });
+
   const { data: operations = [], isLoading } = useQuery<OutsourcedOperationData[]>({
     queryKey: ['/api/outsourced-operations/dashboard'],
   });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, orderDate, dueDate }: { id: string; orderDate: string; dueDate: string }) => {
+      const response = await fetch(`/api/outsourced-operations/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderDate, dueDate })
+      });
+      if (!response.ok) throw new Error('Failed to update operation');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/outsourced-operations/dashboard'] });
+      setEditingId(null);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await fetch(`/api/outsourced-operations/${id}`, {
+        method: 'DELETE'
+      });
+      if (!response.ok) throw new Error('Failed to delete operation');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/outsourced-operations/dashboard'] });
+    },
+  });
+
+  const handleEdit = (operation: OutsourcedOperationData) => {
+    setEditingId(operation.id);
+    setEditDates({
+      orderDate: format(new Date(operation.orderDate), 'yyyy-MM-dd'),
+      dueDate: format(new Date(operation.dueDate), 'yyyy-MM-dd')
+    });
+  };
+
+  const handleSave = () => {
+    if (editingId) {
+      updateMutation.mutate({
+        id: editingId,
+        orderDate: editDates.orderDate,
+        dueDate: editDates.dueDate
+      });
+    }
+  };
+
+  const handleDelete = (id: string) => {
+    if (confirm('Are you sure you want to delete this outsourced operation?')) {
+      deleteMutation.mutate(id);
+    }
+  };
+
+  const handleCancel = () => {
+    setEditingId(null);
+    setEditDates({ orderDate: '', dueDate: '' });
+  };
 
   if (isLoading) {
     return (
@@ -89,19 +159,64 @@ export function OutsourcedOperationsWidget() {
                       <AlertTriangle className="h-4 w-4 text-orange-500" />
                     )}
                   </div>
-                  <Badge 
-                    variant={
-                      operation.riskLevel === 'critical' 
-                        ? 'destructive' 
-                        : operation.riskLevel === 'high' 
-                        ? 'secondary' 
-                        : 'outline'
-                    }
-                    data-testid={`risk-badge-${operation.id}`}
-                  >
-                    {operation.riskLevel === 'critical' ? 'Critical Risk' : 
-                     operation.riskLevel === 'high' ? 'High Risk' : 'Normal'}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge 
+                      variant={
+                        operation.riskLevel === 'critical' 
+                          ? 'destructive' 
+                          : operation.riskLevel === 'high' 
+                          ? 'secondary' 
+                          : 'outline'
+                      }
+                      data-testid={`risk-badge-${operation.id}`}
+                    >
+                      {operation.riskLevel === 'critical' ? 'Critical Risk' : 
+                       operation.riskLevel === 'high' ? 'High Risk' : 'Normal'}
+                    </Badge>
+                    <div className="flex gap-1">
+                      {editingId === operation.id ? (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={handleSave}
+                            disabled={updateMutation.isPending}
+                            data-testid={`save-operation-${operation.id}`}
+                          >
+                            <Save className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={handleCancel}
+                            data-testid={`cancel-operation-${operation.id}`}
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleEdit(operation)}
+                            data-testid={`edit-operation-${operation.id}`}
+                          >
+                            <Edit className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleDelete(operation.id)}
+                            disabled={deleteMutation.isPending}
+                            data-testid={`delete-operation-${operation.id}`}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 text-sm">
@@ -125,9 +240,19 @@ export function OutsourcedOperationsWidget() {
                       <Clock className="h-3 w-3" />
                       Send Date
                     </div>
-                    <div className="font-medium" data-testid={`send-date-${operation.id}`}>
-                      {format(new Date(operation.orderDate), 'MMM d')}
-                    </div>
+                    {editingId === operation.id ? (
+                      <Input
+                        type="date"
+                        value={editDates.orderDate}
+                        onChange={(e) => setEditDates(prev => ({ ...prev, orderDate: e.target.value }))}
+                        className="h-8 text-sm"
+                        data-testid={`edit-send-date-${operation.id}`}
+                      />
+                    ) : (
+                      <div className="font-medium" data-testid={`send-date-${operation.id}`}>
+                        {format(new Date(operation.orderDate), 'MMM d')}
+                      </div>
+                    )}
                   </div>
                   <div>
                     <div className="text-muted-foreground">Lead Time</div>
@@ -137,9 +262,19 @@ export function OutsourcedOperationsWidget() {
                   </div>
                   <div>
                     <div className="text-muted-foreground">Due Back</div>
-                    <div className="font-medium" data-testid={`due-date-${operation.id}`}>
-                      {format(new Date(operation.dueDate), 'MMM d')}
-                    </div>
+                    {editingId === operation.id ? (
+                      <Input
+                        type="date"
+                        value={editDates.dueDate}
+                        onChange={(e) => setEditDates(prev => ({ ...prev, dueDate: e.target.value }))}
+                        className="h-8 text-sm"
+                        data-testid={`edit-due-date-${operation.id}`}
+                      />
+                    ) : (
+                      <div className="font-medium" data-testid={`due-date-${operation.id}`}>
+                        {format(new Date(operation.dueDate), 'MMM d')}
+                      </div>
+                    )}
                   </div>
                 </div>
 

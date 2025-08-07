@@ -801,6 +801,14 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
+  async deleteOutsourcedOperation(opId: string): Promise<boolean> {
+    const result = await db
+      .delete(outsourcedOperations)
+      .where(eq(outsourcedOperations.id, opId))
+      .returning();
+    return result.length > 0;
+  }
+
   // Get outsourced operations with job details and risk assessment for dashboard
   async getOutsourcedOperationsForDashboard(): Promise<any[]> {
     const operations = await db

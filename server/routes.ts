@@ -1501,5 +1501,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update outsourced operation dates
+  app.put("/api/outsourced-operations/:id", async (req, res) => {
+    try {
+      const { orderDate, dueDate } = req.body;
+      
+      if (!orderDate || !dueDate) {
+        return res.status(400).json({ message: "Order date and due date are required" });
+      }
+
+      const updated = await storage.updateOutsourcedOperation(req.params.id, {
+        orderDate: new Date(orderDate),
+        dueDate: new Date(dueDate)
+      });
+      
+      if (!updated) {
+        return res.status(404).json({ message: "Outsourced operation not found" });
+      }
+
+      res.json({ message: "Outsourced operation updated successfully", operation: updated });
+    } catch (error) {
+      console.error('Error updating outsourced operation:', error);
+      res.status(500).json({ message: "Failed to update outsourced operation" });
+    }
+  });
+
+  // Delete outsourced operation
+  app.delete("/api/outsourced-operations/:id", async (req, res) => {
+    try {
+      const deleted = await storage.deleteOutsourcedOperation(req.params.id);
+      
+      if (!deleted) {
+        return res.status(404).json({ message: "Outsourced operation not found" });
+      }
+
+      res.json({ message: "Outsourced operation deleted successfully" });
+    } catch (error) {
+      console.error('Error deleting outsourced operation:', error);
+      res.status(500).json({ message: "Failed to delete outsourced operation" });
+    }
+  });
+
   return httpServer;
 }
