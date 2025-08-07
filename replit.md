@@ -6,6 +6,13 @@ This is a comprehensive Manufacturing Resource Planning (MRP) system designed fo
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
+## AI Agent Instructions
+
+### Prompt: Implement Shift Capacity Load Balancing
+This update implements a new shift-based load balancing system to distribute work more evenly between the 1st and 2nd shifts based on their relative capacity and efficiency.
+
+This update requires creating one new file, replacing one existing file, and updating one API endpoint.
+
 ## Recent Changes
 
 **August 7, 2025** - OPERATOR HIERARCHY AND UI FIXES: Fixed critical scheduler bug and enhanced chunked operation display:
