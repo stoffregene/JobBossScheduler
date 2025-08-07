@@ -77,7 +77,7 @@ export class DatabaseStorage implements IStorage {
       console.log('Initializing default manufacturing data...');
 
       // Create default machines
-      const defaultMachines: InsertMachine[] = [
+      const defaultMachines = [
         {
           machineId: "HAAS-VF2",
           name: "Haas VF-2 VMC",
@@ -116,7 +116,7 @@ export class DatabaseStorage implements IStorage {
       // Create default resources (operators) after machines are created
       const createdMachines = await db.insert(machines).values(defaultMachines).returning();
 
-      const defaultResources: InsertResource[] = [
+      const defaultResources = [
         {
           name: "John Smith",
           employeeId: "EMP001",
@@ -166,6 +166,11 @@ export class DatabaseStorage implements IStorage {
 
   async getJob(id: string): Promise<Job | undefined> {
     const [job] = await db.select().from(jobs).where(eq(jobs.id, id));
+    return job || undefined;
+  }
+
+  async getJobByNumber(jobNumber: string): Promise<Job | undefined> {
+    const [job] = await db.select().from(jobs).where(eq(jobs.jobNumber, jobNumber));
     return job || undefined;
   }
 
@@ -240,6 +245,14 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  async getMachinesBySubstitutionGroup(substitutionGroup: string): Promise<Machine[]> {
+    return await db
+      .select()
+      .from(machines)
+      .where(eq(machines.substitutionGroup, substitutionGroup))
+      .orderBy(machines.machineId);
+  }
+
   // Schedule Entries
   async getScheduleEntries(): Promise<ScheduleEntry[]> {
     if (this.scheduleCache && Date.now() < this.scheduleCacheExpiry) {
@@ -300,6 +313,14 @@ export class DatabaseStorage implements IStorage {
   async clearAllScheduleEntries(): Promise<void> {
     await db.delete(scheduleEntries);
     this.scheduleCache = null;
+  }
+
+  async getScheduleEntriesForMachine(machineId: string): Promise<ScheduleEntry[]> {
+    return await db
+      .select()
+      .from(scheduleEntries)
+      .where(eq(scheduleEntries.machineId, machineId))
+      .orderBy(scheduleEntries.startTime);
   }
 
   // Alerts

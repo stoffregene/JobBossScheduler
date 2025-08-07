@@ -205,7 +205,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/jobs/schedule-all", async (req, res) => {
     try {
-      console.log("🎯 Starting priority-based scheduling for all jobs...");
+      // Use existing storage instance
 
       // 1. Fetch ALL data required by the services upfront
       const allResources = await storage.getResources();
@@ -239,20 +239,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
             await storage.createScheduleEntry(entry);
           }
           await storage.updateJob(job.id, { status: 'Scheduled' });
+          
+          // Update the capacity manager with the newly scheduled entries
           shiftCapacityManager.addEntries(result.scheduledEntries);
+          
           scheduledCount++;
         } else {
           failedCount++;
-          console.error(`Failed to schedule job ${job.jobNumber}: ${result.failureReason}`);
+          console.error(`Failed to schedule job ${job.jobNumber}: ${result.failureReason}`, result);
         }
       }
 
-      broadcast({ type: 'all_jobs_scheduled', data: { scheduled: scheduledCount, failed: failedCount } });
       res.json({ success: true, scheduled: scheduledCount, failed: failedCount });
 
     } catch (error) {
       console.error("Critical error during full scheduling run:", error);
-      res.status(500).json({ message: "Failed to schedule all jobs", error: (error as Error).message });
+      res.status(500).json({ success: false, message: 'A critical error occurred during the scheduling run.' });
     }
   });
 
