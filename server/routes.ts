@@ -211,7 +211,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const allResources = await storage.getResources();
       const allUnavailabilities = await storage.getResourceUnavailabilities();
       const allScheduleEntries = await storage.getScheduleEntries();
-      const jobsToSchedule = (await storage.getJobs()).filter(j => j.status !== 'Scheduled' && j.status !== 'Complete');
+      const jobsToSchedule = (await storage.getJobs()).filter(j => j.status === 'Unscheduled');
 
       if (jobsToSchedule.length === 0) {
         return res.json({ success: true, scheduled: 0, failed: 0, message: "No unscheduled jobs to process." });
@@ -249,7 +249,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     } catch (error) {
       console.error("Critical error during full scheduling run:", error);
-      res.status(500).json({ message: "Failed to schedule all jobs", error: error.message });
+      res.status(500).json({ message: "Failed to schedule all jobs", error: (error as Error).message });
     }
   });
 
