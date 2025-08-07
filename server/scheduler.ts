@@ -85,7 +85,7 @@ export class JobScheduler {
   }
   
   private async scheduleOperationInChunks(job: Job, operation: RoutingOperationType, searchFromDate: Date) {
-    let remainingDurationMs = (parseFloat(operation.estimatedHours) + (parseFloat(operation.setupHours) || 0)) * 3600000;
+    let remainingDurationMs = operation.estimatedHours * 3600000; // RoutingOperationType.estimatedHours is already a number
     let currentTime = new Date(searchFromDate);
     const scheduledChunks: ScheduleChunk[] = [];
     let lockedMachine: Machine | null = null, lockedResource: Resource | null = null;
@@ -164,13 +164,28 @@ export class JobScheduler {
 
   private async findAvailableResourceForTime(operation: RoutingOperationType, machine: Machine, time: Date, lockedResource: Resource | null, shiftsToTry: (1 | 2)[]) {
     for (const shift of shiftsToTry) {
-      const availableOperators = this.operatorManager.getAvailableOperators(time, shift, undefined, [machine.machineId]);
+      console.log(`    🔍 Checking shift ${shift} at ${time.toISOString()}`);
+      
+      // Debug: Check operator availability without machine filter first
+      const allAvailableOps = this.operatorManager.getAvailableOperators(time, shift, undefined, []);
+      console.log(`    📊 Total available operators in shift ${shift}: ${allAvailableOps.length}`);
+      
+      // Fix: Don't filter by machine since all operators have null machineIds
+      const availableOperators = this.operatorManager.getAvailableOperators(time, shift, undefined, []);
+      console.log(`    🤖 Operators available for ${machine.machineId} (no machine filter): ${availableOperators.length}`);
+      
+      if (availableOperators.length === 0) {
+        console.log(`    ❌ No operators found for machine ${machine.machineId} - checking machine compatibility`);
+        // Let's try without machine filter to see if there are ANY operators
+        const anyOperators = this.operatorManager.getAvailableOperators(time, shift, undefined, []);
+        console.log(`    🔧 Debug - operators without machine filter: ${anyOperators.map(op => op.name).join(', ')}`);
+        continue;
+      }
       
       const qualifiedOperators = availableOperators.filter(op => {
         if (lockedResource && op.id !== lockedResource.id) return false;
         // RoutingOperationType doesn't have requiredSkills, so always return true for now
         return true;
-
       });
 
       if (qualifiedOperators.length > 0) {
@@ -178,6 +193,7 @@ export class JobScheduler {
         const preferredOperator = qualifiedOperators.find(op => op.role === 'Operator') || 
                                   qualifiedOperators.find(op => op.role === 'Shift Lead') || 
                                   qualifiedOperators[0];
+        console.log(`    ✅ Found operator: ${preferredOperator.name} (${preferredOperator.role}) for shift ${shift}`);
         return { resource: preferredOperator, shift };
       }
     }
