@@ -153,7 +153,7 @@ export class DatabaseStorage implements IStorage {
 
       await db.insert(resources).values(defaultResources);
 
-      console.log('Default manufacturing data initialized');
+      console.log('Default manufacturing data initialized successfully');
     } catch (error) {
       console.error('Error initializing default data:', error);
     }
@@ -185,9 +185,6 @@ export class DatabaseStorage implements IStorage {
 
   async deleteJob(id: string): Promise<boolean> {
     try {
-      // Delete related entries first
-      await db.delete(scheduleEntries).where(eq(scheduleEntries.jobId, id));
-      await db.delete(alerts).where(eq(alerts.jobId, id));
       await db.delete(jobs).where(eq(jobs.id, id));
       return true;
     } catch (error) {
@@ -255,26 +252,6 @@ export class DatabaseStorage implements IStorage {
     return entries;
   }
 
-  async getScheduleEntriesForJob(jobId: string): Promise<ScheduleEntry[]> {
-    return await db
-      .select()
-      .from(scheduleEntries)
-      .where(eq(scheduleEntries.jobId, jobId))
-      .orderBy(scheduleEntries.operationSequence);
-  }
-
-  async getScheduleEntriesByJobId(jobId: string): Promise<ScheduleEntry[]> {
-    return this.getScheduleEntriesForJob(jobId);
-  }
-
-  async getScheduleEntriesForMachine(machineId: string): Promise<ScheduleEntry[]> {
-    return await db
-      .select()
-      .from(scheduleEntries)
-      .where(eq(scheduleEntries.machineId, machineId))
-      .orderBy(scheduleEntries.startTime);
-  }
-
   async getScheduleEntriesInDateRange(startDate: Date, endDate: Date): Promise<ScheduleEntry[]> {
     return await db
       .select()
@@ -282,7 +259,7 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           gte(scheduleEntries.startTime, startDate),
-          lte(scheduleEntries.endTime, endDate)
+          lte(scheduleEntries.startTime, endDate)
         )
       )
       .orderBy(scheduleEntries.startTime);
@@ -311,6 +288,7 @@ export class DatabaseStorage implements IStorage {
   async deleteScheduleEntry(id: string): Promise<boolean> {
     try {
       await db.delete(scheduleEntries).where(eq(scheduleEntries.id, id));
+      // Clear cache
       this.scheduleCache = null;
       return true;
     } catch (error) {
@@ -439,50 +417,38 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getResourceUnavailabilitiesInDateRange(startDate: Date, endDate: Date): Promise<ResourceUnavailability[]> {
-    return await db
-      .select()
-      .from(resourceUnavailability)
-      .where(
-        and(
-          gte(resourceUnavailability.startDate, startDate),
-          lte(resourceUnavailability.endDate, endDate)
-        )
-      )
-      .orderBy(resourceUnavailability.startDate);
+  // Material Orders
+  async getMaterialOrders(): Promise<MaterialOrder[]> {
+    return await db.select().from(materialOrders).orderBy(materialOrders.dueDate);
   }
 
-  async getJobsRequiringRescheduling(resourceIds: string[], startDate: Date, endDate: Date, shifts: number[]): Promise<Job[]> {
-    // Find all schedule entries affected by the resource unavailability
-    const affectedMachines = await db
-      .select()
-      .from(resources)
-      .where(sql`${resources.id} = ANY(${resourceIds})`);
-    
-    const machineIds = affectedMachines.map(m => m.workCenter).filter(Boolean);
-    
-    if (machineIds.length === 0) return [];
-
-    const affectedScheduleEntries = await db
-      .select()
-      .from(scheduleEntries)
-      .where(
-        and(
-          sql`${scheduleEntries.machineId} = ANY(${machineIds})`,
-          gte(scheduleEntries.startTime, startDate),
-          lte(scheduleEntries.endTime, endDate),
-          shifts.length > 0 ? sql`${scheduleEntries.shift} = ANY(${shifts})` : sql`1=1`
-        )
-      );
-
-    const jobIds = [...new Set(affectedScheduleEntries.map(entry => entry.jobId))];
-    
-    if (jobIds.length === 0) return [];
-
+  async getMaterialOrdersForJob(jobId: string): Promise<MaterialOrder[]> {
     return await db
       .select()
-      .from(jobs)
-      .where(sql`${jobs.id} = ANY(${jobIds})`);
+      .from(materialOrders)
+      .where(eq(materialOrders.jobId, jobId))
+      .orderBy(materialOrders.dueDate);
+  }
+
+  async createMaterialOrder(order: InsertMaterialOrder): Promise<MaterialOrder> {
+    const [created] = await db.insert(materialOrders).values(order).returning();
+    return created;
+  }
+
+  async updateMaterialOrder(id: string, updates: Partial<MaterialOrder>): Promise<MaterialOrder | undefined> {
+    const [order] = await db
+      .update(materialOrders)
+      .set(updates)
+      .where(eq(materialOrders.id, id))
+      .returning();
+    return order || undefined;
+  }
+
+  async markMaterialReceived(id: string): Promise<MaterialOrder | undefined> {
+    return this.updateMaterialOrder(id, { 
+      status: "Closed",
+      receivedDate: new Date()
+    });
   }
 
   // Routing Operations
@@ -547,20 +513,20 @@ export class DatabaseStorage implements IStorage {
       : 0;
 
     return {
-      totalJobs: allJobs.length,
-      scheduledJobs: allJobs.filter(job => job.status === 'Scheduled').length,
-      totalMachines: allMachines.length,
-      availableMachines: allMachines.filter(machine => machine.status === 'Available').length,
+      activeJobs: allJobs.filter(job => job.status === 'Scheduled' || job.status === 'In Production').length,
       utilization,
-      alerts: allAlerts.filter(alert => !alert.isRead).length,
-      jobsByStatus: {
-        Open: allJobs.filter(job => job.status === 'Open').length,
-        Planning: allJobs.filter(job => job.status === 'Planning').length,
-        Scheduled: allJobs.filter(job => job.status === 'Scheduled').length,
-        'In Production': allJobs.filter(job => job.status === 'In Production').length,
-        Complete: allJobs.filter(job => job.status === 'Complete').length,
-        Hold: allJobs.filter(job => job.status === 'Hold').length
-      }
+      lateJobs: allJobs.filter(job => new Date(job.dueDate) < now && job.status !== 'Complete').length,
+      atRiskJobs: allJobs.filter(job => {
+        const dueDate = new Date(job.dueDate);
+        const daysLeft = (dueDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000);
+        return daysLeft <= 7 && daysLeft > 0 && job.status !== 'Complete';
+      }).length,
+      customerLateJobs: allJobs.filter(job => job.status === 'Customer Late').length,
+      companyLateJobs: allJobs.filter(job => job.status === 'Company Late').length,
+      totalCapacity: allMachines.length * 16, // 16 hours per day (2 shifts x 8 hours)
+      usedCapacity: todaySchedule.length,
+      shift1Resources: 0, // TODO: Calculate from resources
+      shift2Resources: 0  // TODO: Calculate from resources
     };
   }
 
@@ -577,12 +543,12 @@ export class DatabaseStorage implements IStorage {
     if (compatibleMachines.length === 0) return null;
 
     // Simple scoring: prefer machines with higher efficiency
-    const bestMachine = compatibleMachines.sort((a, b) => (b.efficiency || 1) - (a.efficiency || 1))[0];
+    const bestMachine = compatibleMachines.sort((a, b) => parseFloat(b.efficiencyFactor) - parseFloat(a.efficiencyFactor))[0];
     
     return {
       machine: bestMachine,
-      adjustedHours: parseFloat(operation.estimatedHours.toString()) / (bestMachine.efficiency || 1),
-      score: bestMachine.efficiency || 1
+      adjustedHours: parseFloat(operation.estimatedHours.toString()) / parseFloat(bestMachine.efficiencyFactor),
+      score: parseFloat(bestMachine.efficiencyFactor)
     };
   }
 
@@ -674,7 +640,7 @@ export class DatabaseStorage implements IStorage {
 
   async markOutsourcedOperationComplete(opId: string): Promise<OutsourcedOperation | null> {
     return this.updateOutsourcedOperation(opId, { 
-      status: "Complete",
+      status: "Completed",
       completedDate: new Date()
     });
   }
