@@ -8,6 +8,15 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+**August 7, 2025** - OPERATOR HIERARCHY AND UI FIXES: Fixed critical scheduler bug and enhanced chunked operation display:
+
+**🔧 OPERATOR SELECTION HIERARCHY**:
+- **ROLE PRIORITIZATION**: Enhanced scheduler to prefer Operators > Shift Leads > Supervisors when assigning resources
+- **FIXED SUPERVISOR OVERUSE**: Resolved issue where supervisors were assigned instead of available operators
+- **SEQUENCE MAPPING BUG**: Fixed critical scheduler bug where operation sequence 0 was incorrectly converted to 10
+- **CHUNKED OPERATION DISPLAY**: Enhanced job details modal to properly display multi-chunk operations with full timing breakdown
+- **TIMEZONE CONSISTENCY**: All schedule times properly display in US Central timezone with correct chunking details
+
 **August 7, 2025** - SHIFT-BASED LOAD BALANCING IMPLEMENTATION: Enhanced scheduling system with intelligent shift capacity management and optimal resource distribution:
 
 **🎯 INTELLIGENT SHIFT LOAD BALANCING**:

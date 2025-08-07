@@ -147,7 +147,13 @@ export class JobScheduler {
         if (!operation.requiredSkills || operation.requiredSkills.length === 0) return true;
         return operation.requiredSkills.every((skill: string) => op.skills.includes(skill));
       });
-      if (qualifiedOperators.length > 0) return { resource: qualifiedOperators[0], shift };
+      if (qualifiedOperators.length > 0) {
+        // Prefer Operators over Supervisors and other roles
+        const preferredOperator = qualifiedOperators.find(op => op.role === 'Operator') || 
+                                  qualifiedOperators.find(op => op.role === 'Shift Lead') || 
+                                  qualifiedOperators[0];
+        return { resource: preferredOperator, shift };
+      }
     }
     return null;
   }

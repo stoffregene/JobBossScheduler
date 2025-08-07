@@ -264,7 +264,7 @@ export default function JobDetailsModal({ jobId, onClose }: JobDetailsModalProps
                                     <div className="text-xs text-gray-500 mt-1">
                                       {scheduledEntries.map((entry: any, idx: number) => (
                                         <div key={idx}>
-                                          Chunk {idx + 1}: {format(new Date(entry.startTime), 'M/d h:mm a')} - {format(new Date(entry.endTime), 'M/d h:mm a')}
+                                          Chunk {idx + 1}: {format(new Date(entry.startTime), 'M/d/yyyy, h:mm a')} - {format(new Date(entry.endTime), 'M/d/yyyy, h:mm a')}
                                         </div>
                                       ))}
                                     </div>
@@ -283,25 +283,7 @@ export default function JobDetailsModal({ jobId, onClose }: JobDetailsModalProps
                           {operation.notes}
                         </div>
                       )}
-                      {scheduledEntry && (
-                        <div className="mt-2 text-xs text-gray-500">
-                          Scheduled: {new Date(scheduledEntry.startTime).toLocaleString('en-US', {
-                            year: 'numeric',
-                            month: 'numeric', 
-                            day: 'numeric',
-                            hour: 'numeric',
-                            minute: 'numeric',
-                            timeZone: 'America/Chicago'
-                          })} - {new Date(scheduledEntry.endTime).toLocaleString('en-US', {
-                            year: 'numeric',
-                            month: 'numeric',
-                            day: 'numeric', 
-                            hour: 'numeric',
-                            minute: 'numeric',
-                            timeZone: 'America/Chicago'
-                          })}
-                        </div>
-                      )}
+
                     </div>
                   );
                 })}
