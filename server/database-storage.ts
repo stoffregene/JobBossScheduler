@@ -200,9 +200,17 @@ export class DatabaseStorage implements IStorage {
 
   async deleteAllJobs(): Promise<number> {
     try {
-      // Clear related data first
-      await this.clearAllScheduleEntries();
-      await db.delete(alerts);
+      // Use a transaction to delete all dependent records safely
+      await db.transaction(async (tx) => {
+        // Delete all dependent records that reference jobs
+        await tx.delete(scheduleEntries); // schedule_entries references jobs
+        await tx.delete(alerts); // alerts references jobs  
+        await tx.delete(materialOrders); // material_orders references jobs
+        await tx.delete(routingOperations); // routing_operations references jobs
+        await tx.delete(outsourcedOperations); // outsourced_operations references jobs
+      });
+      
+      // Now safe to delete jobs
       const result = await db.delete(jobs);
       return result.rowCount || 0;
     } catch (error) {
