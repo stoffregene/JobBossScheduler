@@ -266,7 +266,7 @@ export default function JobDetailsModal({ jobId, onClose }: JobDetailsModalProps
                           )}
                         </div>
                         <div className="text-sm text-gray-700">
-                          {operation.estimatedHours ? operation.estimatedHours.toFixed(1) : 'Not set'} hours
+                          {operation.estimatedHours ? Number(operation.estimatedHours).toFixed(1) : 'Not set'} hours
                         </div>
                       </div>
                       {operation.notes && (
