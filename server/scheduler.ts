@@ -45,7 +45,7 @@ export class JobScheduler {
         machineType: op.machineType,
         estimatedHours: op.estimatedHours || 0,
         setupHours: 0, // RoutingOperationType doesn't have setupHours
-        sequence: op.sequence || 10,
+        sequence: op.sequence !== undefined ? op.sequence : 10, // Keep original sequence, default to 10 only if undefined
         compatibleMachines: op.compatibleMachines || []
       };
 

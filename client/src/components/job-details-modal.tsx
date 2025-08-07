@@ -188,27 +188,13 @@ export default function JobDetailsModal({ jobId, onClose }: JobDetailsModalProps
                   // Find ALL scheduled entries for this operation (may be chunked)
                   const scheduledEntries = scheduleEntries?.filter((entry: any) => 
                     entry.operationSequence === operation.sequence
-                  ) || [];
+                  ).sort((a: any, b: any) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()) || [];
+                  
                   const scheduledEntry = scheduledEntries[0]; // For compatibility with existing code
                   const assignedResource = scheduledEntry?.assignedResourceId && resources ? 
                     resources.find((r: any) => r.id === scheduledEntry.assignedResourceId) : null;
                   
-                  // Debug logging for troubleshooting
-                  if (job?.jobNumber === '59902' || job?.jobNumber === '58905') {
-                    console.log(`${job.jobNumber} Debug - Operation ${operation.sequence}:`, {
-                      jobId: job.id,
-                      operationName: operation.name,
-                      machineType: operation.machineType,
-                      scheduledEntry: scheduledEntry ? {
-                        id: scheduledEntry.id,
-                        jobId: scheduledEntry.jobId,
-                        operationSequence: scheduledEntry.operationSequence,
-                        assignedResourceId: scheduledEntry.assignedResourceId
-                      } : null,
-                      assignedResource: assignedResource ? {name: assignedResource.name, role: assignedResource.role} : null,
-                      allScheduleEntriesForJob: scheduleEntries.length
-                    });
-                  }
+
                   
                   // Find compatible resources for this operation
                   const compatibleResources = resources?.filter((resource: any) => {
@@ -274,6 +260,15 @@ export default function JobDetailsModal({ jobId, onClose }: JobDetailsModalProps
                               {scheduledEntries.length > 0 && (
                                 <div className="text-xs text-gray-600">
                                   Scheduled: {format(new Date(scheduledEntries[0].startTime), 'M/d/yyyy, h:mm a')} - {format(new Date(scheduledEntries[scheduledEntries.length - 1].endTime), 'M/d/yyyy, h:mm a')}
+                                  {scheduledEntries.length > 1 && (
+                                    <div className="text-xs text-gray-500 mt-1">
+                                      {scheduledEntries.map((entry: any, idx: number) => (
+                                        <div key={idx}>
+                                          Chunk {idx + 1}: {format(new Date(entry.startTime), 'M/d h:mm a')} - {format(new Date(entry.endTime), 'M/d h:mm a')}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
                                 </div>
                               )}
                             </div>
