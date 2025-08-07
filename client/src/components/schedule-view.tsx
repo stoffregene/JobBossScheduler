@@ -427,40 +427,30 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
                 });
               });
 
-              // Calculate overlap layers to prevent job overlapping
+              // Simple vertical stacking - assign each job to its own layer
               const calculateJobLayers = (blocks: any[]) => {
-                const layers: { [key: number]: any[] } = { 1: [], 2: [] }; // Separate by shift
+                // Sort jobs by start time within each shift
+                const shift1Jobs = blocks.filter(b => b.shift === 1).sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+                const shift2Jobs = blocks.filter(b => b.shift === 2).sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
                 
-                blocks.forEach(block => {
-                  const shift = block.shift || 1;
-                  const shiftBlocks = layers[shift];
-                  
-                  let layerIndex = 0;
-                  let placed = false;
-                  
-                  // Find the first layer where this block doesn't overlap
-                  while (!placed) {
-                    const conflictFound = shiftBlocks.some(existingBlock => 
-                      existingBlock.layerIndex === layerIndex && 
-                      block.startDate < existingBlock.endDate && 
-                      block.endDate > existingBlock.startDate
-                    );
-                    
-                    if (!conflictFound) {
-                      block.layerIndex = layerIndex;
-                      shiftBlocks.push(block);
-                      placed = true;
-                    } else {
-                      layerIndex++;
-                    }
-                  }
+                // Assign layer index to each job (simple sequential stacking)
+                shift1Jobs.forEach((block, index) => {
+                  block.layerIndex = index;
+                  console.log(`📋 Shift 1 - Job ${block.job?.jobNumber} → Layer ${index}`);
                 });
                 
-                const maxShift1Layers = Math.max(1, layers[1].filter((_, i, arr) => arr.some(b => b.layerIndex === i)).length);
-                const maxShift2Layers = Math.max(1, layers[2].filter((_, i, arr) => arr.some(b => b.layerIndex === i)).length);
+                shift2Jobs.forEach((block, index) => {
+                  block.layerIndex = index;
+                  console.log(`📋 Shift 2 - Job ${block.job?.jobNumber} → Layer ${index}`);
+                });
+                
+                const maxShift1Layers = Math.max(1, shift1Jobs.length);
+                const maxShift2Layers = Math.max(1, shift2Jobs.length);
+                
+                console.log(`📊 Machine has ${shift1Jobs.length} jobs in shift 1, ${shift2Jobs.length} jobs in shift 2`);
                 
                 return { 
-                  blocks: [...layers[1], ...layers[2]], 
+                  blocks: [...shift1Jobs, ...shift2Jobs], 
                   maxShift1Layers,
                   maxShift2Layers,
                   totalLayers: maxShift1Layers + maxShift2Layers
@@ -494,7 +484,7 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
                     className="flex flex-1 relative" 
                     style={{ 
                       minWidth: '600px',
-                      height: `${Math.max(48, layeredBlocks.totalLayers * 28 + 8)}px` // Dynamic height: 28px per layer + 8px padding
+                      height: `${Math.max(60, layeredBlocks.totalLayers * 32 + 16)}px` // Dynamic height: 32px per layer + 16px padding
                     }}
                   >
                     {/* Shift background shading */}
@@ -517,12 +507,12 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
                             {/* 1st shift background (lighter) */}
                             <div 
                               className="bg-blue-50 dark:bg-blue-950/30 border-b border-gray-100 dark:border-gray-700"
-                              style={{ height: `${layeredBlocks.maxShift1Layers * 28}px` }}
+                              style={{ height: `${layeredBlocks.maxShift1Layers * 32}px` }}
                             ></div>
                             {/* 2nd shift background (darker) */}
                             <div 
                               className="bg-blue-100 dark:bg-blue-900/50"
-                              style={{ height: `${layeredBlocks.maxShift2Layers * 28}px` }}
+                              style={{ height: `${layeredBlocks.maxShift2Layers * 32}px` }}
                             ></div>
                           </div>
                         );
@@ -559,17 +549,24 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
                         if (widthPercent <= 0) return null;
                         
                         // Determine vertical position based on shift and layer
-                        const jobHeight = 24; // Height of each job bar in pixels
+                        const jobHeight = 28; // Height of each job bar in pixels
                         const jobGap = 4; // Gap between job bars
                         
                         let topOffset;
+                        const layerIndex = block.layerIndex || 0;
+                        
                         if (block.shift === 1) {
                           // 1st shift: stack from top
-                          topOffset = 2 + (block.layerIndex * (jobHeight + jobGap));
+                          topOffset = 2 + (layerIndex * (jobHeight + jobGap));
                         } else {
                           // 2nd shift: stack from after 1st shift area
-                          const shift1Height = layeredBlocks.maxShift1Layers * (jobHeight + jobGap);
-                          topOffset = shift1Height + 2 + (block.layerIndex * (jobHeight + jobGap));
+                          const shift1Height = layeredBlocks.maxShift1Layers * 32;
+                          topOffset = shift1Height + 2 + (layerIndex * (jobHeight + jobGap));
+                        }
+                        
+                        // Debug logging for positioning
+                        if (blockIndex < 5) { // Only log first few to avoid spam
+                          console.log(`🎯 Job ${block.job?.jobNumber}: shift=${block.shift}, layerIndex=${layerIndex}, topOffset=${topOffset}px`);
                         }
                         
                         return (
