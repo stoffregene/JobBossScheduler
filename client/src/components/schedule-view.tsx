@@ -426,6 +426,48 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
                   daySpan: Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
                 });
               });
+
+              // Calculate overlap layers to prevent job overlapping
+              const calculateJobLayers = (blocks: any[]) => {
+                const layers: { [key: number]: any[] } = { 1: [], 2: [] }; // Separate by shift
+                
+                blocks.forEach(block => {
+                  const shift = block.shift || 1;
+                  const shiftBlocks = layers[shift];
+                  
+                  let layerIndex = 0;
+                  let placed = false;
+                  
+                  // Find the first layer where this block doesn't overlap
+                  while (!placed) {
+                    const conflictFound = shiftBlocks.some(existingBlock => 
+                      existingBlock.layerIndex === layerIndex && 
+                      block.startDate < existingBlock.endDate && 
+                      block.endDate > existingBlock.startDate
+                    );
+                    
+                    if (!conflictFound) {
+                      block.layerIndex = layerIndex;
+                      shiftBlocks.push(block);
+                      placed = true;
+                    } else {
+                      layerIndex++;
+                    }
+                  }
+                });
+                
+                const maxShift1Layers = Math.max(1, layers[1].filter((_, i, arr) => arr.some(b => b.layerIndex === i)).length);
+                const maxShift2Layers = Math.max(1, layers[2].filter((_, i, arr) => arr.some(b => b.layerIndex === i)).length);
+                
+                return { 
+                  blocks: [...layers[1], ...layers[2]], 
+                  maxShift1Layers,
+                  maxShift2Layers,
+                  totalLayers: maxShift1Layers + maxShift2Layers
+                };
+              };
+              
+              const layeredBlocks = calculateJobLayers(jobBlocks);
               
               return (
                 <div key={machine.id} className={`flex gap-0 items-center ${(scheduleView.type === "month" || scheduleView.type === "hour") || isFullscreen ? "overflow-x-auto" : ""}`}>
@@ -447,8 +489,14 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
                     <div className="text-xs text-muted-foreground truncate">{machine.name}</div>
                   </div>
                   
-                  {/* Continuous timeline container */}
-                  <div className="flex flex-1 relative h-12" style={{ minWidth: '600px' }}>
+                  {/* Continuous timeline container with dynamic height */}
+                  <div 
+                    className="flex flex-1 relative" 
+                    style={{ 
+                      minWidth: '600px',
+                      height: `${Math.max(48, layeredBlocks.totalLayers * 28 + 8)}px` // Dynamic height: 28px per layer + 8px padding
+                    }}
+                  >
                     {/* Shift background shading */}
                     <div className="absolute inset-0 flex flex-1">
                       {weekDays.map((day, dayIndex) => {
@@ -467,9 +515,15 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
                             }}
                           >
                             {/* 1st shift background (lighter) */}
-                            <div className="h-6 bg-blue-50 dark:bg-blue-950/30 border-b border-gray-100 dark:border-gray-700"></div>
+                            <div 
+                              className="bg-blue-50 dark:bg-blue-950/30 border-b border-gray-100 dark:border-gray-700"
+                              style={{ height: `${layeredBlocks.maxShift1Layers * 28}px` }}
+                            ></div>
                             {/* 2nd shift background (darker) */}
-                            <div className="h-6 bg-blue-100 dark:bg-blue-900/50"></div>
+                            <div 
+                              className="bg-blue-100 dark:bg-blue-900/50"
+                              style={{ height: `${layeredBlocks.maxShift2Layers * 28}px` }}
+                            ></div>
                           </div>
                         );
                       })}
@@ -477,7 +531,7 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
                     
                     {/* Continuous job blocks */}
                     <div className="absolute inset-0 p-0.5">
-                      {jobBlocks.map((block, blockIndex) => {
+                      {layeredBlocks.blocks.map((block, blockIndex) => {
                         const timelineStart = weekDays[0];
                         const timelineEnd = new Date(weekDays[weekDays.length - 1]);
                         timelineEnd.setHours(23, 59, 59, 999);
@@ -504,9 +558,19 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
                         
                         if (widthPercent <= 0) return null;
                         
-                        // Determine vertical position based on shift
-                        const topOffset = block.shift === 1 ? '2px' : '50%';
-                        const height = 'calc(50% - 4px)';
+                        // Determine vertical position based on shift and layer
+                        const jobHeight = 24; // Height of each job bar in pixels
+                        const jobGap = 4; // Gap between job bars
+                        
+                        let topOffset;
+                        if (block.shift === 1) {
+                          // 1st shift: stack from top
+                          topOffset = 2 + (block.layerIndex * (jobHeight + jobGap));
+                        } else {
+                          // 2nd shift: stack from after 1st shift area
+                          const shift1Height = layeredBlocks.maxShift1Layers * (jobHeight + jobGap);
+                          topOffset = shift1Height + 2 + (block.layerIndex * (jobHeight + jobGap));
+                        }
                         
                         return (
                           <button
@@ -517,8 +581,8 @@ export default function ScheduleView({ scheduleView, onScheduleViewChange }: Sch
                             style={{
                               left: `${leftPercent}%`,
                               width: `${widthPercent}%`,
-                              top: topOffset,
-                              height: height,
+                              top: `${topOffset}px`,
+                              height: `${jobHeight}px`,
                               minWidth: '80px'
                             }}
                             onClick={() => setSelectedJobId(block.job?.id || null)}
