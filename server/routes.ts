@@ -69,7 +69,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Jobs awaiting inspection endpoint
+  app.get('/api/jobs/awaiting-inspection', async (req, res) => {
+    try {
+      const allJobs = await storage.getJobs();
+      const allOps = await storage.getAllRoutingOperations();
+      const allEntries = await storage.getScheduleEntries();
 
+      const inspectionQueue = [];
+
+      for (const job of allJobs) {
+        if (job.status !== 'Scheduled' && job.status !== 'In Progress') {
+          continue;
+        }
+
+        const jobOps = allOps
+          .filter(op => op.jobId === job.id)
+          .sort((a, b) => a.sequence - b.sequence);
+        
+        const jobEntries = allEntries
+          .filter(e => e.jobId === job.id)
+          .sort((a, b) => b.endTime.getTime() - a.endTime.getTime());
+
+        if (jobOps.length === 0) continue;
+
+        const lastCompletedEntry = jobEntries[0];
+        if (!lastCompletedEntry) { // Job is scheduled but no ops have started
+          const firstOp = jobOps[0];
+          if (firstOp.machineType.toUpperCase().includes('INSPECT')) {
+            inspectionQueue.push({
+              jobId: job.id,
+              jobNumber: job.jobNumber,
+              partNumber: job.partNumber,
+              readyForInspectionTime: new Date(), // Ready now
+              previousOp: 'N/A',
+            });
+          }
+          continue;
+        }
+
+        const lastCompletedOpSequence = lastCompletedEntry.operationSequence;
+        const nextOpIndex = jobOps.findIndex(op => op.sequence > lastCompletedOpSequence);
+        
+        if (nextOpIndex !== -1) {
+          const nextOp = jobOps[nextOpIndex];
+          if (nextOp.machineType.toUpperCase().includes('INSPECT')) {
+            inspectionQueue.push({
+              jobId: job.id,
+              jobNumber: job.jobNumber,
+              partNumber: job.partNumber,
+              readyForInspectionTime: lastCompletedEntry.endTime,
+              previousOp: jobOps.find(op => op.sequence === lastCompletedOpSequence)?.operationName || 'Unknown',
+            });
+          }
+        }
+      }
+      
+      res.json(inspectionQueue);
+    } catch (error) {
+      console.error('Failed to get inspection queue:', error);
+      res.status(500).json({ error: 'Failed to fetch data for inspection queue' });
+    }
+  });
 
   app.get("/api/jobs/:id", async (req, res) => {
     try {

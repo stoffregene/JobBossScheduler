@@ -8,6 +8,16 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+**August 7, 2025** - ADVANCED SCHEDULING ALGORITHM IMPLEMENTATION: Completely rebuilt scheduling system with sophisticated priority management, campaign batching, and inspection queue handling:
+
+**🚀 COMPREHENSIVE SCHEDULING OVERHAUL**:
+- **SCHEDULING LOGGER**: New structured logging system with collapsible job-based log grouping for clear scheduling visibility
+- **CAMPAIGN MANAGER**: Intelligent batching of outsourced operations into shipping campaigns with vendor consolidation and optimal timing
+- **PRIORITY MANAGER**: Enhanced business logic for job priority scoring including late-to-customer, late-to-us, nearing-ship-date, and stock priorities
+- **ROBUST JOB SCHEDULER**: Complete scheduling engine with operation chunking, resource locking, and boundary time management
+- **INSPECTION QUEUE WIDGET**: New "Jobs Awaiting Inspection" component tracking quality control workflow with real-time updates
+- **DEPENDENCY MANAGEMENT**: Smart handling of outsourced operation dependencies with promise date validation and warning systems
+
 **August 6, 2025** - YEAR-ROUND OPERATOR AVAILABILITY SYSTEM COMPLETED: Implemented comprehensive year-round operator scheduling with full auto-scheduling algorithm integration:
 
 **🎯 COMPREHENSIVE AVAILABILITY SYSTEM**:
@@ -94,14 +104,15 @@ Preferred communication style: Simple, everyday language.
 - **Database**: PostgreSQL with Drizzle ORM.
 - **Schema**: Comprehensive manufacturing schema (jobs, machines, schedule entries, material orders, alerts).
 - **Machine Tiers**: Premium, Standard, Budget with efficiency and substitution.
-- **Auto-Scheduling Logic**:
-    - Jobs schedule from today or later (never in the past), with a 7-day material buffer policy.
-    - Capacity-aware scheduling: Jobs move to next Monday if daily/weekly capacity is exceeded.
-    - Priority-based scheduling (Critical, High, Normal, Low) based on due dates.
-    - Resource assignment: Role-based and machine-specific compatibility matrix enforcement (e.g., Quality Inspectors for INSPECT operations, Operators/Shift Leads for PRODUCTION). Outsource operations receive no internal resources.
-    - Shift balancing: Utilizes both shifts with weekly capacity constraints, handling multi-day jobs across shifts and weekends.
-    - Material tracking: Missing materials generate alerts but do not block scheduling.
-    - **Year-Round Availability**: OperatorAvailabilityManager provides comprehensive operator scheduling with custom work schedules, unavailability periods, and real-time availability checks.
+- **Advanced Scheduling Logic**:
+    - **Priority Scoring System**: Jobs prioritized by business rules (Late to Customer: 500pts, Late to Us: 400pts, Nearing Ship: 300pts, Normal: 200pts, Stock: 100pts)
+    - **Campaign Batching**: Outsourced operations automatically grouped into vendor-specific shipping campaigns with optimal timing
+    - **Dependency Management**: Smart handling of outsourced operation dependencies with return date validation and promise date checking
+    - **Operation Chunking**: Complex operations split across multiple time slots with resource continuity and availability checking
+    - **Inspection Queue**: Automatic detection of jobs ready for quality control with real-time dashboard widget
+    - **Structured Logging**: Comprehensive job-based logging with collapsible console groups for debugging scheduling decisions
+    - **Boundary Time Management**: Forward and backward scheduling with configurable start dates and dependency constraints
+    - **Year-Round Availability**: OperatorAvailabilityManager provides comprehensive operator scheduling with custom work schedules, unavailability periods, and real-time availability checks
 - **Resource Capacity Tracking**: Accounts for unavailability with year-round scheduling precision.
 - **Migrations**: Drizzle Kit.
 

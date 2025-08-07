@@ -6,6 +6,7 @@ import JobQueue from "../components/job-queue";
 import ScheduleView from "../components/schedule-view";
 import ResourceAllocation from "../components/resource-allocation";
 import JobDetailsModal from "../components/job-details-modal";
+import { InspectionQueueWidget } from "../components/inspection-queue-widget";
 
 import { SchedulingStatusDashboard } from "../components/scheduling-status-dashboard";
 import { Building2, Clock, Users, Package, Upload, Moon, Sun } from "lucide-react";
@@ -18,7 +19,7 @@ import type { Job } from "@shared/schema";
 export default function Dashboard() {
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [scheduleView, setScheduleView] = useState<{ type: 'hour' | 'day' | 'week' | 'month', date: Date }>({ 
+  const [scheduleView, setScheduleView] = useState<{ type: 'hour' | 'day' | 'week' | 'month' | 'operators', date: Date }>({ 
     type: 'week', 
     date: new Date() 
   });
@@ -163,7 +164,7 @@ export default function Dashboard() {
         <div className="mb-8">
           <ScheduleView 
             scheduleView={scheduleView}
-            onScheduleViewChange={(view: { type: 'hour' | 'day' | 'week' | 'month', date: Date }) => setScheduleView(view)}
+            onScheduleViewChange={(view: { type: 'hour' | 'day' | 'week' | 'month' | 'operators', date: Date }) => setScheduleView(view)}
           />
         </div>
 
@@ -174,11 +175,12 @@ export default function Dashboard() {
             <JobQueue onJobSelect={setSelectedJobId} />
             
             {/* Resource Capacity */}
-            <ResourceAllocation scheduleView={scheduleView} />
+            <ResourceAllocation scheduleView={{ type: scheduleView.type === 'operators' ? 'week' : scheduleView.type, date: scheduleView.date }} />
           </div>
 
-          {/* Additional content can be added here if needed */}
+          {/* Quality Control and Additional Widgets */}
           <div className="xl:col-span-2 lg:col-span-1 space-y-6">
+            <InspectionQueueWidget />
           </div>
         </div>
       </div>
