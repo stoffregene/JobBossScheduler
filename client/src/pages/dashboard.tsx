@@ -7,6 +7,7 @@ import ScheduleView from "../components/schedule-view";
 import ResourceAllocation from "../components/resource-allocation";
 import JobDetailsModal from "../components/job-details-modal";
 import { InspectionQueueWidget } from "../components/inspection-queue-widget";
+import { OutsourcedOperationsWidget } from "../components/OutsourcedOperationsWidget";
 
 import { SchedulingStatusDashboard } from "../components/scheduling-status-dashboard";
 import { Building2, Clock, Users, Package, Upload, Moon, Sun } from "lucide-react";
@@ -181,6 +182,7 @@ export default function Dashboard() {
           {/* Quality Control and Additional Widgets */}
           <div className="xl:col-span-2 lg:col-span-1 space-y-6">
             <InspectionQueueWidget />
+            <OutsourcedOperationsWidget />
           </div>
         </div>
       </div>

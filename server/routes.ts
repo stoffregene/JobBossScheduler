@@ -1481,5 +1481,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Outsourced Operations endpoints
+  app.get("/api/outsourced-operations", async (req, res) => {
+    try {
+      const operations = await storage.getOutsourcedOperations();
+      res.json(operations);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch outsourced operations" });
+    }
+  });
+
+  // Get outsourced operations with job details and risk assessment for dashboard
+  app.get("/api/outsourced-operations/dashboard", async (req, res) => {
+    try {
+      const operations = await storage.getOutsourcedOperationsForDashboard();
+      res.json(operations);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch outsourced operations for dashboard" });
+    }
+  });
+
   return httpServer;
 }

@@ -800,4 +800,33 @@ export class DatabaseStorage implements IStorage {
       completedDate: new Date()
     });
   }
+
+  // Get outsourced operations with job details and risk assessment for dashboard
+  async getOutsourcedOperationsForDashboard(): Promise<any[]> {
+    const operations = await db
+      .select({
+        id: outsourcedOperations.id,
+        jobNumber: jobs.jobNumber,
+        vendor: outsourcedOperations.vendor,
+        orderDate: outsourcedOperations.orderDate,
+        dueDate: outsourcedOperations.dueDate,
+        promisedDate: jobs.promisedDate,
+        operationDescription: outsourcedOperations.operationDescription,
+        status: outsourcedOperations.status,
+        leadDays: sql<number>`EXTRACT(DAY FROM (${outsourcedOperations.dueDate} - ${outsourcedOperations.orderDate}))::int`,
+        daysUntilPromised: sql<number>`EXTRACT(DAY FROM (${jobs.promisedDate} - ${outsourcedOperations.dueDate}))::int`,
+      })
+      .from(outsourcedOperations)
+      .innerJoin(jobs, eq(outsourcedOperations.jobId, jobs.id))
+      .where(eq(outsourcedOperations.status, 'Open'))
+      .orderBy(outsourcedOperations.dueDate);
+
+    // Add risk assessment
+    return operations.map(op => ({
+      ...op,
+      isHighRisk: op.daysUntilPromised < 7,
+      riskLevel: op.daysUntilPromised < 0 ? 'critical' : 
+                 op.daysUntilPromised < 7 ? 'high' : 'normal'
+    }));
+  }
 }

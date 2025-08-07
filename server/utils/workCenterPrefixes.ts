@@ -1,6 +1,11 @@
 import fs from "fs";
 import path from "path";
 import { parse } from "csv-parse/sync";
+import { fileURLToPath } from 'url';
+
+// Get the directory path for ES modules  
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /**
  * Reads data/machine_matrix.csv, extracts the alphabetical prefix before the
