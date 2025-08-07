@@ -16,10 +16,10 @@ export class JobScheduler {
   private operatorManager: OperatorAvailabilityManager;
   private shiftCapacityManager: ShiftCapacityManager;
 
-  constructor(storage: IStorage, operatorManager: OperatorAvailabilityManager, allResources: Resource[], allEntries: ScheduleEntry[]) {
+  constructor(storage: IStorage, operatorManager: OperatorAvailabilityManager, shiftCapacityManager: ShiftCapacityManager) {
     this.storage = storage;
     this.operatorManager = operatorManager;
-    this.shiftCapacityManager = new ShiftCapacityManager(allResources, allEntries);
+    this.shiftCapacityManager = shiftCapacityManager;
   }
 
   public async scheduleJob(jobId: string, scheduleAfter: Date = new Date()): Promise<JobScheduleResult> {
@@ -41,10 +41,10 @@ export class JobScheduler {
       // Map the routing operation fields to expected names
       const mappedOp = {
         ...op,
-        operationName: op.operation || op.operationName || 'UNKNOWN',
+        operationName: op.name || 'UNKNOWN',
         machineType: op.machineType,
-        estimatedHours: op.standardTime || op.estimatedHours || 0,
-        setupHours: op.setupTime || op.setupHours || 0,
+        estimatedHours: op.estimatedHours || 0,
+        setupHours: 0, // RoutingOperationType doesn't have setupHours
         sequence: op.sequence || 10,
         compatibleMachines: op.compatibleMachines || []
       };
@@ -77,8 +77,8 @@ export class JobScheduler {
   }
   
   private async scheduleOperationInChunks(job: Job, operation: any, searchFromDate: Date): Promise<ChunkResult> {
-    const estimatedHours = operation.standardTime || operation.estimatedHours || 0;
-    const setupHours = operation.setupTime || operation.setupHours || 0;
+    const estimatedHours = operation.estimatedHours || 0;
+    const setupHours = operation.setupHours || 0;
     let remainingDurationMs = (parseFloat(estimatedHours.toString()) + parseFloat(setupHours.toString())) * 3600000;
     let currentTime = new Date(searchFromDate);
     const scheduledChunks: ScheduleChunk[] = [];
@@ -138,7 +138,7 @@ export class JobScheduler {
       const qualifiedOperators = availableOperators.filter(op => {
         if (lockedResource && op.id !== lockedResource.id) return false;
         if (!operation.requiredSkills || operation.requiredSkills.length === 0) return true;
-        return operation.requiredSkills.every(skill => op.skills.includes(skill));
+        return operation.requiredSkills.every((skill: string) => op.skills.includes(skill));
       });
       if (qualifiedOperators.length > 0) return { resource: qualifiedOperators[0], shift };
     }
@@ -176,7 +176,7 @@ export class JobScheduler {
 
     // 3. Add machines from the operation's explicit compatible list.
     if (operation.compatibleMachines && operation.compatibleMachines.length > 0) {
-        operation.compatibleMachines.forEach(machineId => {
+        operation.compatibleMachines.forEach((machineId: string) => {
             const machine = allMachines.find(m => m.id === machineId || m.machineId === machineId);
             if (machine) potentialMachines.set(machine.id, machine);
         });

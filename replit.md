@@ -8,6 +8,15 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+**August 7, 2025** - SHIFT-BASED LOAD BALANCING IMPLEMENTATION: Enhanced scheduling system with intelligent shift capacity management and optimal resource distribution:
+
+**🎯 INTELLIGENT SHIFT LOAD BALANCING**:
+- **SHIFTCAPACITYMANAGER ENHANCEMENT**: Added `addEntries()` method to dynamically update capacity tracking during job scheduling
+- **OPTIMAL SHIFT SELECTION**: Scheduler now uses ShiftCapacityManager to determine optimal shift assignment based on current load percentages
+- **ENHANCED API INTEGRATION**: Schedule-all endpoint properly integrates with ShiftCapacityManager for real-time capacity tracking
+- **AUTOMATIC LOAD DISTRIBUTION**: Jobs automatically assigned to shift with lower load percentage to balance manufacturing capacity
+- **DYNAMIC CAPACITY UPDATES**: System updates shift capacity metrics as each job is scheduled, ensuring optimal distribution
+
 **August 7, 2025** - ADVANCED SCHEDULING ALGORITHM IMPLEMENTATION: Completely rebuilt scheduling system with sophisticated priority management, campaign batching, and inspection queue handling:
 
 **🚀 COMPREHENSIVE SCHEDULING OVERHAUL**:

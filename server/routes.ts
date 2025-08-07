@@ -220,9 +220,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // 2. Initialize the services with the complete dataset
       const { OperatorAvailabilityManager } = await import('./operator-availability');
       const { JobScheduler } = await import('./scheduler');
+      const { ShiftCapacityManager } = await import('./shift-capacity-manager');
       
       const operatorManager = new OperatorAvailabilityManager(allResources, allUnavailabilities);
-      const scheduler = new JobScheduler(storage, operatorManager, allResources, allScheduleEntries);
+      const shiftCapacityManager = new ShiftCapacityManager(allResources, allScheduleEntries);
+      const scheduler = new JobScheduler(storage, operatorManager, shiftCapacityManager);
 
       let scheduledCount = 0;
       let failedCount = 0;
@@ -231,12 +233,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const job of jobsToSchedule) {
         const result = await scheduler.scheduleJob(job.id);
         
-        if (result.success) {
+        if (result.success && result.scheduledEntries.length > 0) {
           // Save the new schedule entries to the database
           for (const entry of result.scheduledEntries) {
             await storage.createScheduleEntry(entry);
           }
           await storage.updateJob(job.id, { status: 'Scheduled' });
+          shiftCapacityManager.addEntries(result.scheduledEntries);
           scheduledCount++;
         } else {
           failedCount++;

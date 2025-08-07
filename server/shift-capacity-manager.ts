@@ -58,4 +58,8 @@ export class ShiftCapacityManager {
     }
     return 2;
   }
+
+  public addEntries(newEntries: ScheduleEntry[]) {
+    this.scheduleEntries.push(...newEntries);
+  }
 }
