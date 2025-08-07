@@ -1,184 +1,150 @@
 /**
  * @file scheduler.ts
- * @description Final, robust scheduler. Handles priority, batching, and virtual operations.
+ * @description A robust scheduler that now includes shift-based load balancing.
  */
-import { Job, Machine, RoutingOperation, ScheduleEntry, Resource, OutsourcedOperation } from '../shared/schema';
+import { Job, Machine, RoutingOperation, ScheduleEntry, Resource } from '../shared/schema';
 import { IStorage } from './storage-interface';
 import { OperatorAvailabilityManager } from './operator-availability';
-import { PriorityManager } from './priority-manager';
-// import { ReschedulingService } from './rescheduling-service';
-import { SchedulingLogger } from './scheduling-logger';
-import { CampaignManager } from './campaign-manager';
+import { ShiftCapacityManager } from './shift-capacity-manager';
 
-export interface ScheduleChunk { 
-  machine: Machine; 
-  resource: Resource; 
-  startTime: Date; 
-  endTime: Date; 
-  shift: number; 
-}
-
-export interface JobScheduleResult { 
-  success: boolean; 
-  scheduledEntries: ScheduleEntry[]; 
-  failureReason?: string; 
-  failedOperationSequence?: number; 
-  warnings?: string[]; 
-}
+export interface ScheduleChunk { machine: Machine; resource: Resource; startTime: Date; endTime: Date; shift: number; }
+export interface JobScheduleResult { success: boolean; scheduledEntries: ScheduleEntry[]; failureReason?: string; }
 
 export class JobScheduler {
   private storage: IStorage;
   private operatorManager: OperatorAvailabilityManager;
-  private priorityManager: PriorityManager;
-  // private reschedulingService: ReschedulingService;
-  private campaignManager: CampaignManager;
-  private logger: SchedulingLogger;
-  private readonly INTRO_OP_TYPES = ['SAW', 'WATERJET'];
+  private shiftCapacityManager: ShiftCapacityManager;
 
-  constructor(storage: IStorage, operatorManager: OperatorAvailabilityManager, logger: SchedulingLogger) {
+  constructor(storage: IStorage, operatorManager: OperatorAvailabilityManager, allResources: Resource[], allEntries: ScheduleEntry[]) {
     this.storage = storage;
     this.operatorManager = operatorManager;
-    this.logger = logger;
-    this.priorityManager = new PriorityManager(this.logger);
-    // this.reschedulingService = new ReschedulingService(storage);
-    this.campaignManager = new CampaignManager(storage, this.logger);
+    this.shiftCapacityManager = new ShiftCapacityManager(allResources, allEntries);
   }
 
-  public async runFullSchedule(jobsToSchedule: Job[]): Promise<void> {
-    const outsourcedOps = await this.storage.getOutsourcedOperations();
-    const campaigns = await this.campaignManager.createShippingCampaigns(jobsToSchedule, outsourcedOps);
-    const scheduledJobIds = new Set<string>();
-
-    for (const campaign of campaigns) {
-      for (const job of campaign.jobs) {
-        this.logger.addEntry(job.id, 'INFO', `Scheduling job as part of Campaign ${campaign.campaignId}`);
-        const result = await this.scheduleJob(job.id, undefined, campaign.shipDate);
-        if (result.success) scheduledJobIds.add(job.id);
-      }
-    }
-
-    const remainingJobs = jobsToSchedule.filter(job => !scheduledJobIds.has(job.id));
-    for (const job of remainingJobs) { 
-      await this.scheduleJob(job.id); 
-    }
-    
-    this.logger.printFullSummary();
-  }
-
-  public async scheduleJob(jobId: string, scheduleAfter: Date = new Date(), scheduleBackwardsFrom?: Date): Promise<JobScheduleResult> {
+  public async scheduleJob(jobId: string, scheduleAfter: Date = new Date()): Promise<JobScheduleResult> {
     const job = await this.storage.getJob(jobId);
     if (!job) return { success: false, scheduledEntries: [], failureReason: 'Job not found.' };
 
-    this.logger.startJobLog(job.id, job.jobNumber);
     const allOps = await this.storage.getRoutingOperationsByJobId(jobId);
-    const outsourcedOps = await this.storage.getOutsourcedOperationsForJob(jobId);
-    const opsToSchedule = allOps.sort((a, b) => scheduleBackwardsFrom ? b.sequence - a.sequence : a.sequence - b.sequence);
+    const opsToSchedule = allOps.sort((a, b) => a.sequence - b.sequence);
     
-    const warnings: string[] = [];
     const allScheduledEntries: ScheduleEntry[] = [];
-    let boundaryTime = scheduleBackwardsFrom || scheduleAfter;
+    let boundaryTime = scheduleAfter;
 
     for (const op of opsToSchedule) {
-      this.logger.addEntry(job.id, 'INFO', `-> Processing Op ${op.sequence}: ${op.operationName}`);
-
       if (op.machineType.toUpperCase().includes('INSPECT')) {
-        this.logger.addEntry(job.id, 'INFO', `Skipping calendar entry for Op ${op.sequence}: ${op.operationName}. This will be handled by the 'Jobs Awaiting Inspection' queue.`);
         continue;
-      }
-      
-      const precedingOutsourcedOp = this.findPrecedingOutsourcedOp(op, outsourcedOps);
-      if (precedingOutsourcedOp?.dueDate) {
-          boundaryTime = new Date(precedingOutsourcedOp.dueDate);
-          this.logger.addEntry(job.id, 'INFO', `Dependency found: Outsourced op must return by ${boundaryTime.toLocaleString()}`);
-          if (boundaryTime > new Date(job.promisedDate)) {
-              const warningMsg = `Job may be late: Outsourced op return date is after job's promised date.`;
-              warnings.push(warningMsg);
-              this.logger.addEntry(job.id, 'WARN', warningMsg);
-          }
       }
       
       const earliestStartTime = this.getEarliestStartTimeForOperation(op, boundaryTime);
       const chunkResult = await this.scheduleOperationInChunks(job, op, earliestStartTime);
 
       if (!chunkResult.success) {
-        const failureReason = `Could not find an available slot for operation: ${op.operationName}. ${chunkResult.failureReason}`;
-        this.logger.addEntry(job.id, 'ERROR', failureReason);
-        return { success: false, scheduledEntries: allScheduledEntries, failureReason, failedOperationSequence: op.sequence, warnings };
+        return { success: false, scheduledEntries: allScheduledEntries, failureReason: `Failed on Op ${op.sequence}` };
       }
       
       const entriesForOperation = chunkResult.chunks.map(chunk => ({
-        id: '', 
-        jobId: job.id, 
-        machineId: chunk.machine.id, 
-        assignedResourceId: chunk.resource.id,
-        operationSequence: op.sequence, 
-        startTime: chunk.startTime, 
-        endTime: chunk.endTime,
-        shift: chunk.shift, 
-        status: 'Scheduled' as const,
+        id: '', jobId: job.id, machineId: chunk.machine.id, assignedResourceId: chunk.resource.id,
+        operationSequence: op.sequence, startTime: chunk.startTime, endTime: chunk.endTime,
+        shift: chunk.shift, status: 'Scheduled',
       } as ScheduleEntry));
 
       allScheduledEntries.push(...entriesForOperation);
       boundaryTime = chunkResult.chunks[chunkResult.chunks.length - 1].endTime;
-
-      const opName = op.operationName.toUpperCase();
-      if (this.INTRO_OP_TYPES.some(type => opName.includes(type) || op.machineType.toUpperCase().includes(type))) {
-        const nextDay = new Date(boundaryTime);
-        nextDay.setDate(nextDay.getDate() + 1);
-        nextDay.setHours(0, 0, 0, 0);
-        boundaryTime = nextDay;
-        this.logger.addEntry(job.id, 'INFO', `Enforced 24hr lag after intro op. Next op can start after ${boundaryTime.toLocaleString()}`);
-      }
     }
     
-    this.logger.addEntry(job.id, 'INFO', `--- Successfully scheduled Job ${job.jobNumber} ---`);
-    return { success: true, scheduledEntries: allScheduledEntries, warnings };
+    return { success: true, scheduledEntries: allScheduledEntries };
   }
   
-  private findPrecedingOutsourcedOp = (op: RoutingOperation, ops: OutsourcedOperation[]) => 
-    ops.filter(o => o.operationSequence < op.sequence).sort((a, b) => b.operationSequence - a.operationSequence)[0];
+  private async scheduleOperationInChunks(job, operation, searchFromDate) {
+    let remainingDurationMs = (parseFloat(operation.estimatedHours) + (parseFloat(operation.setupHours) || 0)) * 3600000;
+    let currentTime = new Date(searchFromDate);
+    const scheduledChunks: ScheduleChunk[] = [];
+    let lockedMachine: Machine | null = null, lockedResource: Resource | null = null;
 
-  private async scheduleOperationInChunks(job: Job, operation: RoutingOperation, searchFromDate: Date): Promise<{ success: boolean; chunks: ScheduleChunk[]; failureReason?: string }> {
-    // Basic implementation - can be enhanced with actual chunking logic
-    const machines = await this.storage.getMachines();
-    const compatibleMachines = machines.filter(machine => 
-      operation.compatibleMachines.includes(machine.machineId) || 
-      operation.machineType === machine.type
-    );
+    while (remainingDurationMs > 0) {
+      const nextChunk = await this.findNextAvailableChunk(job, operation, currentTime, lockedMachine, lockedResource);
+      if (!nextChunk) return { success: false, chunks: [] };
+      
+      if (!lockedMachine) lockedMachine = nextChunk.machine;
+      if (!lockedResource) lockedResource = nextChunk.resource;
 
-    if (compatibleMachines.length === 0) {
-      return { success: false, chunks: [], failureReason: 'No compatible machines found' };
+      const chunkDurationMs = nextChunk.endTime.getTime() - nextChunk.startTime.getTime();
+      const durationToSchedule = Math.min(remainingDurationMs, chunkDurationMs);
+      const finalChunk = { ...nextChunk, endTime: new Date(nextChunk.startTime.getTime() + durationToSchedule) };
+
+      scheduledChunks.push(finalChunk);
+      remainingDurationMs -= durationToSchedule;
+      currentTime = finalChunk.endTime;
     }
-
-    const resources = await this.storage.getResources();
-    const availableResources = resources.filter(resource => 
-      resource.workCenters.some(wc => compatibleMachines.some(m => m.id === wc))
-    );
-
-    if (availableResources.length === 0) {
-      return { success: false, chunks: [], failureReason: 'No available resources found' };
-    }
-
-    // Simple implementation: create one chunk for the entire operation
-    const machine = compatibleMachines[0];
-    const resource = availableResources[0];
-    const durationMs = this.calculateOperationDurationMs(operation);
-    const endTime = new Date(searchFromDate.getTime() + durationMs);
-
-    const chunk: ScheduleChunk = {
-      machine,
-      resource,
-      startTime: searchFromDate,
-      endTime,
-      shift: searchFromDate.getHours() < 15 ? 1 : 2
-    };
-
-    return { success: true, chunks: [chunk] };
+    return { success: true, chunks: scheduledChunks };
   }
 
-  private getEarliestStartTimeForOperation = (op: RoutingOperation, time: Date) => 
-    (op.earliestStartDate && new Date(op.earliestStartDate) > time) ? new Date(op.earliestStartDate) : time;
+  private async findNextAvailableChunk(incomingJob, operation, searchFrom, lockedMachine, lockedResource) {
+    const compatibleMachines = lockedMachine ? [lockedMachine] : await this.getCompatibleMachinesForOperation(operation);
+    if (compatibleMachines.length === 0) return null;
+    
+    const optimalShift = this.shiftCapacityManager.getOptimalShift();
+    const shiftsToTry = optimalShift === 1 ? [1, 2] : [2, 1];
 
-  private calculateOperationDurationMs = (op: RoutingOperation) => 
-    (parseFloat(op.estimatedHours) + (parseFloat(op.setupHours) || 0)) * 3600000;
+    for (let i = 0; i < 30 * 24 * 60; i++) {
+      const currentTime = new Date(searchFrom.getTime() + i * 60 * 1000);
+      for (const machine of compatibleMachines) {
+        const machineSchedule = await this.storage.getScheduleEntriesForMachine(machine.id);
+        const isBusy = machineSchedule.some(e => currentTime >= e.startTime && currentTime < e.endTime);
+        if (isBusy) continue;
+
+        const resource = await this.findAvailableResourceForTime(operation, machine, currentTime, lockedResource, shiftsToTry);
+        if (resource) {
+          const workBlockEnd = await this.calculateContinuousWorkBlock(currentTime, machine, resource.resource, machineSchedule);
+          if(workBlockEnd.getTime() > currentTime.getTime()) {
+            return { machine, resource: resource.resource, startTime: currentTime, endTime: workBlockEnd, shift: resource.shift };
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  private async findAvailableResourceForTime(operation, machine, time, lockedResource, shiftsToTry) {
+    for (const shift of shiftsToTry) {
+      const availableOperators = this.operatorManager.getAvailableOperators(time, shift, undefined, [machine.machineId]);
+      const qualifiedOperators = availableOperators.filter(op => {
+        if (lockedResource && op.id !== lockedResource.id) return false;
+        if (!operation.requiredSkills || operation.requiredSkills.length === 0) return true;
+        return operation.requiredSkills.every(skill => op.skills.includes(skill));
+      });
+      if (qualifiedOperators.length > 0) return { resource: qualifiedOperators[0], shift };
+    }
+    return null;
+  }
+
+  private async calculateContinuousWorkBlock(startTime, machine, resource, machineSchedule) {
+      const operatorWorkingHours = this.operatorManager.getOperatorWorkingHours(resource.id, startTime);
+      if (!operatorWorkingHours) return startTime;
+      const nextJobStart = machineSchedule.filter(e => e.startTime > startTime).sort((a, b) => a.startTime.getTime() - b.startTime.getTime())[0]?.startTime || new Date(startTime.getTime() + 24 * 60 * 60 * 1000);
+      return new Date(Math.min(operatorWorkingHours.endTime.getTime(), nextJobStart.getTime()));
+  }
+
+  private getEarliestStartTimeForOperation = (op, time) => (op.earliestStartDate && new Date(op.earliestStartDate) > time) ? new Date(op.earliestStartDate) : time;
+
+  private async getCompatibleMachinesForOperation(operation) {
+    const allMachines = await this.storage.getMachines();
+    const potentialMachines = new Map();
+    if (operation.originalQuotedMachineId) {
+        const quotedMachine = allMachines.find(m => m.id === operation.originalQuotedMachineId);
+        if (quotedMachine) potentialMachines.set(quotedMachine.id, quotedMachine);
+    }
+    if (operation.compatibleMachines?.length > 0) {
+        operation.compatibleMachines.forEach(id => {
+            const machine = allMachines.find(m => m.id === id);
+            if (machine) potentialMachines.set(machine.id, machine);
+        });
+    } else {
+        allMachines.forEach(m => {
+            if (m.type === operation.machineType) potentialMachines.set(m.id, m);
+        });
+    }
+    return Array.from(potentialMachines.values());
+  }
 }

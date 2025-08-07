@@ -206,21 +206,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/jobs/schedule-all", async (req, res) => {
     try {
       console.log("🎯 Starting priority-based scheduling for all jobs...");
-      const maxJobs = parseInt(req.query.maxJobs as string) || 100;
+
+      // 1. Fetch ALL data required by the services upfront
+      const allResources = await storage.getResources();
+      const allUnavailabilities = await storage.getResourceUnavailabilities();
+      const allScheduleEntries = await storage.getScheduleEntries();
+      const jobsToSchedule = (await storage.getJobs()).filter(j => j.status !== 'Scheduled' && j.status !== 'Complete');
+
+      if (jobsToSchedule.length === 0) {
+        return res.json({ success: true, scheduled: 0, failed: 0, message: "No unscheduled jobs to process." });
+      }
+
+      // 2. Initialize the services with the complete dataset
+      const { OperatorAvailabilityManager } = await import('./operator-availability');
+      const { JobScheduler } = await import('./scheduler');
       
-      const result = await storage.scheduleJobsByPriority(maxJobs);
-      
-      broadcast({ type: 'all_jobs_scheduled', data: result });
-      res.json({
-        success: true,
-        scheduled: result.scheduled,
-        failed: result.failed,
-        total: result.scheduled + result.failed,
-        results: result.results
-      });
+      const operatorManager = new OperatorAvailabilityManager(allResources, allUnavailabilities);
+      const scheduler = new JobScheduler(storage, operatorManager, allResources, allScheduleEntries);
+
+      let scheduledCount = 0;
+      let failedCount = 0;
+
+      // 3. Loop through and schedule each job
+      for (const job of jobsToSchedule) {
+        const result = await scheduler.scheduleJob(job.id);
+        
+        if (result.success && result.scheduledEntries.length > 0) {
+          // Save the new schedule entries to the database
+          for (const entry of result.scheduledEntries) {
+            await storage.createScheduleEntry(entry);
+          }
+          await storage.updateJob(job.id, { status: 'Scheduled' });
+          scheduledCount++;
+        } else {
+          failedCount++;
+          console.error(`Failed to schedule job ${job.jobNumber}: ${result.failureReason}`);
+        }
+      }
+
+      broadcast({ type: 'all_jobs_scheduled', data: { scheduled: scheduledCount, failed: failedCount } });
+      res.json({ success: true, scheduled: scheduledCount, failed: failedCount });
+
     } catch (error) {
-      console.error('Error scheduling all jobs:', error);
-      res.status(500).json({ message: "Failed to schedule all jobs" });
+      console.error("Critical error during full scheduling run:", error);
+      res.status(500).json({ message: "Failed to schedule all jobs", error: error.message });
     }
   });
 
