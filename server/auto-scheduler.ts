@@ -38,7 +38,8 @@ export async function scheduleJob(
       const machineTypeMapping: Record<string, string> = {
         'VMC': 'MILL',      // VMC (Vertical Machining Center) -> MILL
         'CNC': 'MILL',      // CNC Machining Center -> MILL  
-        'MC': 'MILL'        // Machining Center -> MILL
+        'MC': 'MILL',       // Machining Center -> MILL
+        'GENERAL': 'MILL'   // General operations -> MILL
       };
       
       const baseMachineType = machineTypeMapping[rawMachineType] || rawMachineType;

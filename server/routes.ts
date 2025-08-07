@@ -9,6 +9,7 @@ import { z } from "zod";
 import multer from "multer";
 import csv from "csv-parser";
 import { Readable } from "stream";
+import { getWorkCenterPrefixes } from "./utils/workCenterPrefixes";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
@@ -265,11 +266,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let created = 0;
       let updated = 0;
 
-      // Define standard work centers that are in-house
-      const standardWorkCenters = ['SAW', 'MILL', 'LATHE', 'WATERJET', 'BEAD BLAST', 'WELD', 'INSPECT', 'ASSEMBLE', 'VMC', 'HMC'];
-      
-      const isStandardWorkCenter = (wcName: string): boolean => {
-        return standardWorkCenters.some(wc => wcName.toUpperCase().includes(wc.toUpperCase()));
+      // Dynamic list derived from machine_matrix.csv
+      const standardWorkCenters = getWorkCenterPrefixes();
+
+      const isStandardWorkCenter = (wc: string) => {
+        if (!wc) return false;
+        const val = wc.toUpperCase();
+        return standardWorkCenters.some(prefix => val.includes(prefix));
       };
 
       // Parse CSV data
