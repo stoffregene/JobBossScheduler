@@ -57,7 +57,8 @@ export class JobScheduler {
       const chunkResult = await this.scheduleOperationInChunks(job, mappedOp, earliestStartTime);
 
       if (!chunkResult.success) {
-        return { success: false, scheduledEntries: allScheduledEntries, failureReason: `Failed on Op ${mappedOp.sequence}: Could not find a suitable machine.` };
+        console.error(`❌ Failed to schedule operation ${mappedOp.operationName} (${mappedOp.estimatedHours}h) for job ${job.jobNumber}: ${chunkResult.failureReason}`);
+        return { success: false, scheduledEntries: allScheduledEntries, failureReason: `Failed on Op ${mappedOp.sequence}: ${chunkResult.failureReason}` };
       }
       
       const entriesForOperation = chunkResult.chunks.map(chunk => ({
@@ -86,7 +87,10 @@ export class JobScheduler {
 
     while (remainingDurationMs > 0) {
       const nextChunk = await this.findNextAvailableChunk(job, operation, currentTime, lockedMachine, lockedResource);
-      if (!nextChunk) return { success: false, chunks: [], failureReason: `No available time slots found for operation.` };
+      if (!nextChunk) {
+        console.error(`❌ No available chunk found for ${operation.operationName} (${operation.estimatedHours}h) - remaining: ${remainingDurationMs/3600000}h`);
+        return { success: false, chunks: [], failureReason: `No available time slots found for operation ${operation.operationName} (${operation.estimatedHours}h)` };
+      }
       
       if (!lockedMachine) lockedMachine = nextChunk.machine;
       if (!lockedResource) lockedResource = nextChunk.resource;
@@ -105,9 +109,12 @@ export class JobScheduler {
   private async findNextAvailableChunk(incomingJob: Job, operation: any, searchFrom: Date, lockedMachine: Machine | null, lockedResource: Resource | null) {
     const compatibleMachines = lockedMachine ? [lockedMachine] : await this.getCompatibleMachinesForOperation(operation);
     if (compatibleMachines.length === 0) {
-      console.log(`No compatible machines found for operation ${operation.operationName || operation.operation || 'UNKNOWN'} (${operation.machineType})`);
+      console.error(`❌ No compatible machines found for operation ${operation.operationName || operation.operation || 'UNKNOWN'} (${operation.machineType})`);
       return null;
     }
+    
+    console.log(`🔍 Found ${compatibleMachines.length} compatible machines for ${operation.operationName} (${operation.machineType}): ${compatibleMachines.map(m => m.machineId).join(', ')}`);
+    
     
     const optimalShift = this.shiftCapacityManager.getOptimalShift();
     const shiftsToTry = optimalShift === 1 ? [1, 2] : [2, 1];

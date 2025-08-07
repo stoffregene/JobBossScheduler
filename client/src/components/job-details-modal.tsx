@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { X, Edit, Calendar, Zap } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { format } from "date-fns";
 import type { Job } from "@shared/schema";
 
 interface JobDetailsModalProps {
@@ -184,10 +185,11 @@ export default function JobDetailsModal({ jobId, onClose }: JobDetailsModalProps
             {job.routing && job.routing.length > 0 ? (
               <div className="space-y-3">
                 {job.routing.map((operation, index) => {
-                  // Find the scheduled entry for this operation
-                  const scheduledEntry = scheduleEntries?.find((entry: any) => 
+                  // Find ALL scheduled entries for this operation (may be chunked)
+                  const scheduledEntries = scheduleEntries?.filter((entry: any) => 
                     entry.operationSequence === operation.sequence
-                  );
+                  ) || [];
+                  const scheduledEntry = scheduledEntries[0]; // For compatibility with existing code
                   const assignedResource = scheduledEntry?.assignedResourceId && resources ? 
                     resources.find((r: any) => r.id === scheduledEntry.assignedResourceId) : null;
                   
@@ -242,24 +244,36 @@ export default function JobDetailsModal({ jobId, onClose }: JobDetailsModalProps
                           <div className="text-xs text-gray-500">
                             {operation.machineType} ({operation.compatibleMachines.join(', ')})
                           </div>
-                          {scheduledEntry && (
-                            <div className="mt-1 flex items-center space-x-2">
-                              <Badge variant="outline" className="text-xs">
-                                {scheduledEntry.status}
-                              </Badge>
-                              {operation.machineType === 'OUTSOURCE' ? (
-                                <div className="text-xs text-orange-600 font-medium">
-                                  🏭 External vendor (no internal resources)
-                                </div>
-                              ) : assignedResource ? (
-                                <div className="text-xs text-blue-600 font-medium">
-                                  👤 {assignedResource.name} ({assignedResource.role})
-                                </div>
-                              ) : (
-                                <div className="text-xs text-gray-500">
-                                  Compatible operators: {compatibleResources.length > 0 
-                                    ? compatibleResources.map((r: any) => r.name).join(', ')
-                                    : 'None available'}
+                          {scheduledEntries.length > 0 && (
+                            <div className="mt-1 space-y-1">
+                              <div className="flex items-center space-x-2">
+                                <Badge variant="outline" className="text-xs">
+                                  {scheduledEntry.status}
+                                </Badge>
+                                {operation.machineType === 'OUTSOURCE' ? (
+                                  <div className="text-xs text-orange-600 font-medium">
+                                    🏭 External vendor (no internal resources)
+                                  </div>
+                                ) : assignedResource ? (
+                                  <div className="text-xs text-blue-600 font-medium">
+                                    👤 {assignedResource.name} ({assignedResource.role})
+                                  </div>
+                                ) : (
+                                  <div className="text-xs text-gray-500">
+                                    Compatible operators: {compatibleResources.length > 0 
+                                      ? compatibleResources.map((r: any) => r.name).join(', ')
+                                      : 'None available'}
+                                  </div>
+                                )}
+                                {scheduledEntries.length > 1 && (
+                                  <Badge variant="secondary" className="text-xs">
+                                    {scheduledEntries.length} chunks
+                                  </Badge>
+                                )}
+                              </div>
+                              {scheduledEntries.length > 0 && (
+                                <div className="text-xs text-gray-600">
+                                  Scheduled: {format(new Date(scheduledEntries[0].startTime), 'M/d/yyyy, h:mm a')} - {format(new Date(scheduledEntries[scheduledEntries.length - 1].endTime), 'M/d/yyyy, h:mm a')}
                                 </div>
                               )}
                             </div>
