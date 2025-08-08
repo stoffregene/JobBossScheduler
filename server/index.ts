@@ -37,6 +37,7 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Register API routes FIRST
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
@@ -47,9 +48,7 @@ app.use((req, res, next) => {
     throw err;
   });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
+  // Set up static file serving AFTER API routes
   const env = app.get("env");
   log(`Environment: ${env}`);
   
