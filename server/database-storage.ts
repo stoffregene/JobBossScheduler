@@ -408,6 +408,11 @@ export class DatabaseStorage implements IStorage {
     return resource || undefined;
   }
 
+  async getResourceByEmployeeId(employeeId: string): Promise<Resource | undefined> {
+    const [resource] = await db.select().from(resources).where(eq(resources.employeeId, employeeId));
+    return resource || undefined;
+  }
+
   async createResource(resource: InsertResource): Promise<Resource> {
     const [created] = await db.insert(resources).values(resource).returning();
     await this.refreshOperatorAvailabilityManager();

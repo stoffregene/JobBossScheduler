@@ -404,6 +404,139 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/resources/import", async (req, res) => {
+    try {
+      let resourcesData: any[] = [];
+      
+      // Check if this is a file upload or JSON data
+      if (req.headers['content-type']?.includes('multipart/form-data')) {
+        // Handle file upload
+        const multer = require('multer');
+        const upload = multer().single('file');
+        
+        upload(req as any, res, async (err: any) => {
+          if (err) {
+            return res.status(400).json({ message: "File upload error" });
+          }
+          
+          const file = (req as any).file;
+          if (!file) {
+            return res.status(400).json({ message: "No file provided" });
+          }
+
+          try {
+            let fileData: any[] = [];
+            
+            if (file.mimetype === 'application/json' || file.originalname.endsWith('.json')) {
+              // Parse JSON file
+              const jsonContent = file.buffer.toString('utf8');
+              fileData = JSON.parse(jsonContent);
+            } else if (file.mimetype === 'text/csv' || file.originalname.endsWith('.csv')) {
+              // Parse CSV file
+              const csvContent = file.buffer.toString('utf8');
+              const lines = csvContent.split('\n');
+              const headers = lines[0].split(',').map((h: string) => h.trim().replace(/"/g, ''));
+              
+              for (let i = 1; i < lines.length; i++) {
+                if (lines[i].trim()) {
+                  const values = lines[i].split(',').map((v: string) => v.trim().replace(/"/g, ''));
+                  const row: any = {};
+                  headers.forEach((header: string, index: number) => {
+                    row[header] = values[index] || '';
+                  });
+                  fileData.push(row);
+                }
+              }
+            } else {
+              return res.status(400).json({ message: "Unsupported file type. Please upload JSON or CSV." });
+            }
+            
+            resourcesData = fileData;
+          } catch (parseError) {
+            return res.status(400).json({ message: "Failed to parse file content" });
+          }
+        });
+      } else {
+        // Handle JSON data - load from attached_assets if empty array provided
+        if (Array.isArray(req.body) && req.body.length === 0) {
+          // Load from attached_assets/resources.json
+          const fs = require('fs');
+          const path = require('path');
+          
+          try {
+            const resourcesPath = path.join(__dirname, '../attached_assets/resources.json');
+            const resourcesContent = fs.readFileSync(resourcesPath, 'utf8');
+            resourcesData = JSON.parse(resourcesContent);
+          } catch (fileError) {
+            return res.status(500).json({ message: "Failed to load resources.json file" });
+          }
+        } else {
+          resourcesData = req.body;
+        }
+      }
+
+      let processed = 0;
+      let created = 0;
+      let updated = 0;
+      const errors: string[] = [];
+
+      for (const resourceData of resourcesData) {
+        try {
+          // Transform the data from snake_case to camelCase and handle field mappings
+          const transformedData = {
+            employeeId: resourceData.employee_id,
+            name: resourceData.name,
+            email: resourceData.email || "",
+            role: resourceData.role,
+            workCenters: resourceData.work_centers || [],
+            skills: resourceData.skills || [],
+            shiftSchedule: resourceData.shift_schedule || [1],
+            workSchedule: resourceData.work_schedule || {},
+            status: resourceData.is_active ? 'Active' : 'Inactive'
+          };
+
+          // Check if resource already exists by employeeId
+          const existingResource = await storage.getResourceByEmployeeId(transformedData.employeeId);
+          
+          if (existingResource) {
+            // Update existing resource
+            const updatedResource = await storage.updateResource(existingResource.id, transformedData);
+            if (updatedResource) {
+              updated++;
+              broadcast({ type: 'resource_updated', data: updatedResource });
+            }
+          } else {
+            // Create new resource
+            const newResource = await storage.createResource(transformedData);
+            if (newResource) {
+              created++;
+              broadcast({ type: 'resource_created', data: newResource });
+            }
+          }
+          processed++;
+        } catch (error) {
+          console.error('Failed to import resource:', resourceData, error);
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          errors.push(`Failed to import ${resourceData.name || resourceData.employee_id}: ${errorMessage}`);
+        }
+      }
+
+      broadcast({ type: 'resources_imported', data: { processed, created, updated } });
+      
+      res.json({
+        success: true,
+        processed,
+        created,
+        updated,
+        errors: errors.length > 0 ? errors : undefined,
+        message: `Successfully processed ${processed} resources. Created ${created}, updated ${updated}.`
+      });
+    } catch (error) {
+      console.error('Failed to import resources:', error);
+      res.status(500).json({ message: "Failed to import resources" });
+    }
+  });
+
   app.patch("/api/resources/:id", async (req, res) => {
     try {
       const updates = req.body;

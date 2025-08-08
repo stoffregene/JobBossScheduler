@@ -23,6 +23,16 @@ export default function ResourceManagement() {
   const [deletingResource, setDeletingResource] = useState<Resource | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showUnavailabilityDialog, setShowUnavailabilityDialog] = useState(false);
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const [importResult, setImportResult] = useState<{
+    success: boolean;
+    processed: number;
+    created: number;
+    updated: number;
+    message: string;
+    errors?: string[];
+  } | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
   const [unavailabilityForm, setUnavailabilityForm] = useState({
     resourceIds: [] as string[],
     startDate: "",
@@ -391,6 +401,148 @@ export default function ResourceManagement() {
     }));
   };
 
+  const handleImportResources = () => {
+    setShowImportDialog(true);
+    setImportResult(null);
+  };
+
+  const handleFileImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsImporting(true);
+    setImportResult(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch('/api/resources/import', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        // Invalidate queries to refresh the UI
+        queryClient.invalidateQueries({ queryKey: ['/api/resources'] });
+        
+        setImportResult({
+          success: true,
+          processed: result.processed,
+          created: result.created,
+          updated: result.updated,
+          message: result.message,
+          errors: result.errors
+        });
+
+        toast({
+          title: "Resource Import Complete",
+          description: result.message,
+        });
+      } else {
+        setImportResult({
+          success: false,
+          processed: 0,
+          created: 0,
+          updated: 0,
+          message: result.message || "Failed to import resources."
+        });
+
+        toast({
+          title: "Import Failed",
+          description: result.message || "Failed to import resources.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      setImportResult({
+        success: false,
+        processed: 0,
+        created: 0,
+        updated: 0,
+        message: "An error occurred while importing the resources."
+      });
+
+      toast({
+        title: "Import Error",
+        description: "An error occurred while importing the resources.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsImporting(false);
+      event.target.value = ''; // Reset file input
+    }
+  };
+
+  const handleJSONImport = async () => {
+    setIsImporting(true);
+    setImportResult(null);
+
+    try {
+      // Import the JSON data from attached_assets
+      const response = await fetch('/api/resources/import', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify([]), // We'll load the JSON data on the server side
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        // Invalidate queries to refresh the UI
+        queryClient.invalidateQueries({ queryKey: ['/api/resources'] });
+        
+        setImportResult({
+          success: true,
+          processed: result.processed,
+          created: result.created,
+          updated: result.updated,
+          message: result.message,
+          errors: result.errors
+        });
+
+        toast({
+          title: "Resource Import Complete",
+          description: result.message,
+        });
+      } else {
+        setImportResult({
+          success: false,
+          processed: 0,
+          created: 0,
+          updated: 0,
+          message: result.message || "Failed to import resources."
+        });
+
+        toast({
+          title: "Import Failed",
+          description: result.message || "Failed to import resources.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      setImportResult({
+        success: false,
+        processed: 0,
+        created: 0,
+        updated: 0,
+        message: "An error occurred while importing the resources."
+      });
+
+      toast({
+        title: "Import Error",
+        description: "An error occurred while importing the resources.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   if (resourcesLoading || machinesLoading) {
     return (
       <div className="container mx-auto p-6">
@@ -463,6 +615,15 @@ export default function ResourceManagement() {
           >
             <UserPlus className="h-4 w-4" />
             Add Resource
+          </Button>
+          <Button 
+            onClick={handleImportResources}
+            variant="outline"
+            className="flex items-center gap-2"
+            data-testid="button-import-resources"
+          >
+            <Upload className="h-4 w-4" />
+            Import Resources
           </Button>
         </div>
       </div>
@@ -1494,6 +1655,116 @@ export default function ResourceManagement() {
               data-testid="button-save-add"
             >
               {createResourceMutation.isPending ? "Creating..." : "Create Resource"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import Resources Dialog */}
+      <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Import Resources</DialogTitle>
+            <DialogDescription>
+              Import resources from JSON or CSV files. This will create new resources or update existing ones based on employee ID.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-6">
+            {/* Import Options */}
+            <div className="space-y-4">
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                <h3 className="font-medium text-blue-900 dark:text-blue-100 mb-2">Import Options</h3>
+                <div className="text-sm text-blue-800 dark:text-blue-200 space-y-2">
+                  <p>Choose how to import your resource data:</p>
+                  <ul className="list-disc list-inside space-y-1 ml-4">
+                    <li><strong>JSON Import:</strong> Import from the attached_assets/resources.json file</li>
+                    <li><strong>File Upload:</strong> Upload your own JSON or CSV file</li>
+                    <li>Resources will be matched by Employee ID for updates</li>
+                    <li>New resources will be created for unmatched Employee IDs</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4">
+                <Button 
+                  onClick={handleJSONImport}
+                  disabled={isImporting}
+                  className="flex items-center gap-2"
+                  variant="outline"
+                >
+                  <Upload className="h-4 w-4" />
+                  Import from resources.json
+                </Button>
+
+                <div className="space-y-2">
+                  <Label htmlFor="fileImport">Or upload your own file</Label>
+                  <Input
+                    id="fileImport"
+                    type="file"
+                    accept=".json,.csv,application/json,text/csv"
+                    onChange={handleFileImport}
+                    disabled={isImporting}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Import Results */}
+            {importResult && (
+              <div className={`border rounded-lg p-4 ${
+                importResult.success 
+                  ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800' 
+                  : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+              }`}>
+                <div className="flex items-center gap-2 mb-2">
+                  {importResult.success ? (
+                    <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+                  ) : (
+                    <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400" />
+                  )}
+                  <span className="font-medium">
+                    {importResult.success ? 'Import Complete' : 'Import Failed'}
+                  </span>
+                </div>
+                <p className="text-sm">{importResult.message}</p>
+                
+                {importResult.success && (
+                  <div className="mt-3 text-sm">
+                    <p>Processed: {importResult.processed}</p>
+                    <p>Created: {importResult.created}</p>
+                    <p>Updated: {importResult.updated}</p>
+                  </div>
+                )}
+
+                {importResult.errors && importResult.errors.length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-sm font-medium mb-2">Errors:</p>
+                    <ul className="text-sm space-y-1">
+                      {importResult.errors.map((error, index) => (
+                        <li key={index} className="text-red-600 dark:text-red-400">• {error}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {isImporting && (
+              <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
+                <span className="text-sm">Processing import...</span>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setShowImportDialog(false)}
+              disabled={isImporting}
+            >
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>
