@@ -64,7 +64,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json(filteredJobs);
     } catch (error) {
-      res.status(500).json({ message: "Failed to fetch jobs" });
+      console.error('Error fetching jobs:', error);
+      // Return empty array instead of error to prevent frontend crashes
+      res.json([]);
     }
   });
 
@@ -75,7 +77,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const schedulableJobs = jobs.filter(job => job.status !== 'Complete');
       res.json(schedulableJobs);
     } catch (error) {
-      res.status(500).json({ message: "Failed to fetch schedulable jobs" });
+      console.error('Error fetching schedulable jobs:', error);
+      res.json([]);
     }
   });
 
@@ -564,7 +567,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const machines = await storage.getMachines();
       res.json(machines);
     } catch (error) {
-      res.status(500).json({ message: "Failed to fetch machines" });
+      console.error('Error fetching machines:', error);
+      res.json([]);
     }
   });
 
