@@ -749,10 +749,7 @@ export class DatabaseStorage implements IStorage {
     return { success: false, failureReason: "Drag scheduling not fully implemented" };
   }
 
-  async getMachinesBySubstitutionGroup(substitutionGroup: string): Promise<Machine[]> {
-    const allMachines = await this.getMachines();
-    return allMachines.filter(machine => machine.substitutionGroup === substitutionGroup);
-  }
+
 
   async getCompatibleMachines(capability: string, category?: string, tier?: "Tier 1" | "Standard" | "Budget"): Promise<Machine[]> {
     const allMachines = await this.getMachines();
