@@ -199,14 +199,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   name: row.name,
                   employeeId: row.employee_id || row.employeeId,
                   role: row.role,
-                  email: row.email,
+                  email: row.email || '',
                   workCenters: row.work_centers || row.workCenters || [],
                   skills: row.skills || [],
                   shiftSchedule: row.shift_schedule || row.shiftSchedule || [1],
                   workSchedule: row.work_schedule || row.workSchedule || {},
-                  isActive: row.is_active !== undefined ? row.is_active : true,
                   hourlyRate: row.hourly_rate ? parseFloat(row.hourly_rate) : null,
-                  overtimeRate: row.overtime_rate ? parseFloat(row.overtime_rate) : null
+                  overtimeRate: row.overtime_rate ? parseFloat(row.overtime_rate) : null,
+                  status: 'Active'
                 });
                 importedCount++;
               } catch (error) {
