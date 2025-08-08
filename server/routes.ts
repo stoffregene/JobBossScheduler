@@ -160,6 +160,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ status: "ok", message: "CSV import endpoint is accessible" });
   });
 
+  // Test POST route without multer
+  app.post("/api/test-post", (req, res) => {
+    console.log('Test POST endpoint called');
+    res.json({ status: "ok", message: "POST endpoint working" });
+  });
+
+  // CSV Import endpoint (simple version without multer for testing)
+  app.post("/api/import-csv-simple", async (req, res) => {
+    console.log('CSV import simple endpoint called');
+    res.json({ status: "ok", message: "CSV import simple endpoint working" });
+  });
+
   // CSV Import endpoint
   app.post("/api/import-csv", upload.single('csvFile'), async (req, res) => {
     console.log('CSV import endpoint called');
