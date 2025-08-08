@@ -180,7 +180,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         console.log(`Importing ${tableType} data from JSON...`);
-        console.log(`Data length: ${data.length} records`);
+        console.log(`Data type: ${typeof data}`);
+        console.log(`Data length: ${Array.isArray(data) ? data.length : 'not an array'}`);
 
         let importedCount = 0;
 
@@ -189,7 +190,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             // Clear existing resources first
             await db.delete(resources);
             
-            for (const row of data) {
+            // Ensure data is an array
+            const resourcesData = Array.isArray(data) ? data : [data];
+            
+            for (const row of resourcesData) {
               try {
                 await db.insert(resources).values({
                   name: row.name,
