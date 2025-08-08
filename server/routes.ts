@@ -51,7 +51,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('Starting database migration...');
       
       // Import drizzle-kit for migrations
-      const { migrate } = await import('drizzle-orm/postgres-js/migrator');
+      const { migrate } = await import('drizzle-orm/node-postgres/migrator');
       
       // Run migrations
       await migrate(db, { migrationsFolder: './drizzle' });
