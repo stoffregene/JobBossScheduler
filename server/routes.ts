@@ -44,6 +44,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
   });
+
+  // Database migration endpoint
+  app.post("/api/migrate-db", async (req, res) => {
+    try {
+      console.log('Starting database migration...');
+      
+      // Import drizzle-kit for migrations
+      const { migrate } = await import('drizzle-orm/postgres-js/migrator');
+      
+      // Run migrations
+      await migrate(db, { migrationsFolder: './drizzle' });
+      
+      console.log('Database migration completed successfully');
+      res.json({ 
+        status: "ok", 
+        message: "Database migration completed successfully",
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error('Database migration failed:', error);
+      res.status(500).json({ 
+        status: "error", 
+        message: "Database migration failed",
+        error: error.message,
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
   
   // Configure multer for file uploads
   const upload = multer({ 
