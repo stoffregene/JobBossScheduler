@@ -185,7 +185,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('Inserting Joel Stevenson...');
       await db.execute(sql`INSERT INTO resources (name, employee_id, role, email, work_centers, skills, shift_schedule, work_schedule, status) VALUES ('Joel Stevenson', '012', 'Operator', '', '["c3eabb8c-fa88-4962-b168-544397ae1fc1"]', '[]', '[2]', '{}', 'Active')`);
       
-      let importedCount = 2;
+      // Insert all remaining resources
+      const allResources = [
+        ['Charles Nguyen', '016', 'Operator'],
+        ['Steven Truong', '018', 'Operator'], 
+        ['Calob Lamaster', '011', 'Operator'],
+        ['Lindsay Jackson', '010', 'Quality Inspector'],
+        ['Trevin Jorgensen', '009', 'Operator'],
+        ['Aaron Ackelson', '006', 'Operator'],
+        ['Kyle Evers', '019', 'Operator'],
+        ['Vilas Morris', '014', 'Operator'],
+        ['Aaron Chastain', '007', 'Operator'],
+        ['Noah Johnson', '004', 'Operator'],
+        ['Andy Pontier', '017', 'Operator'],
+        ['Jiordan Hofert', '013', 'Operator'],
+        ['Drew Darling', '005', 'Operator'],
+        ['Jack Glasgow', '020', 'Operator'],
+        ['Chris Johnson', '002', 'Lead Operator'],
+        ['Rick Vandehaar', '001', 'Lead Operator'],
+        ['Dakota Robertson', '015', 'Operator'],
+        ['Corey Smith', '003', 'Supervisor']
+      ];
+      
+      for (const [name, empId, role] of allResources) {
+        console.log(`Inserting ${name}...`);
+        await db.execute(sql`INSERT INTO resources (name, employee_id, role, email, work_centers, skills, shift_schedule, work_schedule, status) VALUES (${name}, ${empId}, ${role}, '', '[]', '[]', '[1]', '{}', 'Active')`);
+      }
+      
+      let importedCount = 2 + allResources.length;
       
       res.json({ 
         status: "ok", 
