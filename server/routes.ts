@@ -200,15 +200,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Parse headers (remove quotes and trim)
       const headers = lines[0].split(',').map((h: string) => h.replace(/"/g, '').trim());
       
-      // Parse data rows
+      // Parse data rows with proper CSV handling
       for (let i = 1; i < lines.length; i++) {
         const line = lines[i].trim();
         if (line) {
-          // Simple CSV parsing - split by comma and remove quotes
-          const values = line.split(',').map((v: string) => v.replace(/"/g, '').trim());
+          // More robust CSV parsing that handles quoted fields with commas
+          const values: string[] = [];
+          let current = '';
+          let inQuotes = false;
+          
+          for (let j = 0; j < line.length; j++) {
+            const char = line[j];
+            if (char === '"') {
+              inQuotes = !inQuotes;
+            } else if (char === ',' && !inQuotes) {
+              values.push(current.trim());
+              current = '';
+            } else {
+              current += char;
+            }
+          }
+          values.push(current.trim()); // Add the last value
+          
           const row: any = {};
           headers.forEach((header: string, index: number) => {
-            row[header] = values[index] || '';
+            row[header] = values[index] ? values[index].replace(/^"|"$/g, '') : '';
           });
           results.push(row);
         }

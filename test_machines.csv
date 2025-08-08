@@ -1,0 +1,2 @@
+﻿id,machine_id,name,type,tier,capabilities,status,utilization,available_shifts,efficiency_factor,substitution_group,category,subcategory,spindles,live_tooling,bar_feeder,fourth_axis,bar_length
+test-id,SAW-001,Test Machine,SAW,Standard,["cutting"],Available,0.00,[1],1.00,test_group,Band Saws,Horizontal Band,,false,false,false,
