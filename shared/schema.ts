@@ -91,14 +91,15 @@ export const resources = pgTable("resources", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   employeeId: text("employee_id").notNull().unique(),
   name: text("name").notNull(),
-  email: text("email"),
+  email: text("email").notNull(),
   role: text("role").notNull(), // Operator, Technician, Inspector, etc.
   workCenters: jsonb("work_centers").$type<string[]>().notNull().default([]), // Machine IDs they can operate
   skills: jsonb("skills").$type<string[]>().notNull().default([]), // Skill sets
   shiftSchedule: jsonb("shift_schedule").$type<number[]>().notNull().default([1]), // Normal shifts (legacy)
   workSchedule: jsonb("work_schedule").$type<ResourceWorkSchedule>().notNull().default({}), // Custom work schedule
-  isActive: boolean("is_active").notNull().default(true),
-  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  hourlyRate: decimal("hourly_rate", { precision: 8, scale: 2 }),
+  overtimeRate: decimal("overtime_rate", { precision: 8, scale: 2 }),
+  status: text("status").notNull().default("Active"),
 });
 
 // Resource unavailability periods (vacation, sick, training, etc.)
