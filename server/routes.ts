@@ -170,6 +170,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Direct SQL import for resources
+  app.post("/api/import-resources-sql", async (req, res) => {
+    try {
+      const { data } = req.body;
+      
+      // Clear existing resources
+      await db.execute(sql`DELETE FROM resources`);
+      
+      let importedCount = 0;
+      
+      for (const row of data) {
+        try {
+          await db.execute(sql`
+            INSERT INTO resources (
+              name, employee_id, role, email, work_centers, skills, 
+              shift_schedule, work_schedule, hourly_rate, overtime_rate, status
+            ) VALUES (
+              ${row.name || 'Unknown'}, 
+              ${row.employee_id}, 
+              ${row.role}, 
+              ${row.email || ''}, 
+              ${JSON.stringify(row.work_centers || [])}, 
+              ${JSON.stringify(row.skills || [])}, 
+              ${JSON.stringify(row.shift_schedule || [1])}, 
+              ${JSON.stringify(row.work_schedule || {})}, 
+              ${row.hourly_rate || null}, 
+              ${row.overtime_rate || null}, 
+              'Active'
+            )
+          `);
+          importedCount++;
+        } catch (error) {
+          console.error('Failed to insert resource:', row.name, error);
+        }
+      }
+      
+      res.json({ 
+        status: "ok", 
+        message: `Successfully imported ${importedCount} resources`,
+        importedCount 
+      });
+      
+    } catch (error) {
+      console.error('SQL import failed:', error);
+      res.status(500).json({ status: "error", message: error.message });
+    }
+  });
+
   // CSV Import endpoint (GET version for testing)
   app.get("/api/import-csv", (req, res) => {
     console.log('CSV import GET endpoint called');
