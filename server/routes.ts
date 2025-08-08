@@ -12,6 +12,7 @@ import { Readable } from "stream";
 import { getWorkCenterPrefixes } from "./utils/workCenterPrefixes";
 import { db } from "./db";
 import { machines } from "@shared/schema";
+import path from "path";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
@@ -54,11 +55,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       console.log('Starting database migration...');
       
-      // Import drizzle-kit for migrations
-      const { migrate } = await import('drizzle-orm/node-postgres/migrator');
+      // Execute migration SQL directly
+      const fs = await import('fs');
+      const migrationPath = path.resolve(process.cwd(), 'drizzle', '0000_initial.sql');
+      const migrationSQL = fs.readFileSync(migrationPath, 'utf8');
       
-      // Run migrations
-      await migrate(db, { migrationsFolder: './drizzle' });
+      // Execute the SQL directly
+      await db.execute(migrationSQL);
       
       console.log('Database migration completed successfully');
       res.json({ 
@@ -83,11 +86,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       console.log('Starting database migration...');
       
-      // Import drizzle-kit for migrations
-      const { migrate } = await import('drizzle-orm/node-postgres/migrator');
+      // Execute migration SQL directly
+      const fs = await import('fs');
+      const migrationPath = path.resolve(process.cwd(), 'drizzle', '0000_initial.sql');
+      const migrationSQL = fs.readFileSync(migrationPath, 'utf8');
       
-      // Run migrations
-      await migrate(db, { migrationsFolder: './drizzle' });
+      // Execute the SQL directly
+      await db.execute(migrationSQL);
       
       console.log('Database migration completed successfully');
       res.json({ 
