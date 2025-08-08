@@ -168,7 +168,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // JSON Import endpoint for resources
     app.post("/api/import-json", async (req, res) => {
-      console.log('JSON import endpoint called');
+      console.log('JSON import endpoint called - FORCE DEPLOY');
       try {
         const { tableType, data } = req.body;
         
@@ -251,7 +251,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     // JSON Import endpoint for resources
     app.post("/api/import-json", async (req, res) => {
-      console.log('JSON import endpoint called');
+      console.log('JSON import endpoint called - FORCE DEPLOY');
       try {
         const { tableType, data } = req.body;
         
