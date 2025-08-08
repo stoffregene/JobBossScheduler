@@ -22,6 +22,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/", (req, res) => {
     res.json({ status: "ok", message: "JobBossScheduler API is running", timestamp: new Date().toISOString() });
   });
+
+  // Database connection test endpoint
+  app.get("/api/test-db", async (req, res) => {
+    try {
+      // Simple database query to test connection
+      const result = await db.select().from(machines).limit(1);
+      res.json({ 
+        status: "ok", 
+        message: "Database connection successful",
+        machineCount: result.length,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error('Database connection test failed:', error);
+      res.status(500).json({ 
+        status: "error", 
+        message: "Database connection failed",
+        error: error.message,
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
   
   // Configure multer for file uploads
   const upload = multer({ 
