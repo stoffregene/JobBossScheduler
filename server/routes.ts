@@ -148,6 +148,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Test route to verify route registration
+  app.get("/api/test-route", (req, res) => {
+    console.log('Test route called');
+    res.json({ status: "ok", message: "Test route working" });
+  });
+
+  // CSV Import endpoint (GET version for testing)
+  app.get("/api/import-csv", (req, res) => {
+    console.log('CSV import GET endpoint called');
+    res.json({ status: "ok", message: "CSV import endpoint is accessible" });
+  });
+
   // CSV Import endpoint
   app.post("/api/import-csv", upload.single('csvFile'), async (req, res) => {
     console.log('CSV import endpoint called');
