@@ -1,17 +1,6 @@
-import { Pool, neonConfig } from '@neondatabase/serverless';
-import { drizzle } from 'drizzle-orm/neon-serverless';
-import { WebSocket } from 'ws';
+import { Pool } from 'pg';
+import { drizzle } from 'drizzle-orm/node-postgres';
 import * as schema from "@shared/schema";
-
-// Configure WebSocket for Neon serverless in Node.js environment
-neonConfig.webSocketConstructor = WebSocket;
-
-// Try to use direct connection if WebSocket fails
-try {
-  neonConfig.webSocketConstructor = WebSocket;
-} catch (error) {
-  console.log('WebSocket configuration failed, using direct connection');
-}
 
 if (!process.env.DATABASE_URL) {
   throw new Error(
@@ -30,7 +19,7 @@ let db: any;
 
 try {
   pool = new Pool({ connectionString: process.env.DATABASE_URL });
-  db = drizzle({ client: pool, schema });
+  db = drizzle(pool, { schema });
   console.log('Database connection established successfully');
 } catch (error) {
   console.error('Failed to create database pool:', error);
