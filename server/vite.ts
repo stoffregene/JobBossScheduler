@@ -67,7 +67,8 @@ export async function setupVite(app: Express, server: Server) {
 }
 
 export function serveStatic(app: Express) {
-  const distPath = path.resolve(import.meta.dirname, "..", "dist", "public");
+  // Use process.cwd() instead of import.meta.dirname for more reliable path resolution
+  const distPath = path.resolve(process.cwd(), "dist", "public");
   
   log(`Looking for static files in: ${distPath}`);
   log(`Directory exists: ${fs.existsSync(distPath)}`);
