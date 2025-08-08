@@ -11,7 +11,7 @@ import csv from "csv-parser";
 import { Readable } from "stream";
 import { getWorkCenterPrefixes } from "./utils/workCenterPrefixes";
 import { db } from "./db";
-import { machines } from "@shared/schema";
+import { machines, resources } from "@shared/schema";
 import path from "path";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -103,6 +103,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ 
         status: "error", 
         message: "Database migration failed",
+        error: error.message,
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+
+  // Initialize default data endpoint
+  app.get("/api/init-data", async (req, res) => {
+    console.log('Initialize data endpoint called');
+    try {
+      console.log('Starting data initialization...');
+      
+      // Force re-initialization by clearing existing data first
+      await db.delete(machines);
+      await db.delete(resources);
+      
+      // Import the storage to trigger initialization
+      const { storage } = await import('./storage');
+      
+      // Manually trigger the initialization
+      await storage.initializeDefaultData();
+      
+      console.log('Default data initialization completed successfully');
+      res.json({ 
+        status: "ok", 
+        message: "Default data initialization completed successfully",
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error('Data initialization failed:', error);
+      res.status(500).json({ 
+        status: "error", 
+        message: "Data initialization failed",
         error: error.message,
         timestamp: new Date().toISOString()
       });
