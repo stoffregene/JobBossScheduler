@@ -6,72 +6,6 @@ This is a comprehensive Manufacturing Resource Planning (MRP) system designed fo
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
-## Recent Changes
-
-**August 6, 2025** - YEAR-ROUND OPERATOR AVAILABILITY SYSTEM COMPLETED: Implemented comprehensive year-round operator scheduling with full auto-scheduling algorithm integration:
-
-**🎯 COMPREHENSIVE AVAILABILITY SYSTEM**:
-- **OPERATORAVAILABILITYMANAGER**: New service class providing year-round operator scheduling logic with real-time availability checking
-- **AUTO-SCHEDULING INTEGRATION**: Scheduling algorithm now uses comprehensive operator availability instead of basic weekly patterns
-- **INTELLIGENT RESOURCE ASSIGNMENT**: Enhanced resource assignment with unavailability checking, custom work schedules, and shift compatibility
-- **API ENDPOINTS**: Complete RESTful API coverage for operator availability queries and schedule analysis
-- **DATABASE AUTO-REFRESH**: Automatic refresh of availability manager when resource or unavailability data changes
-
-**August 6, 2025** - OPERATOR UNAVAILABILITY VISUALIZATION FIXED: Operators marked as unavailable now display red "Unavailable" blocks during their scheduled work times instead of disappearing from the view:
-
-**🔴 UNAVAILABILITY DISPLAY ENHANCEMENT**:
-- **RED UNAVAILABLE BLOCKS**: When operators are marked out (vacation/sick), their normally scheduled work time now displays as red "Unavailable" blocks
-- **PROPER SCHEDULE PRESERVATION**: System shows operator's actual work schedule times in red rather than removing them completely
-- **CROSS-DAY SHIFT SUPPORT**: Unavailable blocks properly handle 2nd shift spans (3 PM to 3 AM next day) with correct multi-day visualization
-- **PARTIAL/FULL DAY HANDLING**: Supports both partial day unavailability (specific hours) and full day unavailability (entire scheduled shift)
-- **VISUAL CONSISTENCY**: Red blocks match legend and provide clear distinction from working time blocks (blue/green)
-
-**August 6, 2025** - CRITICAL INFINITE LOOP RESOLUTION: Completely eliminated all infinite loops in resource scheduling with comprehensive protection systems:
-
-**🛡️ COMPREHENSIVE LOOP PROTECTION**:
-- **MULTI-SHIFT LIMITS**: Added 50-attempt maximum for multi-day job scheduling to prevent infinite resource assignment loops
-- **DAY-SKIPPING LIMITS**: Limited resource availability checking to 10-day maximum to prevent endless date searching  
-- **OUTER LOOP LIMITS**: Added 30-attempt maximum for main date-iteration loop to prevent scheduling deadlocks
-- **PROPER BREAK CONDITIONS**: Multi-shift failures now properly exit loops and advance to next available dates/shifts
-- **LOG SPAM PREVENTION**: Added intelligent log caching to prevent infinite console flooding while maintaining diagnostic visibility
-
-**August 6, 2025** - CRITICAL SCHEDULING ALGORITHM FIXES: Fixed status filtering and implemented custom work schedule support to eliminate incorrect job times:
-
-**🔧 CUSTOM WORK SCHEDULE IMPLEMENTATION**:
-- **STATUS FILTERING**: Fixed schedule view to only display jobs with "Scheduled" status (eliminated "Open" jobs appearing on calendar)
-- **CUSTOM WORK TIMES**: Added `getResourceWorkTimes()` function to extract individual resource work schedules (e.g., Mike's 5:00 AM - 4:00 PM)
-- **ENHANCED SCHEDULING**: Updated algorithm to use custom work schedule times instead of generic 3:00 AM - 3:00 PM shift times
-- **MULTI-DAY JOBS**: Enhanced multi-day job logic to span consecutive days within custom work windows (26.7-hour jobs use daily 11-hour segments)
-- **WEEKEND SKIPPING**: Updated day-skipping logic to respect individual resource availability (Mike works Monday-Thursday only)
-
-**August 5, 2025** - CRITICAL RESOURCE ALLOCATION BUG FIXED: Eliminated resource double-booking in auto-scheduler to enforce fundamental manufacturing constraint:
-
-**🔧 RESOURCE CONFLICT RESOLUTION**:
-- **ONE RESOURCE = ONE MACHINE**: Fixed critical bug where same employee was assigned to multiple machines simultaneously
-- **TIME-BASED AVAILABILITY**: Added `isResourceAvailableAtTime()` method to check for scheduling conflicts before resource assignment
-- **ENHANCED ASSIGNOPTIMALRESOURCE**: Updated resource assignment logic to validate availability during target time periods
-- **SCHEDULE REBUILD**: Cleared existing conflicted schedule and rebuilt with new conflict checking logic
-- **ZERO CONFLICTS VERIFIED**: Confirmed no resource double-booking exists in current schedule
-
-**August 5, 2025** - CALENDAR VIEWS ENHANCED: Added hourly, daily, weekly, and monthly calendar perspectives for comprehensive schedule management:
-
-**📅 MULTIPLE CALENDAR VIEWS**:
-- **HOURLY VIEW**: 24-hour breakdown of single day with precise job timing
-- **DAILY VIEW**: Single day focus with detailed job information  
-- **WEEKLY VIEW**: Traditional 7-day view with optimized layout
-- **MONTHLY VIEW**: 35-day calendar grid for long-term planning
-- **SMART NAVIGATION**: View-specific time navigation (hour→day, day→day, week→week, month→month)
-- **ADAPTIVE HEADERS**: Time displays adjust per view type (12 AM/PM for hourly, full dates for daily)
-
-**August 5, 2025** - MULTI-DAY JOB VISUALIZATION ENHANCED: Improved schedule display with staggered job blocks, US Central timezone, and expandable day functionality:
-
-**📅 ADVANCED SCHEDULE VISUALIZATION**:
-- **MULTI-DAY BLOCKS**: Jobs spanning multiple days now show blocks on ALL affected days with visual start/continuation/end indicators (▶ ◆ ◀)
-- **STAGGERED POSITIONING**: Job blocks show actual start/end times within each day using calculated positioning and partial widths
-- **EXPANDABLE DAYS**: Added clickable "+X more" functionality to expand crowded days and view all scheduled jobs
-- **US CENTRAL TIMEZONE**: Fixed job details modal to display all dates/times in America/Chicago timezone consistently
-- **VISUAL INDICATORS**: Clear border styles distinguish multi-day job segments (rounded start, straight continuation, rounded end)
-
 ## System Architecture
 
 ### Frontend Architecture
@@ -81,7 +15,7 @@ Preferred communication style: Simple, everyday language.
 - **State Management**: TanStack Query for server state.
 - **Routing**: Wouter.
 - **Real-time Updates**: WebSocket integration for live data synchronization.
-- **UI/UX Decisions**: Clear visual indicators for scheduling, multi-day jobs, and capacity constraints. Color coding for shifts and accessibility. Fullscreen support with proper scrolling and sticky headers. Multiple calendar views (hourly, daily, weekly, monthly) for comprehensive schedule perspectives.
+- **UI/UX Decisions**: Clear visual indicators for scheduling, multi-day jobs, and capacity constraints. Color coding for shifts and accessibility. Fullscreen support with proper scrolling and sticky headers. Multiple calendar views (hourly, daily, weekly, monthly) for comprehensive schedule perspectives. Enhanced display for multi-day jobs with staggered blocks and US Central timezone.
 
 ### Backend Architecture
 - **Runtime**: Node.js with Express.js.
@@ -94,14 +28,18 @@ Preferred communication style: Simple, everyday language.
 - **Database**: PostgreSQL with Drizzle ORM.
 - **Schema**: Comprehensive manufacturing schema (jobs, machines, schedule entries, material orders, alerts).
 - **Machine Tiers**: Premium, Standard, Budget with efficiency and substitution.
-- **Auto-Scheduling Logic**:
-    - Jobs schedule from today or later (never in the past), with a 7-day material buffer policy.
-    - Capacity-aware scheduling: Jobs move to next Monday if daily/weekly capacity is exceeded.
-    - Priority-based scheduling (Critical, High, Normal, Low) based on due dates.
-    - Resource assignment: Role-based and machine-specific compatibility matrix enforcement (e.g., Quality Inspectors for INSPECT operations, Operators/Shift Leads for PRODUCTION). Outsource operations receive no internal resources.
-    - Shift balancing: Utilizes both shifts with weekly capacity constraints, handling multi-day jobs across shifts and weekends.
-    - Material tracking: Missing materials generate alerts but do not block scheduling.
-    - **Year-Round Availability**: OperatorAvailabilityManager provides comprehensive operator scheduling with custom work schedules, unavailability periods, and real-time availability checks.
+- **Advanced Scheduling Logic**:
+    - **Priority Scoring System**: Jobs prioritized by business rules (Late to Customer, Late to Us, Nearing Ship, Normal, Stock).
+    - **Campaign Batching**: Outsourced operations automatically grouped into vendor-specific shipping campaigns.
+    - **Dependency Management**: Smart handling of outsourced operation dependencies with return date validation and promise date checking.
+    - **Operation Chunking**: Complex operations split across multiple time slots with resource continuity and availability checking.
+    - **Inspection Queue**: Automatic detection of jobs ready for quality control with real-time dashboard widget.
+    - **Structured Logging**: Comprehensive job-based logging with collapsible console groups for debugging scheduling decisions.
+    - **Boundary Time Management**: Forward and backward scheduling with configurable start dates and dependency constraints.
+    - **Year-Round Availability**: Comprehensive operator scheduling with custom work schedules, unavailability periods, and real-time availability checks.
+    - **Shift Capacity Load Balancing**: Distributes work evenly between shifts based on capacity.
+    - **Resource Conflict Resolution**: Prevents resource double-booking, ensuring one resource per machine.
+    - **Loop Protection**: Comprehensive limits to prevent infinite loops during scheduling.
 - **Resource Capacity Tracking**: Accounts for unavailability with year-round scheduling precision.
 - **Migrations**: Drizzle Kit.
 
