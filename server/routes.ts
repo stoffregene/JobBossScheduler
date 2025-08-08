@@ -166,11 +166,84 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ status: "ok", message: "POST endpoint working" });
   });
 
-  // CSV Import endpoint (simple version without multer for testing)
-  app.post("/api/import-csv-simple", async (req, res) => {
-    console.log('CSV import simple endpoint called');
-    res.json({ status: "ok", message: "CSV import simple endpoint working" });
-  });
+      // JSON Import endpoint for resources
+    app.post("/api/import-json", async (req, res) => {
+      console.log('JSON import endpoint called');
+      try {
+        const { tableType, data } = req.body;
+        
+        if (!tableType || !data) {
+          return res.status(400).json({
+            status: "error",
+            message: "Missing tableType or data"
+          });
+        }
+
+        console.log(`Importing ${tableType} data from JSON...`);
+        console.log(`Data length: ${data.length} records`);
+
+        let importedCount = 0;
+
+        switch (tableType) {
+          case 'resources':
+            // Clear existing resources first
+            await db.delete(resources);
+            
+            for (const row of data) {
+              try {
+                await db.insert(resources).values({
+                  name: row.name,
+                  employeeId: row.employee_id || row.employeeId,
+                  role: row.role,
+                  email: row.email,
+                  workCenters: row.work_centers || row.workCenters || [],
+                  skills: row.skills || [],
+                  shiftSchedule: row.shift_schedule || row.shiftSchedule || [1],
+                  workSchedule: row.work_schedule || row.workSchedule || {},
+                  hourlyRate: row.hourly_rate ? parseFloat(row.hourly_rate) : null,
+                  overtimeRate: row.overtime_rate ? parseFloat(row.overtime_rate) : null,
+                  status: row.status || 'Active'
+                });
+                importedCount++;
+              } catch (error) {
+                console.error('Failed to insert resource row:', row, error);
+                throw error;
+              }
+            }
+            break;
+
+          default:
+            return res.status(400).json({
+              status: "error",
+              message: "Invalid table type. Use 'resources' for JSON import"
+            });
+        }
+
+        console.log(`Successfully imported ${importedCount} records to ${tableType}`);
+        res.json({
+          status: "ok",
+          message: `Successfully imported ${importedCount} records to ${tableType}`,
+          importedCount,
+          tableType,
+          timestamp: new Date().toISOString()
+        });
+
+      } catch (error) {
+        console.error('JSON import failed:', error);
+        res.status(500).json({
+          status: "error",
+          message: "JSON import failed",
+          error: error.message,
+          timestamp: new Date().toISOString()
+        });
+      }
+    });
+
+    // CSV Import endpoint (simple version without multer for testing)
+    app.post("/api/import-csv-simple", async (req, res) => {
+      console.log('CSV import simple endpoint called');
+      res.json({ status: "ok", message: "CSV import simple endpoint working" });
+    });
 
   // CSV Import endpoint
   app.post("/api/import-csv", upload.single('csvFile'), async (req, res) => {
