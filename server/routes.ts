@@ -193,11 +193,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Parse CSV manually since dynamic require is not supported
       const lines = csvData.split('\n');
+      if (lines.length < 2) {
+        throw new Error('CSV file must have at least a header row and one data row');
+      }
+      
+      // Parse headers (remove quotes and trim)
       const headers = lines[0].split(',').map((h: string) => h.replace(/"/g, '').trim());
       
+      // Parse data rows
       for (let i = 1; i < lines.length; i++) {
-        if (lines[i].trim()) {
-          const values = lines[i].split(',').map((v: string) => v.replace(/"/g, '').trim());
+        const line = lines[i].trim();
+        if (line) {
+          // Simple CSV parsing - split by comma and remove quotes
+          const values = line.split(',').map((v: string) => v.replace(/"/g, '').trim());
           const row: any = {};
           headers.forEach((header: string, index: number) => {
             row[header] = values[index] || '';
@@ -308,6 +316,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
     } catch (error) {
       console.error('CSV import failed:', error);
+      console.error('CSV data length:', csvData.length);
+      console.error('CSV data preview:', csvData.substring(0, 200));
       res.status(500).json({ 
         status: "error", 
         message: "CSV import failed",
