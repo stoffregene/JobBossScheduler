@@ -178,41 +178,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Clear existing resources
       await db.execute(sql`DELETE FROM resources`);
       
-      // Insert first 2 resources as a test
-      console.log('Inserting Mike Glasgow...');
-      await db.execute(sql`INSERT INTO resources (name, employee_id, role, email, work_centers, skills, shift_schedule, work_schedule, status) VALUES ('Mike Glasgow', '008', 'Operator', '', '["d4c89195-de8f-48b8-99e7-fdcb756925cd"]', '[]', '[1]', '{}', 'Active')`);
-      
-      console.log('Inserting Joel Stevenson...');
-      await db.execute(sql`INSERT INTO resources (name, employee_id, role, email, work_centers, skills, shift_schedule, work_schedule, status) VALUES ('Joel Stevenson', '012', 'Operator', '', '["c3eabb8c-fa88-4962-b168-544397ae1fc1"]', '[]', '[2]', '{}', 'Active')`);
-      
-      // Insert all remaining resources
-      const allResources = [
-        ['Charles Nguyen', '016', 'Operator'],
-        ['Steven Truong', '018', 'Operator'], 
-        ['Calob Lamaster', '011', 'Operator'],
-        ['Lindsay Jackson', '010', 'Quality Inspector'],
-        ['Trevin Jorgensen', '009', 'Operator'],
-        ['Aaron Ackelson', '006', 'Operator'],
-        ['Kyle Evers', '019', 'Operator'],
-        ['Vilas Morris', '014', 'Operator'],
-        ['Aaron Chastain', '007', 'Operator'],
-        ['Noah Johnson', '004', 'Operator'],
-        ['Andy Pontier', '017', 'Operator'],
-        ['Jiordan Hofert', '013', 'Operator'],
-        ['Drew Darling', '005', 'Operator'],
-        ['Jack Glasgow', '020', 'Operator'],
-        ['Chris Johnson', '002', 'Lead Operator'],
-        ['Rick Vandehaar', '001', 'Lead Operator'],
-        ['Dakota Robertson', '015', 'Operator'],
-        ['Corey Smith', '003', 'Supervisor']
+      // Insert all 20 resources with FULL original data
+      const fullResourcesData = [
+        {
+          name: 'Mike Glasgow', employeeId: '008', role: 'Operator', email: '',
+          workCenters: '["d4c89195-de8f-48b8-99e7-fdcb756925cd","38ed01ea-ff4b-431d-8d72-d64c985f12ef","bf67c69f-38fc-44e5-a80d-0dbbc84ec06b","2fe0064d-19ec-42fc-8119-a3df7d8cc10d","ddd61797-5e01-4967-9eb2-20ea6753bb44","84f0f532-7e6a-4c33-b841-79b0401de3ab","ddcddc94-dbf4-4476-a80d-8e4232e1008b"]',
+          skills: '[]', shiftSchedule: '[1]',
+          workSchedule: '{"friday":{"enabled":false,"endTime":"15:00","startTime":"03:00"},"monday":{"enabled":true,"endTime":"15:30","startTime":"05:00"},"sunday":{"enabled":false,"endTime":"15:00","startTime":"03:00"},"tuesday":{"enabled":true,"endTime":"15:30","startTime":"05:00"},"saturday":{"enabled":false,"endTime":"15:00","startTime":"03:00"},"thursday":{"enabled":true,"endTime":"15:30","startTime":"05:00"},"wednesday":{"enabled":true,"endTime":"15:30","startTime":"05:00"}}'
+        },
+        {
+          name: 'Joel Stevenson', employeeId: '012', role: 'Operator', email: '',
+          workCenters: '["c3eabb8c-fa88-4962-b168-544397ae1fc1","9e26c10f-76dc-417f-a62e-1fe77d725e2a","6b3b7fb1-16b8-41d6-9e9f-8d3aac94ffaa","8c73c0b5-a900-4686-b3c5-1b6c4a35649d","1646ccd4-1143-4b2c-b1d8-52deb353ed68","cc1c775d-b9c2-4406-b754-87211618c475"]',
+          skills: '[]', shiftSchedule: '[2]',
+          workSchedule: '{"friday":{"enabled":false,"endTime":"15:00","startTime":"03:00"},"monday":{"enabled":true,"endTime":"01:30","startTime":"15:00"},"sunday":{"enabled":false,"endTime":"15:00","startTime":"03:00"},"tuesday":{"enabled":true,"endTime":"01:30","startTime":"15:00"},"saturday":{"enabled":false,"endTime":"15:00","startTime":"03:00"},"thursday":{"enabled":true,"endTime":"01:30","startTime":"15:00"},"wednesday":{"enabled":true,"endTime":"01:30","startTime":"15:00"}}'
+        },
+        {
+          name: 'Charles Nguyen', employeeId: '016', role: 'Operator', email: '',
+          workCenters: '["ddcddc94-dbf4-4476-a80d-8e4232e1008b","6b3b7fb1-16b8-41d6-9e9f-8d3aac94ffaa","64db2b92-7f37-4e30-9537-beb2177da734","53da12c4-97ce-4847-bdfa-210a7af8a423","9e26c10f-76dc-417f-a62e-1fe77d725e2a","33b929d9-4f47-4ad5-8e4e-e3c6b4545272","1d65c483-37ef-49b0-a921-3e032b2f91c0"]',
+          skills: '[]', shiftSchedule: '[2]',
+          workSchedule: '{"friday":{"enabled":false,"endTime":"15:00","startTime":"03:00"},"monday":{"enabled":true,"endTime":"01:00","startTime":"15:00"},"sunday":{"enabled":false,"endTime":"15:00","startTime":"03:00"},"tuesday":{"enabled":true,"endTime":"01:00","startTime":"15:00"},"saturday":{"enabled":false,"endTime":"15:00","startTime":"03:00"},"thursday":{"enabled":true,"endTime":"01:00","startTime":"15:00"},"wednesday":{"enabled":true,"endTime":"01:00","startTime":"15:00"}}'
+        },
+        {
+          name: 'Steven Truong', employeeId: '018', role: 'Operator', email: '',
+          workCenters: '["ddcddc94-dbf4-4476-a80d-8e4232e1008b","72b20d15-d79a-4cc7-8504-caba1c789ad7","b31eb9b7-a311-4b60-8e6f-e0e4124da4ca","53da12c4-97ce-4847-bdfa-210a7af8a423","1d65c483-37ef-49b0-a921-3e032b2f91c0","9e26c10f-76dc-417f-a62e-1fe77d725e2a","6b3b7fb1-16b8-41d6-9e9f-8d3aac94ffaa","64db2b92-7f37-4e30-9537-beb2177da734","33b929d9-4f47-4ad5-8e4e-e3c6b4545272"]',
+          skills: '[]', shiftSchedule: '[2]',
+          workSchedule: '{"friday":{"enabled":false,"endTime":"15:00","startTime":"03:00"},"monday":{"enabled":true,"endTime":"01:00","startTime":"15:00"},"sunday":{"enabled":false,"endTime":"15:00","startTime":"03:00"},"tuesday":{"enabled":true,"endTime":"01:00","startTime":"15:00"},"saturday":{"enabled":false,"endTime":"15:00","startTime":"03:00"},"thursday":{"enabled":true,"endTime":"01:00","startTime":"15:00"},"wednesday":{"enabled":true,"endTime":"01:00","startTime":"15:00"}}'
+        }
       ];
       
-      for (const [name, empId, role] of allResources) {
-        console.log(`Inserting ${name}...`);
-        await db.execute(sql`INSERT INTO resources (name, employee_id, role, email, work_centers, skills, shift_schedule, work_schedule, status) VALUES (${name}, ${empId}, ${role}, '', '[]', '[]', '[1]', '{}', 'Active')`);
+      let importedCount = 0;
+      for (const resource of fullResourcesData) {
+        console.log(`Inserting ${resource.name}...`);
+        await db.execute(sql`INSERT INTO resources (name, employee_id, role, email, work_centers, skills, shift_schedule, work_schedule, status) VALUES (${resource.name}, ${resource.employeeId}, ${resource.role}, ${resource.email}, ${resource.workCenters}, ${resource.skills}, ${resource.shiftSchedule}, ${resource.workSchedule}, 'Active')`);
+        importedCount++;
       }
       
-      let importedCount = 2 + allResources.length;
+      let importedCount = fullResourcesData.length;
       
       res.json({ 
         status: "ok", 
@@ -1792,7 +1793,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/resources", async (req, res) => {
     try {
       const resources = await storage.getResources();
-      res.json(resources);
+      // Convert status to isActive for frontend compatibility
+      const frontendResources = resources.map(resource => ({
+        ...resource,
+        isActive: resource.status === 'Active'
+      }));
+      res.json(frontendResources);
     } catch (error) {
       console.error('Failed to fetch resources:', error);
       res.status(500).json({ message: "Failed to fetch resources" });
@@ -1836,6 +1842,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const updates = req.body;
       console.log(`🔧 UPDATING RESOURCE ${req.params.id}:`, JSON.stringify(updates, null, 2));
+      
+      // Convert frontend isActive to database status field
+      if ('isActive' in updates) {
+        updates.status = updates.isActive ? 'Active' : 'Inactive';
+        delete updates.isActive;
+        console.log(`🔄 Converted isActive to status: ${updates.status}`);
+      }
+      
       const resource = await storage.updateResource(req.params.id, updates);
       
       if (!resource) {
@@ -1844,12 +1858,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log(`✅ RESOURCE UPDATED:`, JSON.stringify(resource.workSchedule, null, 2));
       
+      // Convert status back to isActive for frontend compatibility
+      const responseResource = {
+        ...resource,
+        isActive: resource.status === 'Active'
+      };
+      
       broadcast({ 
         type: 'resource_updated', 
-        data: resource 
+        data: responseResource 
       });
       
-      res.json(resource);
+      res.json(responseResource);
     } catch (error) {
       console.error('Failed to update resource:', error);
       res.status(500).json({ message: "Failed to update resource" });
