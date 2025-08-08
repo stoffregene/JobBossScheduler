@@ -14,6 +14,15 @@ import { getWorkCenterPrefixes } from "./utils/workCenterPrefixes";
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
   
+  // Health check endpoints
+  app.get("/health", (req, res) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  });
+
+  app.get("/", (req, res) => {
+    res.json({ status: "ok", message: "JobBossScheduler API is running", timestamp: new Date().toISOString() });
+  });
+  
   // Configure multer for file uploads
   const upload = multer({ 
     storage: multer.memoryStorage(),

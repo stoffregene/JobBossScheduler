@@ -72,5 +72,8 @@ app.use((req, res, next) => {
     reusePort: true,
   }, () => {
     log(`serving on port ${port}`);
+    log(`Environment: ${process.env.NODE_ENV}`);
+    log(`Database URL set: ${process.env.DATABASE_URL ? 'Yes' : 'No'}`);
+    log(`Health check available at: http://localhost:${port}/health`);
   });
 })();
