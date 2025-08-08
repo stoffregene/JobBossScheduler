@@ -225,26 +225,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await db.delete(machines);
           
           for (const row of results) {
-            await db.insert(machines).values({
-              machineId: row.machine_id || row.machineId,
-              name: row.name,
-              type: row.type,
-              category: row.category,
-              subcategory: row.subcategory,
-              tier: row.tier || 'Tier 1',
-              capabilities: JSON.parse(row.capabilities || '[]'),
-              status: row.status || 'Available',
-              utilization: row.utilization || '0',
-              availableShifts: JSON.parse(row.available_shifts || '[1, 2]'),
-              efficiencyFactor: row.efficiency_factor || '1.0',
-              substitutionGroup: row.substitution_group,
-              spindles: row.spindles,
-              liveTooling: row.live_tooling === 'true',
-              barFeeder: row.bar_feeder === 'true',
-              barLength: row.bar_length ? parseInt(row.bar_length) : null,
-              fourthAxis: row.fourth_axis === 'true'
-            });
-            importedCount++;
+            try {
+              // Parse JSON fields safely
+              let capabilities = [];
+              let availableShifts = [1, 2];
+              
+              try {
+                capabilities = JSON.parse(row.capabilities || '[]');
+              } catch (e) {
+                console.log('Failed to parse capabilities:', row.capabilities);
+                capabilities = [];
+              }
+              
+              try {
+                availableShifts = JSON.parse(row.available_shifts || '[1, 2]');
+              } catch (e) {
+                console.log('Failed to parse available_shifts:', row.available_shifts);
+                availableShifts = [1, 2];
+              }
+              
+              await db.insert(machines).values({
+                machineId: row.machine_id || row.machineId,
+                name: row.name,
+                type: row.type,
+                category: row.category,
+                subcategory: row.subcategory,
+                tier: row.tier || 'Tier 1',
+                capabilities: capabilities,
+                status: row.status || 'Available',
+                utilization: row.utilization || '0',
+                availableShifts: availableShifts,
+                efficiencyFactor: row.efficiency_factor || '1.0',
+                substitutionGroup: row.substitution_group,
+                spindles: row.spindles,
+                liveTooling: row.live_tooling === 'true',
+                barFeeder: row.bar_feeder === 'true',
+                barLength: row.bar_length ? parseInt(row.bar_length) : null,
+                fourthAxis: row.fourth_axis === 'true'
+              });
+              importedCount++;
+            } catch (error) {
+              console.error('Failed to insert machine row:', row, error);
+              throw error;
+            }
           }
           break;
 
@@ -253,20 +276,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await db.delete(resources);
           
           for (const row of results) {
-            await db.insert(resources).values({
-              name: row.name,
-              employeeId: row.employee_id || row.employeeId,
-              role: row.role,
-              email: row.email,
-              workCenters: JSON.parse(row.work_centers || '[]'),
-              skills: JSON.parse(row.skills || '[]'),
-              shiftSchedule: JSON.parse(row.shift_schedule || '[1]'),
-              workSchedule: JSON.parse(row.work_schedule || '{}'),
-              hourlyRate: row.hourly_rate ? parseFloat(row.hourly_rate) : null,
-              overtimeRate: row.overtime_rate ? parseFloat(row.overtime_rate) : null,
-              status: row.status || 'Active'
-            });
-            importedCount++;
+            try {
+              // Parse JSON fields safely
+              let workCenters = [];
+              let skills = [];
+              let shiftSchedule = [1];
+              let workSchedule = {};
+              
+              try {
+                workCenters = JSON.parse(row.work_centers || '[]');
+              } catch (e) {
+                console.log('Failed to parse work_centers:', row.work_centers);
+                workCenters = [];
+              }
+              
+              try {
+                skills = JSON.parse(row.skills || '[]');
+              } catch (e) {
+                console.log('Failed to parse skills:', row.skills);
+                skills = [];
+              }
+              
+              try {
+                shiftSchedule = JSON.parse(row.shift_schedule || '[1]');
+              } catch (e) {
+                console.log('Failed to parse shift_schedule:', row.shift_schedule);
+                shiftSchedule = [1];
+              }
+              
+              try {
+                workSchedule = JSON.parse(row.work_schedule || '{}');
+              } catch (e) {
+                console.log('Failed to parse work_schedule:', row.work_schedule);
+                workSchedule = {};
+              }
+              
+              await db.insert(resources).values({
+                name: row.name,
+                employeeId: row.employee_id || row.employeeId,
+                role: row.role,
+                email: row.email,
+                workCenters: workCenters,
+                skills: skills,
+                shiftSchedule: shiftSchedule,
+                workSchedule: workSchedule,
+                hourlyRate: row.hourly_rate ? parseFloat(row.hourly_rate) : null,
+                overtimeRate: row.overtime_rate ? parseFloat(row.overtime_rate) : null,
+                status: row.status || 'Active'
+              });
+              importedCount++;
+            } catch (error) {
+              console.error('Failed to insert resource row:', row, error);
+              throw error;
+            }
           }
           break;
 
@@ -275,26 +337,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await db.delete(jobs);
           
           for (const row of results) {
-            await db.insert(jobs).values({
-              jobNumber: row.job_number || row.jobNumber,
-              partNumber: row.part_number || row.partNumber,
-              description: row.description,
-              customer: row.customer,
-              quantity: parseInt(row.quantity),
-              dueDate: new Date(row.due_date || row.dueDate),
-              orderDate: new Date(row.order_date || row.orderDate),
-              promisedDate: new Date(row.promised_date || row.promisedDate),
-              priority: row.priority || 'Normal',
-              status: row.status || 'Unscheduled',
-              routing: JSON.parse(row.routing || '[]'),
-              estimatedHours: row.estimated_hours || row.estimatedHours || '0',
-              outsourcedVendor: row.outsourced_vendor || row.outsourcedVendor,
-              leadDays: row.lead_days ? parseInt(row.lead_days) : null,
-              linkMaterial: row.link_material === 'true',
-              material: row.material,
-              routingModified: row.routing_modified === 'true'
-            });
-            importedCount++;
+            try {
+              // Parse JSON fields safely
+              let routing = [];
+              
+              try {
+                routing = JSON.parse(row.routing || '[]');
+              } catch (e) {
+                console.log('Failed to parse routing:', row.routing);
+                routing = [];
+              }
+              
+              await db.insert(jobs).values({
+                jobNumber: row.job_number || row.jobNumber,
+                partNumber: row.part_number || row.partNumber,
+                description: row.description,
+                customer: row.customer,
+                quantity: parseInt(row.quantity),
+                dueDate: new Date(row.due_date || row.dueDate),
+                orderDate: new Date(row.order_date || row.orderDate),
+                promisedDate: new Date(row.promised_date || row.promisedDate),
+                priority: row.priority || 'Normal',
+                status: row.status || 'Unscheduled',
+                routing: routing,
+                estimatedHours: row.estimated_hours || row.estimatedHours || '0',
+                outsourcedVendor: row.outsourced_vendor || row.outsourcedVendor,
+                leadDays: row.lead_days ? parseInt(row.lead_days) : null,
+                linkMaterial: row.link_material === 'true',
+                material: row.material,
+                routingModified: row.routing_modified === 'true'
+              });
+              importedCount++;
+            } catch (error) {
+              console.error('Failed to insert job row:', row, error);
+              throw error;
+            }
           }
           break;
 
