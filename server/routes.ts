@@ -170,6 +170,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Execute hardcoded resources SQL
+  app.post("/api/execute-resources-sql", async (req, res) => {
+    try {
+      console.log('Executing hardcoded resources SQL...');
+      
+      // Clear existing resources
+      await db.execute(sql`DELETE FROM resources`);
+      
+      // Insert first 2 resources as a test
+      console.log('Inserting Mike Glasgow...');
+      await db.execute(sql`INSERT INTO resources (name, employee_id, role, email, work_centers, skills, shift_schedule, work_schedule, status) VALUES ('Mike Glasgow', '008', 'Operator', '', '["d4c89195-de8f-48b8-99e7-fdcb756925cd"]', '[]', '[1]', '{}', 'Active')`);
+      
+      console.log('Inserting Joel Stevenson...');
+      await db.execute(sql`INSERT INTO resources (name, employee_id, role, email, work_centers, skills, shift_schedule, work_schedule, status) VALUES ('Joel Stevenson', '012', 'Operator', '', '["c3eabb8c-fa88-4962-b168-544397ae1fc1"]', '[]', '[2]', '{}', 'Active')`);
+      
+      let importedCount = 2;
+      
+      res.json({ 
+        status: "ok", 
+        message: `Successfully imported ${importedCount} resources via hardcoded SQL`,
+        importedCount: importedCount
+      });
+      
+    } catch (error) {
+      console.error('SQL execution failed:', error);
+      res.status(500).json({ status: "error", message: error.message });
+    }
+  });
+
   // Direct SQL import for resources
   app.post("/api/import-resources-sql", async (req, res) => {
     try {
