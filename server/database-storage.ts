@@ -44,7 +44,11 @@ export class DatabaseStorage implements IStorage {
   private operatorAvailabilityManager: OperatorAvailabilityManager | null = null;
 
   constructor() {
-    this.initializeDefaultData();
+    // Initialize data asynchronously without blocking the server startup
+    this.initializeDefaultData().catch(error => {
+      console.error('Failed to initialize default data:', error);
+      // Don't throw - let the server start even if initialization fails
+    });
   }
 
   // Initialize or update the operator availability manager
@@ -70,12 +74,20 @@ export class DatabaseStorage implements IStorage {
   }
 
   private async initializeDefaultData() {
-    try {
-      // Check if data already exists
-      const existingMachines = await db.select().from(machines).limit(1);
-      if (existingMachines.length > 0) return;
+    // Retry database connection with exponential backoff
+    const maxRetries = 5;
+    let retryCount = 0;
+    
+    while (retryCount < maxRetries) {
+      try {
+        // Check if data already exists
+        const existingMachines = await db.select().from(machines).limit(1);
+        if (existingMachines.length > 0) {
+          console.log('Database already has data, skipping initialization');
+          return;
+        }
 
-      console.log('Initializing default manufacturing data...');
+        console.log('Initializing default manufacturing data...');
 
       // Create default machines
       const defaultMachines = [
@@ -154,9 +166,22 @@ export class DatabaseStorage implements IStorage {
 
       await db.insert(resources).values(defaultResources);
 
-      console.log('Default manufacturing data initialized successfully');
-    } catch (error) {
-      console.error('Error initializing default data:', error);
+        console.log('Default manufacturing data initialized successfully');
+        return; // Success, exit the retry loop
+      } catch (error) {
+        retryCount++;
+        console.error(`Error initializing default data (attempt ${retryCount}/${maxRetries}):`, error);
+        
+        if (retryCount >= maxRetries) {
+          console.error('Failed to initialize default data after all retries');
+          return; // Give up after max retries
+        }
+        
+        // Wait before retrying (exponential backoff)
+        const waitTime = Math.pow(2, retryCount) * 1000; // 2s, 4s, 8s, 16s, 32s
+        console.log(`Retrying in ${waitTime}ms...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
     }
   }
 
