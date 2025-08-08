@@ -190,20 +190,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Parse CSV data
       const results: any[] = [];
-      const csv = require('csv-parser');
       
-      await new Promise((resolve, reject) => {
-        const stream = require('stream');
-        const readable = new stream.Readable();
-        readable.push(csvData);
-        readable.push(null);
-        
-        readable
-          .pipe(csv())
-          .on('data', (data: any) => results.push(data))
-          .on('end', resolve)
-          .on('error', reject);
-      });
+      // Parse CSV manually since dynamic require is not supported
+      const lines = csvData.split('\n');
+      const headers = lines[0].split(',').map((h: string) => h.replace(/"/g, '').trim());
+      
+      for (let i = 1; i < lines.length; i++) {
+        if (lines[i].trim()) {
+          const values = lines[i].split(',').map((v: string) => v.replace(/"/g, '').trim());
+          const row: any = {};
+          headers.forEach((header: string, index: number) => {
+            row[header] = values[index] || '';
+          });
+          results.push(row);
+        }
+      }
 
       console.log(`Parsed ${results.length} records from CSV`);
 
