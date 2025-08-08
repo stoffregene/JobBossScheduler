@@ -27,6 +27,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Database connection test endpoint
   app.get("/api/test-db", async (req, res) => {
+    console.log('Test DB endpoint called');
     try {
       // Simple database query to test connection
       const result = await db.select().from(machines).limit(1);
@@ -47,8 +48,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Database migration endpoint
+  // Database migration endpoint (POST)
   app.post("/api/migrate-db", async (req, res) => {
+    console.log('Migration endpoint called (POST)');
+    try {
+      console.log('Starting database migration...');
+      
+      // Import drizzle-kit for migrations
+      const { migrate } = await import('drizzle-orm/node-postgres/migrator');
+      
+      // Run migrations
+      await migrate(db, { migrationsFolder: './drizzle' });
+      
+      console.log('Database migration completed successfully');
+      res.json({ 
+        status: "ok", 
+        message: "Database migration completed successfully",
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error('Database migration failed:', error);
+      res.status(500).json({ 
+        status: "error", 
+        message: "Database migration failed",
+        error: error.message,
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+
+  // Database migration endpoint (GET) - for easier testing
+  app.get("/api/migrate-db", async (req, res) => {
+    console.log('Migration endpoint called (GET)');
     try {
       console.log('Starting database migration...');
       
