@@ -175,6 +175,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { data } = req.body;
       
+      if (!Array.isArray(data)) {
+        return res.status(400).json({ status: "error", message: "Data must be an array" });
+      }
+      
+      console.log(`Importing ${data.length} resources with direct SQL...`);
+      
       // Clear existing resources
       await db.execute(sql`DELETE FROM resources`);
       
