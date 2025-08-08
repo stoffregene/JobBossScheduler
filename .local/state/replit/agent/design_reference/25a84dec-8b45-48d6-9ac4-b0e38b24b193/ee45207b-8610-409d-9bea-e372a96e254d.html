@@ -1,0 +1,866 @@
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JobBoss Production Scheduler</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+    tailwind.config = {
+        theme: {
+            extend: {
+                fontFamily: {
+                    'sans': ['Inter', 'system-ui', 'sans-serif'],
+                    'mono': ['JetBrains Mono', 'monospace']
+                },
+                colors: {
+                    primary: {
+                        50: '#E3F2FD',
+                        100: '#BBDEFB',
+                        500: '#1976D2',
+                        600: '#1565C0',
+                        700: '#0D47A1'
+                    },
+                    success: {
+                        50: '#E8F5E8',
+                        100: '#C8E6C9',
+                        500: '#388E3C',
+                        600: '#2E7D32'
+                    },
+                    warning: {
+                        50: '#FFF3E0',
+                        100: '#FFE0B2',
+                        500: '#F57C00',
+                        600: '#EF6C00'
+                    },
+                    error: {
+                        50: '#FFEBEE',
+                        100: '#FFCDD2',
+                        500: '#D32F2F',
+                        600: '#C62828'
+                    }
+                }
+            }
+        }
+    };
+    </script>
+</head>
+<body class="bg-gray-50 font-sans">
+    <!-- @COMPONENT: AppLayout -->
+    <div class="min-h-screen">
+        <!-- Header -->
+        <!-- @COMPONENT: Header -->
+        <header class="bg-white shadow-sm border-b border-gray-200">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center h-16">
+                    <div class="flex items-center space-x-4">
+                        <div class="flex items-center space-x-2">
+                            <i class="fas fa-industry text-primary-500 text-xl"></i>
+                            <span class="text-xl font-bold text-gray-900">JobBoss Scheduler</span>
+                        </div>
+                        <!-- @STATE: currentTime:string -->
+                        <div class="hidden md:flex items-center text-sm text-gray-500">
+                            <i class="far fa-clock mr-1"></i>
+                            <span data-bind="currentTime">Dec 15, 2024 - 10:42 AM</span>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center space-x-4">
+                        <!-- Database Status -->
+                        <div class="flex items-center space-x-2">
+                            <div class="w-2 h-2 bg-success-500 rounded-full"></div>
+                            <span class="text-sm text-gray-600">JobBoss Connected</span>
+                        </div>
+                        
+                        <!-- Alerts -->
+                        <button class="relative p-2 text-gray-400 hover:text-gray-500">
+                            <i class="fas fa-bell text-lg"></i>
+                            <span class="absolute -top-1 -right-1 w-5 h-5 bg-error-500 text-white text-xs rounded-full flex items-center justify-center">3</span>
+                        </button>
+                        
+                        <!-- User Menu -->
+                        <div class="flex items-center space-x-2">
+                            <span class="text-sm font-medium text-gray-700" data-bind="user.name">Production Manager</span>
+                            <button class="w-8 h-8 bg-primary-500 text-white rounded-full flex items-center justify-center">
+                                <span class="text-sm font-medium">PM</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+        <!-- @END_COMPONENT: Header -->
+
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <!-- Dashboard Overview -->
+            <!-- @COMPONENT: DashboardOverview -->
+            <div class="mb-8">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <!-- Active Jobs Card -->
+                    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-gray-600">Active Jobs</p>
+                                <p class="text-3xl font-bold text-gray-900" data-bind="stats.activeJobs">127</p>
+                            </div>
+                            <div class="w-12 h-12 bg-primary-100 rounded-lg flex items-center justify-center">
+                                <i class="fas fa-briefcase text-primary-500 text-xl"></i>
+                            </div>
+                        </div>
+                        <div class="mt-4 flex items-center text-sm">
+                            <span class="text-success-600 font-medium">+5.2%</span>
+                            <span class="text-gray-500 ml-1">from last week</span>
+                        </div>
+                    </div>
+
+                    <!-- Machine Utilization Card -->
+                    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-gray-600">Machine Utilization</p>
+                                <p class="text-3xl font-bold text-gray-900" data-bind="stats.utilization">84%</p>
+                            </div>
+                            <div class="w-12 h-12 bg-success-100 rounded-lg flex items-center justify-center">
+                                <i class="fas fa-cogs text-success-500 text-xl"></i>
+                            </div>
+                        </div>
+                        <div class="mt-4">
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div class="bg-success-500 h-2 rounded-full" style="width: 84%"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Late Jobs Card -->
+                    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-gray-600">At Risk Jobs</p>
+                                <p class="text-3xl font-bold text-error-500" data-bind="stats.lateJobs">8</p>
+                            </div>
+                            <div class="w-12 h-12 bg-error-100 rounded-lg flex items-center justify-center">
+                                <i class="fas fa-exclamation-triangle text-error-500 text-xl"></i>
+                            </div>
+                        </div>
+                        <div class="mt-4 flex items-center text-sm">
+                            <span class="text-error-600 font-medium">2 customer late</span>
+                            <span class="text-gray-500 ml-1">• 6 company late</span>
+                        </div>
+                    </div>
+
+                    <!-- Resource Capacity Card -->
+                    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-gray-600">Resource Capacity</p>
+                                <p class="text-3xl font-bold text-gray-900" data-bind="stats.capacity">11/16</p>
+                            </div>
+                            <div class="w-12 h-12 bg-warning-100 rounded-lg flex items-center justify-center">
+                                <i class="fas fa-users text-warning-500 text-xl"></i>
+                            </div>
+                        </div>
+                        <div class="mt-4 text-sm text-gray-500">
+                            <span>1st Shift: 11 operators</span><br>
+                            <span>2nd Shift: 5 operators</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- @END_COMPONENT: DashboardOverview -->
+
+            <!-- Main Content Grid -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- Left Column: Job Queue & Schedule -->
+                <div class="lg:col-span-2 space-y-6">
+                    <!-- Job Queue -->
+                    <!-- @COMPONENT: JobQueue -->
+                    <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                        <div class="px-6 py-4 border-b border-gray-200">
+                            <div class="flex items-center justify-between">
+                                <h3 class="text-lg font-semibold text-gray-900">Job Queue</h3>
+                                <div class="flex items-center space-x-2">
+                                    <button class="px-3 py-1 text-sm bg-primary-100 text-primary-700 rounded-md hover:bg-primary-200">
+                                        <i class="fas fa-filter mr-1"></i>Filter
+                                    </button>
+                                    <button class="px-3 py-1 text-sm bg-success-100 text-success-700 rounded-md hover:bg-success-200">
+                                        <i class="fas fa-plus mr-1"></i>Add Job
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="overflow-x-auto">
+                            <table class="w-full">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Job #</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Part</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Due Date</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="bg-white divide-y divide-gray-200">
+                                    <!-- @MAP: jobs.map(job => ( -->
+                                    <tr class="hover:bg-gray-50 cursor-pointer" data-event="click:showJobDetails">
+                                        <td class="px-6 py-4 whitespace-nowrap">
+                                            <div class="text-sm font-mono text-gray-900" data-bind="job.number">JB-2024-1847</div>
+                                            <div class="text-xs text-gray-500" data-bind="job.created">Created: Dec 10</div>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap">
+                                            <div class="text-sm text-gray-900" data-bind="job.partNumber">ALM-4567-REV-C</div>
+                                            <div class="text-xs text-gray-500" data-bind="job.description">Aluminum Housing</div>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap">
+                                            <div class="text-sm text-gray-900" data-bind="job.dueDate">Jan 12, 2025</div>
+                                            <div class="text-xs text-gray-500" data-bind="job.daysRemaining">28 days</div>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap">
+                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-warning-100 text-warning-800" data-bind="job.status">
+                                                Company Late
+                                            </span>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap">
+                                            <div class="flex items-center">
+                                                <div class="w-2 h-2 bg-error-500 rounded-full mr-2"></div>
+                                                <span class="text-sm text-gray-900" data-bind="job.priority">High</span>
+                                            </div>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                            <button class="text-primary-600 hover:text-primary-900 mr-3" data-event="click:scheduleJob">
+                                                <i class="fas fa-calendar-plus"></i>
+                                            </button>
+                                            <button class="text-gray-400 hover:text-gray-600" data-event="click:editJob">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    
+                                    <tr class="hover:bg-gray-50 cursor-pointer">
+                                        <td class="px-6 py-4 whitespace-nowrap">
+                                            <div class="text-sm font-mono text-gray-900">JB-2024-1848</div>
+                                            <div class="text-xs text-gray-500">Created: Dec 11</div>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap">
+                                            <div class="text-sm text-gray-900">STL-9876-A</div>
+                                            <div class="text-xs text-gray-500">Steel Bracket</div>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap">
+                                            <div class="text-sm text-gray-900">Jan 15, 2025</div>
+                                            <div class="text-xs text-gray-500">31 days</div>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap">
+                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-success-100 text-success-800">
+                                                On Schedule
+                                            </span>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap">
+                                            <div class="flex items-center">
+                                                <div class="w-2 h-2 bg-success-500 rounded-full mr-2"></div>
+                                                <span class="text-sm text-gray-900">Normal</span>
+                                            </div>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                            <button class="text-primary-600 hover:text-primary-900 mr-3">
+                                                <i class="fas fa-calendar-plus"></i>
+                                            </button>
+                                            <button class="text-gray-400 hover:text-gray-600">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+
+                                    <tr class="hover:bg-gray-50 cursor-pointer">
+                                        <td class="px-6 py-4 whitespace-nowrap">
+                                            <div class="text-sm font-mono text-gray-900">JB-2024-1849</div>
+                                            <div class="text-xs text-gray-500">Created: Dec 12</div>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap">
+                                            <div class="text-sm text-gray-900">TIT-3344-REV-B</div>
+                                            <div class="text-xs text-gray-500">Titanium Component</div>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap">
+                                            <div class="text-sm text-gray-900">Dec 18, 2024</div>
+                                            <div class="text-xs text-error-600 font-medium">3 days (Customer Late)</div>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap">
+                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-error-100 text-error-800">
+                                                Customer Late
+                                            </span>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap">
+                                            <div class="flex items-center">
+                                                <div class="w-2 h-2 bg-error-500 rounded-full mr-2"></div>
+                                                <span class="text-sm text-gray-900">Critical</span>
+                                            </div>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                            <button class="text-primary-600 hover:text-primary-900 mr-3">
+                                                <i class="fas fa-calendar-plus"></i>
+                                            </button>
+                                            <button class="text-gray-400 hover:text-gray-600">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    <!-- @END_MAP )) -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <!-- @END_COMPONENT: JobQueue -->
+
+                    <!-- Schedule View -->
+                    <!-- @COMPONENT: ScheduleView -->
+                    <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                        <div class="px-6 py-4 border-b border-gray-200">
+                            <div class="flex items-center justify-between">
+                                <h3 class="text-lg font-semibold text-gray-900">Production Schedule</h3>
+                                <div class="flex items-center space-x-2">
+                                    <select class="text-sm border border-gray-300 rounded-md px-3 py-1">
+                                        <option>This Week</option>
+                                        <option>Next Week</option>
+                                        <option>This Month</option>
+                                    </select>
+                                    <button class="px-3 py-1 text-sm bg-primary-100 text-primary-700 rounded-md hover:bg-primary-200">
+                                        <i class="fas fa-download mr-1"></i>Export
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Schedule Grid -->
+                        <!-- @FUNCTIONALITY: This should implement a Gantt chart with drag-and-drop scheduling -->
+                        <div class="p-6">
+                            <div class="space-y-4">
+                                <!-- Day Headers -->
+                                <div class="grid grid-cols-8 gap-2 text-sm font-medium text-gray-500">
+                                    <div class="text-right pr-4">Machine</div>
+                                    <div class="text-center">Mon 12/16</div>
+                                    <div class="text-center">Tue 12/17</div>
+                                    <div class="text-center">Wed 12/18</div>
+                                    <div class="text-center">Thu 12/19</div>
+                                    <div class="text-center">Fri 12/20</div>
+                                    <div class="text-center">Sat 12/21</div>
+                                    <div class="text-center">Sun 12/22</div>
+                                </div>
+
+                                <!-- Machine Rows -->
+                                <div class="space-y-2">
+                                    <!-- Machine 1 -->
+                                    <div class="grid grid-cols-8 gap-2 items-center">
+                                        <div class="text-sm font-medium text-gray-900 text-right pr-4">
+                                            <div>CNC-001</div>
+                                            <div class="text-xs text-gray-500">Haas VF-2</div>
+                                        </div>
+                                        <div class="h-12 bg-gray-100 rounded relative flex items-center justify-center">
+                                            <div class="absolute inset-1 bg-primary-500 rounded text-white text-xs px-2 flex items-center justify-center" data-mock="true" data-implementation="Draggable job card">
+                                                JB-1847 (6h)
+                                            </div>
+                                        </div>
+                                        <div class="h-12 bg-gray-100 rounded relative flex items-center justify-center">
+                                            <div class="absolute inset-1 bg-warning-500 rounded text-white text-xs px-2 flex items-center justify-center" data-mock="true">
+                                                JB-1849 (8h)
+                                            </div>
+                                        </div>
+                                        <div class="h-12 bg-gray-100 rounded"></div>
+                                        <div class="h-12 bg-gray-100 rounded"></div>
+                                        <div class="h-12 bg-gray-100 rounded"></div>
+                                        <div class="h-12 bg-gray-100 rounded"></div>
+                                        <div class="h-12 bg-gray-100 rounded"></div>
+                                    </div>
+
+                                    <!-- Machine 2 -->
+                                    <div class="grid grid-cols-8 gap-2 items-center">
+                                        <div class="text-sm font-medium text-gray-900 text-right pr-4">
+                                            <div>CNC-002</div>
+                                            <div class="text-xs text-gray-500">Mazak VTC-800</div>
+                                        </div>
+                                        <div class="h-12 bg-gray-100 rounded"></div>
+                                        <div class="h-12 bg-gray-100 rounded relative flex items-center justify-center">
+                                            <div class="absolute inset-1 bg-success-500 rounded text-white text-xs px-2 flex items-center justify-center" data-mock="true">
+                                                JB-1848 (4h)
+                                            </div>
+                                        </div>
+                                        <div class="h-12 bg-gray-100 rounded relative flex items-center justify-center">
+                                            <div class="absolute inset-1 bg-success-500 rounded text-white text-xs px-2 flex items-center justify-center" data-mock="true">
+                                                JB-1848 (4h)
+                                            </div>
+                                        </div>
+                                        <div class="h-12 bg-gray-100 rounded"></div>
+                                        <div class="h-12 bg-gray-100 rounded"></div>
+                                        <div class="h-12 bg-gray-100 rounded"></div>
+                                        <div class="h-12 bg-gray-100 rounded"></div>
+                                    </div>
+
+                                    <!-- Welding Station -->
+                                    <div class="grid grid-cols-8 gap-2 items-center">
+                                        <div class="text-sm font-medium text-gray-900 text-right pr-4">
+                                            <div>WELD-001</div>
+                                            <div class="text-xs text-gray-500">TIG Station</div>
+                                        </div>
+                                        <div class="h-12 bg-gray-100 rounded"></div>
+                                        <div class="h-12 bg-gray-100 rounded"></div>
+                                        <div class="h-12 bg-gray-100 rounded relative flex items-center justify-center">
+                                            <div class="absolute inset-1 bg-purple-500 rounded text-white text-xs px-2 flex items-center justify-center" data-mock="true">
+                                                JB-1847 (2h)
+                                            </div>
+                                        </div>
+                                        <div class="h-12 bg-gray-100 rounded"></div>
+                                        <div class="h-12 bg-gray-100 rounded"></div>
+                                        <div class="h-12 bg-gray-100 rounded opacity-50"></div>
+                                        <div class="h-12 bg-gray-100 rounded opacity-50"></div>
+                                    </div>
+
+                                    <!-- Bead Blast -->
+                                    <div class="grid grid-cols-8 gap-2 items-center">
+                                        <div class="text-sm font-medium text-gray-900 text-right pr-4">
+                                            <div>BLAST-001</div>
+                                            <div class="text-xs text-gray-500">Bead Blast</div>
+                                        </div>
+                                        <div class="h-12 bg-gray-100 rounded"></div>
+                                        <div class="h-12 bg-gray-100 rounded"></div>
+                                        <div class="h-12 bg-gray-100 rounded"></div>
+                                        <div class="h-12 bg-gray-100 rounded relative flex items-center justify-center">
+                                            <div class="absolute inset-1 bg-indigo-500 rounded text-white text-xs px-2 flex items-center justify-center" data-mock="true">
+                                                JB-1847 (1h)
+                                            </div>
+                                        </div>
+                                        <div class="h-12 bg-gray-100 rounded"></div>
+                                        <div class="h-12 bg-gray-100 rounded opacity-50"></div>
+                                        <div class="h-12 bg-gray-100 rounded opacity-50"></div>
+                                    </div>
+                                </div>
+
+                                <!-- Legend -->
+                                <div class="mt-6 flex flex-wrap items-center gap-4 text-sm">
+                                    <div class="flex items-center">
+                                        <div class="w-4 h-4 bg-primary-500 rounded mr-2"></div>
+                                        <span>Machining</span>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <div class="w-4 h-4 bg-purple-500 rounded mr-2"></div>
+                                        <span>Welding</span>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <div class="w-4 h-4 bg-indigo-500 rounded mr-2"></div>
+                                        <span>Finishing</span>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <div class="w-4 h-4 bg-warning-500 rounded mr-2"></div>
+                                        <span>Late Risk</span>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <div class="w-4 h-4 bg-gray-300 rounded mr-2 opacity-50"></div>
+                                        <span>2nd Shift Unavailable</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- @END_COMPONENT: ScheduleView -->
+                </div>
+
+                <!-- Right Column: Machine Status & Alerts -->
+                <div class="space-y-6">
+                    <!-- Machine Status -->
+                    <!-- @COMPONENT: MachineStatus -->
+                    <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                        <div class="px-6 py-4 border-b border-gray-200">
+                            <h3 class="text-lg font-semibold text-gray-900">Machine Status</h3>
+                        </div>
+                        
+                        <div class="p-6 space-y-4">
+                            <!-- @MAP: machines.map(machine => ( -->
+                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-3 h-3 bg-success-500 rounded-full" data-bind="machine.status"></div>
+                                    <div>
+                                        <div class="text-sm font-medium text-gray-900" data-bind="machine.id">CNC-001</div>
+                                        <div class="text-xs text-gray-500" data-bind="machine.type">Haas VF-2</div>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <div class="text-sm text-gray-900" data-bind="machine.utilization">92%</div>
+                                    <div class="text-xs text-gray-500">utilization</div>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-3 h-3 bg-success-500 rounded-full"></div>
+                                    <div>
+                                        <div class="text-sm font-medium text-gray-900">CNC-002</div>
+                                        <div class="text-xs text-gray-500">Mazak VTC-800</div>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <div class="text-sm text-gray-900">78%</div>
+                                    <div class="text-xs text-gray-500">utilization</div>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-3 h-3 bg-warning-500 rounded-full"></div>
+                                    <div>
+                                        <div class="text-sm font-medium text-gray-900">CNC-003</div>
+                                        <div class="text-xs text-gray-500">DMG MORI</div>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <div class="text-sm text-gray-900">45%</div>
+                                    <div class="text-xs text-gray-500">utilization</div>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-3 h-3 bg-error-500 rounded-full"></div>
+                                    <div>
+                                        <div class="text-sm font-medium text-gray-900">CNC-004</div>
+                                        <div class="text-xs text-gray-500">Haas ST-30</div>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <div class="text-sm text-error-600">Offline</div>
+                                    <div class="text-xs text-gray-500">maintenance</div>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-3 h-3 bg-success-500 rounded-full"></div>
+                                    <div>
+                                        <div class="text-sm font-medium text-gray-900">WELD-001</div>
+                                        <div class="text-xs text-gray-500">TIG Station</div>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <div class="text-sm text-gray-900">67%</div>
+                                    <div class="text-xs text-gray-500">1st shift only</div>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-3 h-3 bg-success-500 rounded-full"></div>
+                                    <div>
+                                        <div class="text-sm font-medium text-gray-900">BLAST-001</div>
+                                        <div class="text-xs text-gray-500">Bead Blast</div>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <div class="text-sm text-gray-900">34%</div>
+                                    <div class="text-xs text-gray-500">1st shift only</div>
+                                </div>
+                            </div>
+                            <!-- @END_MAP )) -->
+                        </div>
+                    </div>
+                    <!-- @END_COMPONENT: MachineStatus -->
+
+                    <!-- Alert Panel -->
+                    <!-- @COMPONENT: AlertPanel -->
+                    <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                        <div class="px-6 py-4 border-b border-gray-200">
+                            <h3 class="text-lg font-semibold text-gray-900">Alerts & Notifications</h3>
+                        </div>
+                        
+                        <div class="p-6 space-y-4">
+                            <!-- @MAP: alerts.map(alert => ( -->
+                            <div class="flex items-start space-x-3 p-3 bg-error-50 border border-error-200 rounded-lg">
+                                <i class="fas fa-exclamation-circle text-error-500 mt-0.5"></i>
+                                <div class="flex-1">
+                                    <div class="text-sm font-medium text-error-800" data-bind="alert.title">Customer Late Job</div>
+                                    <div class="text-sm text-error-700 mt-1" data-bind="alert.message">Job JB-1849 (TIT-3344-REV-B) is 3 days past customer due date</div>
+                                    <div class="text-xs text-error-600 mt-2" data-bind="alert.time">2 hours ago</div>
+                                </div>
+                            </div>
+
+                            <div class="flex items-start space-x-3 p-3 bg-warning-50 border border-warning-200 rounded-lg">
+                                <i class="fas fa-clock text-warning-500 mt-0.5"></i>
+                                <div class="flex-1">
+                                    <div class="text-sm font-medium text-warning-800">Machine Maintenance Due</div>
+                                    <div class="text-sm text-warning-700 mt-1">CNC-004 (Haas ST-30) requires scheduled maintenance</div>
+                                    <div class="text-xs text-warning-600 mt-2">4 hours ago</div>
+                                </div>
+                            </div>
+
+                            <div class="flex items-start space-x-3 p-3 bg-primary-50 border border-primary-200 rounded-lg">
+                                <i class="fas fa-info-circle text-primary-500 mt-0.5"></i>
+                                <div class="flex-1">
+                                    <div class="text-sm font-medium text-primary-800">Resource Optimization</div>
+                                    <div class="text-sm text-primary-700 mt-1">Machine substitution available: CNC-002 can handle JB-1847 routing</div>
+                                    <div class="text-xs text-primary-600 mt-2">6 hours ago</div>
+                                </div>
+                            </div>
+
+                            <div class="flex items-start space-x-3 p-3 bg-success-50 border border-success-200 rounded-lg">
+                                <i class="fas fa-check-circle text-success-500 mt-0.5"></i>
+                                <div class="flex-1">
+                                    <div class="text-sm font-medium text-success-800">Schedule Updated</div>
+                                    <div class="text-sm text-success-700 mt-1">Jobs JB-1850 through JB-1853 successfully scheduled for next week</div>
+                                    <div class="text-xs text-success-600 mt-2">1 day ago</div>
+                                </div>
+                            </div>
+                            <!-- @END_MAP )) -->
+                        </div>
+                    </div>
+                    <!-- @END_COMPONENT: AlertPanel -->
+
+                    <!-- Resource Allocation -->
+                    <!-- @COMPONENT: ResourceAllocation -->
+                    <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                        <div class="px-6 py-4 border-b border-gray-200">
+                            <h3 class="text-lg font-semibold text-gray-900">Resource Allocation</h3>
+                        </div>
+                        
+                        <div class="p-6 space-y-4">
+                            <!-- 1st Shift -->
+                            <div>
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="text-sm font-medium text-gray-700">1st Shift (3AM - 3PM)</span>
+                                    <span class="text-sm text-gray-500" data-bind="shift1.utilization">11/11 operators</span>
+                                </div>
+                                <div class="w-full bg-gray-200 rounded-full h-2">
+                                    <div class="bg-success-500 h-2 rounded-full" style="width: 100%"></div>
+                                </div>
+                                <div class="text-xs text-gray-500 mt-1">Capacity: 82.5 hours (11 × 7.5h)</div>
+                            </div>
+
+                            <!-- 2nd Shift -->
+                            <div>
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="text-sm font-medium text-gray-700">2nd Shift (3PM - 3AM)</span>
+                                    <span class="text-sm text-gray-500" data-bind="shift2.utilization">5/5 operators</span>
+                                </div>
+                                <div class="w-full bg-gray-200 rounded-full h-2">
+                                    <div class="bg-warning-500 h-2 rounded-full" style="width: 100%"></div>
+                                </div>
+                                <div class="text-xs text-gray-500 mt-1">Capacity: 32.5 hours (5 × 6.5h)</div>
+                            </div>
+
+                            <!-- Weekly Capacity -->
+                            <div class="mt-4 pt-4 border-t border-gray-200">
+                                <div class="text-sm font-medium text-gray-700 mb-2">Weekly Capacity Overview</div>
+                                <div class="grid grid-cols-2 gap-4 text-sm">
+                                    <div>
+                                        <div class="text-gray-600">Total Hours:</div>
+                                        <div class="font-medium" data-bind="capacity.total">460 hours</div>
+                                    </div>
+                                    <div>
+                                        <div class="text-gray-600">Scheduled:</div>
+                                        <div class="font-medium" data-bind="capacity.scheduled">387 hours</div>
+                                    </div>
+                                    <div>
+                                        <div class="text-gray-600">Available:</div>
+                                        <div class="font-medium text-success-600" data-bind="capacity.available">73 hours</div>
+                                    </div>
+                                    <div>
+                                        <div class="text-gray-600">Utilization:</div>
+                                        <div class="font-medium" data-bind="capacity.utilization">84.1%</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- @END_COMPONENT: ResourceAllocation -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Job Details Modal -->
+        <!-- @COMPONENT: JobDetailsModal [jobId] -->
+        <div id="jobModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50" data-event="click:closeModal">
+            <div class="flex items-center justify-center min-h-screen p-4">
+                <div class="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-screen overflow-y-auto" data-event="click:stopPropagation">
+                    <div class="px-6 py-4 border-b border-gray-200">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-lg font-semibold text-gray-900">Job Details - <span data-bind="selectedJob.number">JB-2024-1847</span></h3>
+                            <button class="text-gray-400 hover:text-gray-600" data-event="click:closeModal">
+                                <i class="fas fa-times text-xl"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="p-6">
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <!-- Job Information -->
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="text-sm font-medium text-gray-700">Part Number</label>
+                                    <div class="mt-1 text-sm text-gray-900" data-bind="selectedJob.partNumber">ALM-4567-REV-C</div>
+                                </div>
+                                
+                                <div>
+                                    <label class="text-sm font-medium text-gray-700">Description</label>
+                                    <div class="mt-1 text-sm text-gray-900" data-bind="selectedJob.description">Aluminum Housing - Precision Machined</div>
+                                </div>
+                                
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="text-sm font-medium text-gray-700">Quantity</label>
+                                        <div class="mt-1 text-sm text-gray-900" data-bind="selectedJob.quantity">25 pieces</div>
+                                    </div>
+                                    <div>
+                                        <label class="text-sm font-medium text-gray-700">Priority</label>
+                                        <div class="mt-1">
+                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-error-100 text-error-800" data-bind="selectedJob.priority">
+                                                High
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Routing Information -->
+                            <div class="space-y-4">
+                                <h4 class="text-md font-semibold text-gray-900">Routing Operations</h4>
+                                <!-- @MAP: selectedJob.routing.map(operation => ( -->
+                                <div class="border border-gray-200 rounded-lg p-3">
+                                    <div class="flex justify-between items-center">
+                                        <div>
+                                            <div class="text-sm font-medium text-gray-900" data-bind="operation.name">OP-010: Rough Machining</div>
+                                            <div class="text-xs text-gray-500" data-bind="operation.machine">CNC-001 (or compatible)</div>
+                                        </div>
+                                        <div class="text-sm text-gray-700" data-bind="operation.time">6.0 hours</div>
+                                    </div>
+                                    <div class="mt-2 text-xs text-gray-600" data-bind="operation.notes">
+                                        Face and bore operations. Requires 0.5" end mill and boring bar.
+                                    </div>
+                                </div>
+
+                                <div class="border border-gray-200 rounded-lg p-3">
+                                    <div class="flex justify-between items-center">
+                                        <div>
+                                            <div class="text-sm font-medium text-gray-900">OP-020: Welding</div>
+                                            <div class="text-xs text-gray-500">WELD-001</div>
+                                        </div>
+                                        <div class="text-sm text-gray-700">2.0 hours</div>
+                                    </div>
+                                    <div class="mt-2 text-xs text-gray-600">
+                                        TIG weld seam preparation and execution. ER4043 filler rod.
+                                    </div>
+                                </div>
+
+                                <div class="border border-gray-200 rounded-lg p-3">
+                                    <div class="flex justify-between items-center">
+                                        <div>
+                                            <div class="text-sm font-medium text-gray-900">OP-030: Finish Machining</div>
+                                            <div class="text-xs text-gray-500">CNC-002 (or compatible)</div>
+                                        </div>
+                                        <div class="text-sm text-gray-700">4.0 hours</div>
+                                    </div>
+                                    <div class="mt-2 text-xs text-gray-600">
+                                        Final dimensions and surface finish. +/- 0.001" tolerance.
+                                    </div>
+                                </div>
+
+                                <div class="border border-gray-200 rounded-lg p-3">
+                                    <div class="flex justify-between items-center">
+                                        <div>
+                                            <div class="text-sm font-medium text-gray-900">OP-040: Bead Blast</div>
+                                            <div class="text-xs text-gray-500">BLAST-001</div>
+                                        </div>
+                                        <div class="text-sm text-gray-700">1.0 hour</div>
+                                    </div>
+                                    <div class="mt-2 text-xs text-gray-600">
+                                        Glass bead finish per specification ABC-123.
+                                    </div>
+                                </div>
+                                <!-- @END_MAP )) -->
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="mt-6 flex justify-end space-x-3">
+                            <button class="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200" data-event="click:closeModal">
+                                Close
+                            </button>
+                            <button class="px-4 py-2 text-sm bg-warning-100 text-warning-700 rounded-md hover:bg-warning-200" data-event="click:editJob">
+                                Edit Job
+                            </button>
+                            <button class="px-4 py-2 text-sm bg-primary-600 text-white rounded-md hover:bg-primary-700" data-event="click:scheduleJob">
+                                Schedule Job
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- @END_COMPONENT: JobDetailsModal -->
+    </div>
+    <!-- @END_COMPONENT: AppLayout -->
+
+    <script>
+        // TODO: Implement business logic, API calls, and state management
+        // TODO: Connect to JobBoss SQL database using secure connection
+        // TODO: Implement drag-and-drop scheduling functionality
+        // TODO: Add real-time updates and conflict detection
+        // TODO: Implement machine interchangeability logic
+        // TODO: Add export capabilities for schedule reports
+
+        (function() {
+            // Modal handling
+            const jobModal = document.getElementById('jobModal');
+            
+            // Show job details modal
+            function showJobDetails(jobId) {
+                jobModal.classList.remove('hidden');
+                document.body.style.overflow = 'hidden';
+                // TODO: Load job details from database
+            }
+            
+            // Close modal
+            function closeModal() {
+                jobModal.classList.add('hidden');
+                document.body.style.overflow = 'auto';
+            }
+            
+            // Add event listeners for job rows
+            document.querySelectorAll('[data-event="click:showJobDetails"]').forEach(row => {
+                row.addEventListener('click', (e) => {
+                    if (!e.target.closest('button')) {
+                        showJobDetails();
+                    }
+                });
+            });
+            
+            // Modal close events
+            document.querySelectorAll('[data-event="click:closeModal"]').forEach(btn => {
+                btn.addEventListener('click', closeModal);
+            });
+            
+            // Prevent modal close when clicking inside modal content
+            document.querySelectorAll('[data-event="click:stopPropagation"]').forEach(el => {
+                el.addEventListener('click', (e) => e.stopPropagation());
+            });
+            
+            // Simulated real-time updates
+            function updateCurrentTime() {
+                const now = new Date();
+                const timeString = now.toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric'
+                }) + ' - ' + now.toLocaleTimeString('en-US', {
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    hour12: true
+                });
+                
+                document.querySelectorAll('[data-bind="currentTime"]').forEach(el => {
+                    el.textContent = timeString;
+                });
+            }
+            
+            // Update time every minute
+            updateCurrentTime();
+            setInterval(updateCurrentTime, 60000);
+        })();
+    </script>
+</body>
+</html>
