@@ -107,14 +107,8 @@ export const resourceUnavailability = pgTable("resource_unavailability", {
   resourceId: varchar("resource_id").notNull().references(() => resources.id),
   startDate: timestamp("start_date").notNull(),
   endDate: timestamp("end_date").notNull(),
-  startTime: text("start_time"), // "08:00" for hour-based granularity (24hr format)
-  endTime: text("end_time"), // "12:00" for hour-based granularity (24hr format)
-  isPartialDay: boolean("is_partial_day").notNull().default(false), // true for hour-based unavailability
   reason: text("reason").notNull(), // Vacation, Sick, Training, Meeting, etc.
-  shifts: jsonb("shifts").$type<number[]>().notNull().default([1, 2]), // Which shifts affected
-  notes: text("notes"),
-  createdAt: timestamp("created_at").notNull().default(sql`now()`),
-  createdBy: text("created_by").notNull(), // Who marked them unavailable
+  type: text("type").notNull().default("Vacation"),
 });
 
 // Enhanced routing operations with dependencies and constraints
