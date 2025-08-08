@@ -22,9 +22,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
-  app.get("/", (req, res) => {
-    res.json({ status: "ok", message: "JobBossScheduler API is running", timestamp: new Date().toISOString() });
-  });
+  // Root route removed to allow static file serving to handle frontend
 
   // Database connection test endpoint
   app.get("/api/test-db", async (req, res) => {
