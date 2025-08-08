@@ -11,7 +11,7 @@ import csv from "csv-parser";
 import { Readable } from "stream";
 import { getWorkCenterPrefixes } from "./utils/workCenterPrefixes";
 import { db } from "./db";
-import { machines, resources } from "@shared/schema";
+import { machines, resources, jobs } from "@shared/schema";
 import path from "path";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -136,6 +136,150 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ 
         status: "error", 
         message: "Data initialization failed",
+        error: error.message,
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+
+  // CSV Import endpoint
+  app.post("/api/import-csv", upload.single('csvFile'), async (req, res) => {
+    console.log('CSV import endpoint called');
+    try {
+      if (!req.file) {
+        return res.status(400).json({ 
+          status: "error", 
+          message: "No CSV file uploaded" 
+        });
+      }
+
+      const csvData = req.file.buffer.toString();
+      const tableType = req.body.tableType; // 'machines', 'resources', 'jobs'
+      
+      console.log(`Importing ${tableType} data from CSV...`);
+      
+      // Parse CSV data
+      const results: any[] = [];
+      const csv = require('csv-parser');
+      
+      await new Promise((resolve, reject) => {
+        const stream = require('stream');
+        const readable = new stream.Readable();
+        readable.push(csvData);
+        readable.push(null);
+        
+        readable
+          .pipe(csv())
+          .on('data', (data: any) => results.push(data))
+          .on('end', resolve)
+          .on('error', reject);
+      });
+
+      console.log(`Parsed ${results.length} records from CSV`);
+
+      // Import based on table type
+      let importedCount = 0;
+      
+      switch (tableType) {
+        case 'machines':
+          // Clear existing machines first
+          await db.delete(machines);
+          
+          for (const row of results) {
+            await db.insert(machines).values({
+              machineId: row.machine_id || row.machineId,
+              name: row.name,
+              type: row.type,
+              category: row.category,
+              subcategory: row.subcategory,
+              tier: row.tier || 'Tier 1',
+              capabilities: JSON.parse(row.capabilities || '[]'),
+              status: row.status || 'Available',
+              utilization: row.utilization || '0',
+              availableShifts: JSON.parse(row.available_shifts || '[1, 2]'),
+              efficiencyFactor: row.efficiency_factor || '1.0',
+              substitutionGroup: row.substitution_group,
+              spindles: row.spindles,
+              liveTooling: row.live_tooling === 'true',
+              barFeeder: row.bar_feeder === 'true',
+              barLength: row.bar_length ? parseInt(row.bar_length) : null,
+              fourthAxis: row.fourth_axis === 'true'
+            });
+            importedCount++;
+          }
+          break;
+
+        case 'resources':
+          // Clear existing resources first
+          await db.delete(resources);
+          
+          for (const row of results) {
+            await db.insert(resources).values({
+              name: row.name,
+              employeeId: row.employee_id || row.employeeId,
+              role: row.role,
+              email: row.email,
+              workCenters: JSON.parse(row.work_centers || '[]'),
+              skills: JSON.parse(row.skills || '[]'),
+              shiftSchedule: JSON.parse(row.shift_schedule || '[1]'),
+              workSchedule: JSON.parse(row.work_schedule || '{}'),
+              hourlyRate: row.hourly_rate ? parseFloat(row.hourly_rate) : null,
+              overtimeRate: row.overtime_rate ? parseFloat(row.overtime_rate) : null,
+              status: row.status || 'Active'
+            });
+            importedCount++;
+          }
+          break;
+
+        case 'jobs':
+          // Clear existing jobs first
+          await db.delete(jobs);
+          
+          for (const row of results) {
+            await db.insert(jobs).values({
+              jobNumber: row.job_number || row.jobNumber,
+              partNumber: row.part_number || row.partNumber,
+              description: row.description,
+              customer: row.customer,
+              quantity: parseInt(row.quantity),
+              dueDate: new Date(row.due_date || row.dueDate),
+              orderDate: new Date(row.order_date || row.orderDate),
+              promisedDate: new Date(row.promised_date || row.promisedDate),
+              priority: row.priority || 'Normal',
+              status: row.status || 'Unscheduled',
+              routing: JSON.parse(row.routing || '[]'),
+              estimatedHours: row.estimated_hours || row.estimatedHours || '0',
+              outsourcedVendor: row.outsourced_vendor || row.outsourcedVendor,
+              leadDays: row.lead_days ? parseInt(row.lead_days) : null,
+              linkMaterial: row.link_material === 'true',
+              material: row.material,
+              routingModified: row.routing_modified === 'true'
+            });
+            importedCount++;
+          }
+          break;
+
+        default:
+          return res.status(400).json({ 
+            status: "error", 
+            message: "Invalid table type. Use 'machines', 'resources', or 'jobs'" 
+          });
+      }
+
+      console.log(`Successfully imported ${importedCount} records to ${tableType}`);
+      res.json({ 
+        status: "ok", 
+        message: `Successfully imported ${importedCount} records to ${tableType}`,
+        importedCount,
+        tableType,
+        timestamp: new Date().toISOString()
+      });
+      
+    } catch (error) {
+      console.error('CSV import failed:', error);
+      res.status(500).json({ 
+        status: "error", 
+        message: "CSV import failed",
         error: error.message,
         timestamp: new Date().toISOString()
       });
