@@ -12,6 +12,7 @@ import { Readable } from "stream";
 import { getWorkCenterPrefixes } from "./utils/workCenterPrefixes";
 import { db } from "./db";
 import { machines, resources, jobs } from "@shared/schema";
+import { sql } from "drizzle-orm";
 import path from "path";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -152,6 +153,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/test-route", (req, res) => {
     console.log('Test route called');
     res.json({ status: "ok", message: "Test route working" });
+  });
+
+  // Check database schema
+  app.get("/api/check-schema", async (req, res) => {
+    try {
+      const result = await db.execute(sql`
+        SELECT column_name, data_type 
+        FROM information_schema.columns 
+        WHERE table_name = 'resources' 
+        ORDER BY ordinal_position
+      `);
+      res.json({ status: "ok", columns: result.rows });
+    } catch (error) {
+      res.status(500).json({ status: "error", message: error.message });
+    }
   });
 
   // CSV Import endpoint (GET version for testing)
