@@ -10,6 +10,8 @@ import multer from "multer";
 import csv from "csv-parser";
 import { Readable } from "stream";
 import { getWorkCenterPrefixes } from "./utils/workCenterPrefixes";
+import { db } from "./db";
+import { machines } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
