@@ -116,6 +116,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Fix schema mismatches endpoint
+  app.post("/api/fix-schema", async (req, res) => {
+    try {
+      console.log('Fixing schema mismatches...');
+      
+      // Drop and recreate routing_operations table with correct schema
+      await db.execute(sql`DROP TABLE IF EXISTS "routing_operations" CASCADE`);
+      
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS "routing_operations" (
+          "id" varchar PRIMARY KEY DEFAULT gen_random_uuid(),
+          "job_id" varchar NOT NULL REFERENCES "jobs"("id") ON DELETE CASCADE,
+          "sequence" integer NOT NULL,
+          "operation_name" text NOT NULL,
+          "machine_type" text NOT NULL,
+          "compatible_machines" jsonb NOT NULL DEFAULT '[]',
+          "required_skills" jsonb NOT NULL DEFAULT '[]',
+          "estimated_hours" decimal(10,2) NOT NULL,
+          "setup_hours" decimal(10,2) NOT NULL DEFAULT '0',
+          "dependencies" jsonb NOT NULL DEFAULT '[]',
+          "earliest_start_date" timestamp,
+          "latest_finish_date" timestamp,
+          "status" text NOT NULL DEFAULT 'Unscheduled',
+          "scheduled_start_time" timestamp,
+          "scheduled_end_time" timestamp,
+          "assigned_machine_id" varchar REFERENCES "machines"("id"),
+          "assigned_resource_id" varchar REFERENCES "resources"("id"),
+          "original_quoted_machine_id" varchar REFERENCES "machines"("id"),
+          "original_estimated_hours" decimal(10,2),
+          "efficiency_impact" decimal(5,2) DEFAULT '0',
+          "notes" text
+        )
+      `);
+      
+      console.log('Schema fixes completed successfully');
+      res.json({ 
+        status: "ok", 
+        message: "Schema fixes completed successfully" 
+      });
+    } catch (error) {
+      console.error('Schema fix failed:', error);
+      res.status(500).json({ 
+        status: "error", 
+        message: "Schema fix failed",
+        error: error.message
+      });
+    }
+  });
+
   // Initialize default data endpoint
   app.get("/api/init-data", async (req, res) => {
     console.log('Initialize data endpoint called');
