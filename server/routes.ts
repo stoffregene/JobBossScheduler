@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { WebSocketServer, WebSocket } from "ws";
+// import { WebSocketServer, WebSocket } from "ws";
 import { DatabaseStorage } from "./database-storage";
 
 const storage = new DatabaseStorage();
@@ -17,6 +17,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
+  // Completely disable WebSocket to stop connection spam
+  /*
   // WebSocket setup
   const wss = new WebSocketServer({ server: httpServer });
   const clients = new Set<WebSocket>();
@@ -44,6 +46,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       clients.delete(ws);
     });
   });
+  */
 
   // Jobs endpoints
   app.get("/api/jobs", async (req, res) => {
@@ -55,6 +58,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Failed to fetch jobs:', error);
       res.status(500).json({ message: "Failed to fetch jobs" });
+    }
+  });
+
+  // Specific job routes must come before parameterized routes
+  app.get("/api/jobs/awaiting-material", async (req, res) => {
+    try {
+      // Get jobs that have material requirements but no material orders
+      const jobs = await storage.getJobs();
+      const awaitingMaterial = jobs.filter(job => 
+        job.linkMaterial && job.material && 
+        job.status !== 'Complete' && job.status !== 'Cancelled'
+      );
+      res.json(awaitingMaterial);
+    } catch (error) {
+      console.error('Failed to fetch jobs awaiting material:', error);
+      res.status(500).json({ message: "Failed to fetch jobs awaiting material" });
+    }
+  });
+
+  app.delete("/api/jobs/awaiting-material/all", async (req, res) => {
+    try {
+      // This would be implemented as needed
+      res.status(204).send();
+    } catch (error) {
+      console.error('Failed to delete jobs awaiting material:', error);
+      res.status(500).json({ message: "Failed to delete jobs awaiting material" });
+    }
+  });
+
+  app.get("/api/jobs/awaiting-inspection", async (req, res) => {
+    try {
+      // Get routing operations that are ready for inspection
+      const operations = await storage.getAllRoutingOperations();
+      const inspectionOperations = operations.filter(op => 
+        op.status === 'Complete' && 
+        op.operationName?.toLowerCase().includes('inspect')
+      );
+      res.json(inspectionOperations);
+    } catch (error) {
+      console.error('Failed to fetch jobs awaiting inspection:', error);
+      res.status(500).json({ error: "Failed to fetch data" });
     }
   });
 
@@ -75,7 +119,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const jobData = insertJobSchema.parse(req.body);
       const job = await storage.createJob(jobData);
-      broadcast({ type: 'job_created', data: job });
+      // broadcast({ type: 'job_created', data: job }); // Removed broadcast
       res.status(201).json(job);
     } catch (error) {
       console.error('Failed to create job:', error);
@@ -92,7 +136,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!job) {
         return res.status(404).json({ message: "Job not found" });
       }
-      broadcast({ type: 'job_updated', data: job });
+      // broadcast({ type: 'job_updated', data: job }); // Removed broadcast
       res.json(job);
     } catch (error) {
       console.error('Failed to update job:', error);
@@ -106,7 +150,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!success) {
         return res.status(404).json({ message: "Job not found" });
       }
-      broadcast({ type: 'job_deleted', data: { id: req.params.id } });
+      // broadcast({ type: 'job_deleted', data: { id: req.params.id } }); // Removed broadcast
       res.status(204).send();
     } catch (error) {
       console.error('Failed to delete job:', error);
@@ -117,7 +161,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/jobs", async (req, res) => {
     try {
       await storage.deleteAllJobs();
-      broadcast({ type: 'jobs_cleared' });
+      // broadcast({ type: 'jobs_cleared' }); // Removed broadcast
       res.status(204).send();
     } catch (error) {
       console.error('Failed to delete all jobs:', error);
@@ -128,7 +172,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/jobs/:id/auto-schedule", async (req, res) => {
     try {
       const result = await storage.autoScheduleJob(req.params.id);
-      broadcast({ type: 'job_scheduled', data: result });
+      // broadcast({ type: 'job_scheduled', data: result }); // Removed broadcast
       res.json(result);
     } catch (error) {
       console.error('Failed to auto-schedule job:', error);
@@ -139,7 +183,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/jobs/schedule-all", async (req, res) => {
     try {
       const result = await storage.scheduleJobsByPriority();
-      broadcast({ type: 'jobs_scheduled', data: result });
+      // broadcast({ type: 'jobs_scheduled', data: result }); // Removed broadcast
       res.json(result);
     } catch (error) {
       console.error('Failed to schedule all jobs:', error);
@@ -150,7 +194,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/jobs/update-priorities", async (req, res) => {
     try {
       await storage.updateAllJobPriorities();
-      broadcast({ type: 'priorities_updated' });
+      // broadcast({ type: 'priorities_updated' }); // Removed broadcast
       res.json({ message: "Job priorities updated successfully" });
     } catch (error) {
       console.error('Failed to update job priorities:', error);
@@ -210,7 +254,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error('Failed to import job:', jobData, error);
         }
       }
-      broadcast({ type: 'jobs_imported', data: { imported: importedJobs.length } });
+      // broadcast({ type: 'jobs_imported', data: { imported: importedJobs.length } }); // Removed broadcast
       res.json({ imported: importedJobs.length, jobs: importedJobs });
     } catch (error) {
       console.error('Failed to import jobs:', error);
@@ -246,7 +290,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const machineData = insertMachineSchema.parse(req.body);
       const machine = await storage.createMachine(machineData);
-      broadcast({ type: 'machine_created', data: machine });
+      // broadcast({ type: 'machine_created', data: machine }); // Removed broadcast
       res.status(201).json(machine);
     } catch (error) {
       console.error('Failed to create machine:', error);
@@ -263,7 +307,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!machine) {
         return res.status(404).json({ message: "Machine not found" });
       }
-      broadcast({ type: 'machine_updated', data: machine });
+      // broadcast({ type: 'machine_updated', data: machine }); // Removed broadcast
       res.json(machine);
     } catch (error) {
       console.error('Failed to update machine:', error);
@@ -277,7 +321,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!success) {
         return res.status(404).json({ message: "Machine not found" });
       }
-      broadcast({ type: 'machine_deleted', data: { id: req.params.id } });
+      // broadcast({ type: 'machine_deleted', data: { id: req.params.id } }); // Removed broadcast
       res.status(204).send();
     } catch (error) {
       console.error('Failed to delete machine:', error);
@@ -300,7 +344,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const entryData = insertScheduleEntrySchema.parse(req.body);
       const entry = await storage.createScheduleEntry(entryData);
-      broadcast({ type: 'schedule_entry_created', data: entry });
+      // broadcast({ type: 'schedule_entry_created', data: entry }); // Removed broadcast
       res.status(201).json(entry);
     } catch (error) {
       console.error('Failed to create schedule entry:', error);
@@ -317,7 +361,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!entry) {
         return res.status(404).json({ message: "Schedule entry not found" });
       }
-      broadcast({ type: 'schedule_entry_updated', data: entry });
+      // broadcast({ type: 'schedule_entry_updated', data: entry }); // Removed broadcast
       res.json(entry);
     } catch (error) {
       console.error('Failed to update schedule entry:', error);
@@ -331,7 +375,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!success) {
         return res.status(404).json({ message: "Schedule entry not found" });
       }
-      broadcast({ type: 'schedule_entry_deleted', data: { id: req.params.id } });
+      // broadcast({ type: 'schedule_entry_deleted', data: { id: req.params.id } }); // Removed broadcast
       res.status(204).send();
     } catch (error) {
       console.error('Failed to delete schedule entry:', error);
@@ -342,7 +386,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/schedule/all", async (req, res) => {
     try {
       await storage.clearAllScheduleEntries();
-      broadcast({ type: 'schedule_cleared' });
+      // broadcast({ type: 'schedule_cleared' }); // Removed broadcast
       res.status(204).send();
     } catch (error) {
       console.error('Failed to delete all schedule entries:', error);
@@ -393,7 +437,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         delete (resourceData as any).isActive;
       }
       const resource = await storage.createResource(resourceData);
-      broadcast({ type: 'resource_created', data: resource });
+      // broadcast({ type: 'resource_created', data: resource }); // Removed broadcast
       res.status(201).json(resource);
     } catch (error) {
       console.error('Failed to create resource:', error);
@@ -503,14 +547,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const updatedResource = await storage.updateResource(existingResource.id, transformedData);
             if (updatedResource) {
               updated++;
-              broadcast({ type: 'resource_updated', data: updatedResource });
+              // broadcast({ type: 'resource_updated', data: updatedResource }); // Removed broadcast
             }
           } else {
             // Create new resource
             const newResource = await storage.createResource(transformedData);
             if (newResource) {
               created++;
-              broadcast({ type: 'resource_created', data: newResource });
+              // broadcast({ type: 'resource_created', data: newResource }); // Removed broadcast
             }
           }
           processed++;
@@ -521,7 +565,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      broadcast({ type: 'resources_imported', data: { processed, created, updated } });
+      // broadcast({ type: 'resources_imported', data: { processed, created, updated } }); // Removed broadcast
       
       res.json({
         success: true,
@@ -563,10 +607,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         isActive: resource.status === 'Active'
       };
       
-      broadcast({ 
-        type: 'resource_updated', 
-        data: responseResource 
-      });
+      // broadcast({  // Removed broadcast
+      //   type: 'resource_updated', 
+      //   data: responseResource 
+      // });
       
       res.json(responseResource);
     } catch (error) {
@@ -581,7 +625,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!success) {
         return res.status(404).json({ message: "Resource not found" });
       }
-      broadcast({ type: 'resource_deleted', data: { id: req.params.id } });
+      // broadcast({ type: 'resource_deleted', data: { id: req.params.id } }); // Removed broadcast
       res.status(204).send();
     } catch (error) {
       console.error('Failed to delete resource:', error);
@@ -604,7 +648,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const unavailabilityData = req.body;
       const result = await storage.createResourceUnavailability(unavailabilityData);
-      broadcast({ type: 'resource_unavailability_created', data: result });
+      // broadcast({ type: 'resource_unavailability_created', data: result }); // Removed broadcast
       res.status(201).json(result);
     } catch (error) {
       console.error('Failed to create resource unavailability:', error);
@@ -618,7 +662,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!success) {
         return res.status(404).json({ message: "Resource unavailability not found" });
       }
-      broadcast({ type: 'resource_unavailability_deleted', data: { id: req.params.id } });
+      // broadcast({ type: 'resource_unavailability_deleted', data: { id: req.params.id } }); // Removed broadcast
       res.status(204).send();
     } catch (error) {
       console.error('Failed to delete resource unavailability:', error);
@@ -641,7 +685,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const alertData = insertAlertSchema.parse(req.body);
       const alert = await storage.createAlert(alertData);
-      broadcast({ type: 'alert_created', data: alert });
+      // broadcast({ type: 'alert_created', data: alert }); // Removed broadcast
       res.status(201).json(alert);
     } catch (error) {
       console.error('Failed to create alert:', error);
@@ -658,7 +702,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!success) {
         return res.status(404).json({ message: "Alert not found" });
       }
-      broadcast({ type: 'alert_deleted', data: { id: req.params.id } });
+      // broadcast({ type: 'alert_deleted', data: { id: req.params.id } }); // Removed broadcast
       res.status(204).send();
     } catch (error) {
       console.error('Failed to delete alert:', error);
@@ -692,7 +736,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Stub implementation for material order creation
       const materialData = insertMaterialOrderSchema.parse(req.body);
       const material = { id: 'temp-id', ...materialData, createdAt: new Date() };
-      broadcast({ type: 'material_created', data: material });
+      // broadcast({ type: 'material_created', data: material }); // Removed broadcast
       res.status(201).json(material);
     } catch (error) {
       console.error('Failed to create material order:', error);
@@ -707,7 +751,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // Stub implementation for marking material as received
       const result = { id: req.params.id, received: true };
-      broadcast({ type: 'material_received', data: result });
+      // broadcast({ type: 'material_received', data: result }); // Removed broadcast
       res.json(result);
     } catch (error) {
       console.error('Failed to mark material as received:', error);
@@ -760,7 +804,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/outsourced-operations/:id/complete", async (req, res) => {
     try {
       const result = await storage.markOutsourcedOperationComplete(req.params.id);
-      broadcast({ type: 'outsourced_operation_completed', data: result });
+      // broadcast({ type: 'outsourced_operation_completed', data: result }); // Removed broadcast
       res.json(result);
     } catch (error) {
       console.error('Failed to complete outsourced operation:', error);

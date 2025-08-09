@@ -19,7 +19,7 @@ interface EfficiencyData {
 export function EfficiencyImpactWidget() {
   const { data: efficiencyData, isLoading } = useQuery<EfficiencyData>({
     queryKey: ['/api/efficiency-impact'],
-    refetchInterval: 30000,
+    // Removed refetch interval - WebSocket updates will handle real-time data
   });
 
   if (isLoading) {

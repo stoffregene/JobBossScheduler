@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useWebSocket } from "@/hooks/use-websocket";
+// import { useWebSocket } from "@/hooks/use-websocket";
 import { queryClient } from "@/lib/queryClient";
 import DashboardOverview from "../components/dashboard-overview";
 import JobQueue from "../components/job-queue";
@@ -26,6 +26,8 @@ export default function Dashboard() {
   });
   const { theme, toggleTheme } = useTheme();
 
+  // WebSocket disabled on backend - no real-time updates for now
+  /*
   // Real-time updates via WebSocket
   useWebSocket((message) => {
     switch (message.type) {
@@ -50,6 +52,7 @@ export default function Dashboard() {
         break;
     }
   });
+  */
 
   // Update current time every minute
   useEffect(() => {

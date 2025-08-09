@@ -22,7 +22,7 @@ export function InspectionQueueWidget() {
       if (!response.ok) throw new Error('Network response was not ok');
       return response.json();
     },
-    refetchInterval: 60000, // Refetch every minute
+    // Removed refetch interval - WebSocket updates will handle real-time data
   });
 
   if (isLoading) {

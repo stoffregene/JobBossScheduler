@@ -80,10 +80,13 @@ export class DatabaseStorage implements IStorage {
     
     while (retryCount < maxRetries) {
       try {
-        // Check if data already exists
-        const existingMachines = await db.select().from(machines).limit(1);
-        if (existingMachines.length > 0) {
-          console.log('Database already has data, skipping initialization');
+        // Check if data already exists - be more thorough
+        const existingMachines = await db.select().from(machines);
+        const existingResources = await db.select().from(resources);
+        const existingJobs = await db.select().from(jobs);
+        
+        if (existingMachines.length > 0 || existingResources.length > 0 || existingJobs.length > 0) {
+          console.log(`Database already has data (${existingMachines.length} machines, ${existingResources.length} resources, ${existingJobs.length} jobs), skipping initialization`);
           return;
         }
 
@@ -144,7 +147,8 @@ export class DatabaseStorage implements IStorage {
             wednesday: { enabled: true, startTime: "03:00", endTime: "15:00" },
             thursday: { enabled: true, startTime: "03:00", endTime: "15:00" },
             friday: { enabled: false, startTime: "03:00", endTime: "15:00" }
-          }
+          },
+          status: "Active"
         },
         {
           name: "Jane Doe",
@@ -160,7 +164,8 @@ export class DatabaseStorage implements IStorage {
             wednesday: { enabled: true, startTime: "03:00", endTime: "15:00" },
             thursday: { enabled: true, startTime: "03:00", endTime: "15:00" },
             friday: { enabled: false, startTime: "03:00", endTime: "15:00" }
-          }
+          },
+          status: "Active"
         }
       ];
 

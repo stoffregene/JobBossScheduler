@@ -13,7 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Users, UserPlus, Edit, Trash2, Settings, Wrench, X, Plus, ArrowLeft, Package, Building2, Calendar, Clock, AlertTriangle } from "lucide-react";
+import { Users, UserPlus, Edit, Trash2, Settings, Wrench, X, Plus, ArrowLeft, Package, Building2, Calendar, Clock, AlertTriangle, Upload } from "lucide-react";
 import { Link } from "wouter";
 import type { Resource, Machine, ResourceUnavailability } from "@shared/schema";
 

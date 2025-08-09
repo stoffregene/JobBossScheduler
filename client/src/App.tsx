@@ -13,6 +13,7 @@ import SchedulingStatusPage from "./pages/scheduling-status";
 import NotFound from "./pages/not-found";
 
 function Router() {
+  console.log("Router component loaded");
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
@@ -29,6 +30,7 @@ function Router() {
 }
 
 function App() {
+  console.log("App component loaded");
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
