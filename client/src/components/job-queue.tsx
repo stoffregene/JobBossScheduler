@@ -20,7 +20,7 @@ interface JobQueueProps {
   onJobSelect: (jobId: string) => void;
 }
 
-type SortField = 'jobNumber' | 'partNumber' | 'dueDate' | 'status' | 'priority' | 'customer' | 'estimatedHours';
+type SortField = 'jobNumber' | 'partNumber' | 'promisedDate' | 'status' | 'priority' | 'customer' | 'estimatedHours';
 type SortDirection = 'asc' | 'desc';
 
 export default function JobQueue({ onJobSelect }: JobQueueProps) {
@@ -33,7 +33,7 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
   const [isRoutingDialogOpen, setIsRoutingDialogOpen] = useState(false);
   const [selectedJobForRouting, setSelectedJobForRouting] = useState<Job | null>(null);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [sortField, setSortField] = useState<SortField>('dueDate');
+  const [sortField, setSortField] = useState<SortField>('promisedDate');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [filters, setFilters] = useState({
     status: 'all',
@@ -45,11 +45,15 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
     jobNumber: '',
     partNumber: '',
     description: '',
-    dueDate: '',
+    promisedDate: '',
     priority: 'Normal' as const,
     estimatedHours: '',
     customer: '',
-    operations: [] as string[]
+    quantity: 1,
+    material: '',
+    leadDays: 0,
+    outsourcedVendor: '',
+    routing: [] as any[]
   });
   const [isScheduleProgressVisible, setIsScheduleProgressVisible] = useState(false);
   const [isManualScheduleOpen, setIsManualScheduleOpen] = useState(false);
@@ -86,9 +90,9 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
       let aValue: any = a[sortField];
       let bValue: any = b[sortField];
 
-      if (sortField === 'dueDate') {
-        aValue = new Date(a.dueDate).getTime();
-        bValue = new Date(b.dueDate).getTime();
+      if (sortField === 'promisedDate') {
+        aValue = new Date(a.promisedDate).getTime();
+        bValue = new Date(b.promisedDate).getTime();
       } else if (sortField === 'estimatedHours') {
         aValue = parseFloat(a.estimatedHours || '0');
         bValue = parseFloat(b.estimatedHours || '0');
@@ -113,8 +117,8 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
     mutationFn: async (jobData: typeof newJob) => {
       const estimatedHours = parseFloat(jobData.estimatedHours) || 2; // Default to 2 hours if not specified
       
-      // Create basic routing operations for scheduling
-      const routing = [
+      // Use provided routing or create basic routing operations for scheduling
+      const routing = jobData.routing.length > 0 ? jobData.routing : [
         {
           sequence: 1,
           operationName: "Machining",
@@ -144,11 +148,15 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
         partNumber: jobData.partNumber,
         description: jobData.description,
         customer: jobData.customer,
-        dueDate: jobData.dueDate, // Keep as string, backend will convert
+        promisedDate: jobData.promisedDate, // Use promised date as primary scheduling driver
+        dueDate: jobData.promisedDate, // Set due date same as promised for now
         estimatedHours: estimatedHours.toString(),
-        quantity: 1,
+        quantity: jobData.quantity,
         status: 'Unscheduled' as const,
         priority: jobData.priority,
+        material: jobData.material,
+        leadDays: jobData.leadDays,
+        outsourcedVendor: jobData.outsourcedVendor,
         routing
       };
       return apiRequest('/api/jobs', 'POST', payload);
@@ -160,11 +168,15 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
         jobNumber: '',
         partNumber: '',
         description: '',
-        dueDate: '',
+        promisedDate: '',
         priority: 'Normal',
         estimatedHours: '',
         customer: '',
-        operations: []
+        quantity: 1,
+        material: '',
+        leadDays: 0,
+        outsourcedVendor: '',
+        routing: []
       });
       toast({
         title: "Job Created",
@@ -374,10 +386,10 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
   });
 
   const handleCreateJob = () => {
-    if (!newJob.jobNumber || !newJob.partNumber || !newJob.dueDate) {
+    if (!newJob.jobNumber || !newJob.partNumber || !newJob.promisedDate) {
       toast({
         title: "Missing Information",
-        description: "Please fill in all required fields (Job Number, Part Number, Due Date).",
+        description: "Please fill in all required fields (Job Number, Part Number, Promised Date).",
         variant: "destructive",
       });
       return;
@@ -650,12 +662,12 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="dueDate">Due Date *</Label>
+                        <Label htmlFor="promisedDate">Promised Date *</Label>
                         <Input
-                          id="dueDate"
+                          id="promisedDate"
                           type="date"
-                          value={newJob.dueDate}
-                          onChange={(e) => setNewJob(prev => ({ ...prev, dueDate: e.target.value }))}
+                          value={newJob.promisedDate}
+                          onChange={(e) => setNewJob(prev => ({ ...prev, promisedDate: e.target.value }))}
                         />
                       </div>
                       <div className="space-y-2">
@@ -745,14 +757,35 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
     }
   };
 
-  const getDaysRemaining = (dueDate: Date) => {
+  const getDaysRemaining = (promisedDate: Date, jobNumber: string) => {
     const today = new Date();
-    const due = new Date(dueDate);
-    const diffTime = due.getTime() - today.getTime();
+    const promised = new Date(promisedDate);
+    const diffTime = promised.getTime() - today.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const isStockJob = jobNumber.toUpperCase().startsWith('S');
     
     if (diffDays < 0) {
-      return { text: `${Math.abs(diffDays)} days overdue`, className: 'text-error-600 font-medium' };
+      if (isStockJob) {
+        // Stock job overdue - special visual treatment
+        if (diffDays < -30) {
+          return { 
+            text: `${Math.abs(diffDays)} days overdue (CRITICAL STOCK)`, 
+            className: 'text-red-700 font-bold bg-red-100 px-2 py-1 rounded' 
+          };
+        } else if (diffDays < -7) {
+          return { 
+            text: `${Math.abs(diffDays)} days overdue (Stock Overdue)`, 
+            className: 'text-orange-600 font-medium bg-orange-50 px-2 py-1 rounded' 
+          };
+        } else {
+          return { 
+            text: `${Math.abs(diffDays)} days overdue (Stock)`, 
+            className: 'text-yellow-600 font-medium bg-yellow-50 px-2 py-1 rounded' 
+          };
+        }
+      } else {
+        return { text: `${Math.abs(diffDays)} days overdue`, className: 'text-error-600 font-medium' };
+      }
     } else if (diffDays < 4) {
       return { text: `${diffDays} days (Customer Late)`, className: 'text-error-600 font-medium' };
     } else {
@@ -945,85 +978,299 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
                         Add Job
                       </Button>
                     </DialogTrigger>
-              <DialogContent className="max-w-md">
+              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Add New Job</DialogTitle>
                 </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="jobNumber">Job Number *</Label>
-                    <Input
-                      id="jobNumber"
-                      value={newJob.jobNumber}
-                      onChange={(e) => setNewJob(prev => ({ ...prev, jobNumber: e.target.value }))}
-                      placeholder="J0001"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="partNumber">Part Number *</Label>
-                    <Input
-                      id="partNumber"
-                      value={newJob.partNumber}
-                      onChange={(e) => setNewJob(prev => ({ ...prev, partNumber: e.target.value }))}
-                      placeholder="PN-12345"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="description">Description</Label>
-                    <Textarea
-                      id="description"
-                      value={newJob.description}
-                      onChange={(e) => setNewJob(prev => ({ ...prev, description: e.target.value }))}
-                      placeholder="Brief description of the part"
-                      rows={2}
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-6 py-4">
+                  {/* Basic Job Information */}
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-medium text-gray-900">Basic Information</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="jobNumber">Job Number *</Label>
+                        <Input
+                          id="jobNumber"
+                          value={newJob.jobNumber}
+                          onChange={(e) => setNewJob(prev => ({ ...prev, jobNumber: e.target.value }))}
+                          placeholder="J0001"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="partNumber">Part Number *</Label>
+                        <Input
+                          id="partNumber"
+                          value={newJob.partNumber}
+                          onChange={(e) => setNewJob(prev => ({ ...prev, partNumber: e.target.value }))}
+                          placeholder="PN-12345"
+                        />
+                      </div>
+                    </div>
+                    
                     <div className="space-y-2">
-                      <Label htmlFor="dueDate">Due Date *</Label>
-                      <Input
-                        id="dueDate"
-                        type="date"
-                        value={newJob.dueDate}
-                        onChange={(e) => setNewJob(prev => ({ ...prev, dueDate: e.target.value }))}
+                      <Label htmlFor="description">Description</Label>
+                      <Textarea
+                        id="description"
+                        value={newJob.description}
+                        onChange={(e) => setNewJob(prev => ({ ...prev, description: e.target.value }))}
+                        placeholder="Brief description of the part"
+                        rows={2}
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="priority">Priority</Label>
-                      <Select value={newJob.priority} onValueChange={(value) => setNewJob(prev => ({ ...prev, priority: value as any }))}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Normal">Normal</SelectItem>
-                          <SelectItem value="High">High</SelectItem>
-                          <SelectItem value="Critical">Critical</SelectItem>
-                        </SelectContent>
-                      </Select>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="customer">Customer</Label>
+                        <Input
+                          id="customer"
+                          value={newJob.customer}
+                          onChange={(e) => setNewJob(prev => ({ ...prev, customer: e.target.value }))}
+                          placeholder="Customer name"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="quantity">Quantity</Label>
+                        <Input
+                          id="quantity"
+                          type="number"
+                          value={newJob.quantity}
+                          onChange={(e) => setNewJob(prev => ({ ...prev, quantity: parseInt(e.target.value) || 1 }))}
+                          placeholder="1"
+                          min="1"
+                        />
+                      </div>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="estimatedHours">Est. Hours</Label>
-                      <Input
-                        id="estimatedHours"
-                        type="number"
-                        value={newJob.estimatedHours}
-                        onChange={(e) => setNewJob(prev => ({ ...prev, estimatedHours: e.target.value }))}
-                        placeholder="8.5"
-                        step="0.5"
-                      />
+
+                  {/* Scheduling Information */}
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-medium text-gray-900">Scheduling Information</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="promisedDate">Promised Date *</Label>
+                        <Input
+                          id="promisedDate"
+                          type="date"
+                          value={newJob.promisedDate}
+                          onChange={(e) => setNewJob(prev => ({ ...prev, promisedDate: e.target.value }))}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="priority">Priority</Label>
+                        <Select value={newJob.priority} onValueChange={(value) => setNewJob(prev => ({ ...prev, priority: value as any }))}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Normal">Normal</SelectItem>
+                            <SelectItem value="High">High</SelectItem>
+                            <SelectItem value="Critical">Critical</SelectItem>
+                            <SelectItem value="Stock">Stock</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="customer">Customer</Label>
-                      <Input
-                        id="customer"
-                        value={newJob.customer}
-                        onChange={(e) => setNewJob(prev => ({ ...prev, customer: e.target.value }))}
-                        placeholder="Customer name"
-                      />
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="estimatedHours">Total Est. Hours</Label>
+                        <Input
+                          id="estimatedHours"
+                          type="number"
+                          value={newJob.estimatedHours}
+                          onChange={(e) => setNewJob(prev => ({ ...prev, estimatedHours: e.target.value }))}
+                          placeholder="8.5"
+                          step="0.5"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="leadDays">External Lead Days</Label>
+                        <Input
+                          id="leadDays"
+                          type="number"
+                          value={newJob.leadDays}
+                          onChange={(e) => setNewJob(prev => ({ ...prev, leadDays: parseInt(e.target.value) || 0 }))}
+                          placeholder="21"
+                          min="0"
+                        />
+                      </div>
                     </div>
                   </div>
+
+                  {/* Material and Vendor Information */}
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-medium text-gray-900">Material & Vendor Information</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="material">Material</Label>
+                        <Input
+                          id="material"
+                          value={newJob.material}
+                          onChange={(e) => setNewJob(prev => ({ ...prev, material: e.target.value }))}
+                          placeholder="Aluminum, Steel, etc."
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="outsourcedVendor">Outsourced Vendor</Label>
+                        <Select value={newJob.outsourcedVendor} onValueChange={(value) => setNewJob(prev => ({ ...prev, outsourcedVendor: value }))}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select vendor" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="">None</SelectItem>
+                            <SelectItem value="GERARD">GERARD (14 days)</SelectItem>
+                            <SelectItem value="A-1 LAPPIN">A-1 LAPPIN (20 days)</SelectItem>
+                            <SelectItem value="ADV PLATIN">ADV PLATIN (3-10 days)</SelectItem>
+                            <SelectItem value="FITZGERALD">FITZGERALD (16 days)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Routing Operations */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-medium text-gray-900">Routing Operations</h3>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const newOperation = {
+                            sequence: newJob.routing.length + 1,
+                            operationName: `Operation ${newJob.routing.length + 1}`,
+                            machineType: "MILL",
+                            compatibleMachines: ["HMC-001", "VMC-001"],
+                            estimatedHours: 1,
+                            setupHours: 0.5,
+                            dependencies: [],
+                            notes: ""
+                          };
+                          setNewJob(prev => ({ ...prev, routing: [...prev.routing, newOperation] }));
+                        }}
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add Operation
+                      </Button>
+                    </div>
+                    
+                    {newJob.routing.length === 0 ? (
+                      <div className="text-center text-gray-500 py-4 border-2 border-dashed border-gray-300 rounded-lg">
+                        <p>No routing operations defined</p>
+                        <p className="text-sm">Click "Add Operation" to define the manufacturing steps</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {newJob.routing.map((operation, index) => (
+                          <div key={index} className="border border-gray-200 rounded-lg p-4">
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                <Label>Operation Name</Label>
+                                <Input
+                                  value={operation.operationName}
+                                  onChange={(e) => {
+                                    const updatedRouting = [...newJob.routing];
+                                    updatedRouting[index].operationName = e.target.value;
+                                    setNewJob(prev => ({ ...prev, routing: updatedRouting }));
+                                  }}
+                                  placeholder="e.g., Rough Mill"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label>Machine Type</Label>
+                                <Select 
+                                  value={operation.machineType} 
+                                  onValueChange={(value) => {
+                                    const updatedRouting = [...newJob.routing];
+                                    updatedRouting[index].machineType = value;
+                                    setNewJob(prev => ({ ...prev, routing: updatedRouting }));
+                                  }}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="MILL">Mill</SelectItem>
+                                    <SelectItem value="LATHE">Lathe</SelectItem>
+                                    <SelectItem value="SAW">Saw</SelectItem>
+                                    <SelectItem value="WELD">Weld</SelectItem>
+                                    <SelectItem value="INSPECT">Inspect</SelectItem>
+                                    <SelectItem value="OUTSOURCE">Outsource</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-4 mt-4">
+                              <div className="space-y-2">
+                                <Label>Estimated Hours</Label>
+                                <Input
+                                  type="number"
+                                  value={operation.estimatedHours}
+                                  onChange={(e) => {
+                                    const updatedRouting = [...newJob.routing];
+                                    updatedRouting[index].estimatedHours = parseFloat(e.target.value) || 0;
+                                    setNewJob(prev => ({ ...prev, routing: updatedRouting }));
+                                  }}
+                                  placeholder="2.5"
+                                  step="0.5"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label>Setup Hours</Label>
+                                <Input
+                                  type="number"
+                                  value={operation.setupHours || 0}
+                                  onChange={(e) => {
+                                    const updatedRouting = [...newJob.routing];
+                                    updatedRouting[index].setupHours = parseFloat(e.target.value) || 0;
+                                    setNewJob(prev => ({ ...prev, routing: updatedRouting }));
+                                  }}
+                                  placeholder="0.5"
+                                  step="0.25"
+                                />
+                              </div>
+                            </div>
+                            
+                            <div className="mt-4">
+                              <Label>Notes</Label>
+                              <Textarea
+                                value={operation.notes || ""}
+                                onChange={(e) => {
+                                  const updatedRouting = [...newJob.routing];
+                                  updatedRouting[index].notes = e.target.value;
+                                  setNewJob(prev => ({ ...prev, routing: updatedRouting }));
+                                }}
+                                placeholder="Additional notes for this operation"
+                                rows={2}
+                              />
+                            </div>
+                            
+                            <div className="mt-4 flex justify-end">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  const updatedRouting = newJob.routing.filter((_, i) => i !== index);
+                                  // Re-sequence operations
+                                  updatedRouting.forEach((op, i) => {
+                                    op.sequence = i + 1;
+                                  });
+                                  setNewJob(prev => ({ ...prev, routing: updatedRouting }));
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4 mr-1" />
+                                Remove
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
                   <div className="flex justify-end space-x-2 pt-4">
                     <Button variant="outline" onClick={() => setIsAddJobOpen(false)}>
                       Cancel
@@ -1068,11 +1315,11 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                       <button 
                         className="flex items-center space-x-1 hover:text-gray-700 dark:hover:text-gray-200"
-                        onClick={() => handleSort('dueDate')}
-                        data-testid="sort-due-date"
+                        onClick={() => handleSort('promisedDate')}
+                        data-testid="sort-promised-date"
                       >
-                        <span>Due Date</span>
-                        {getSortIcon('dueDate')}
+                        <span>Promised Date</span>
+                        {getSortIcon('promisedDate')}
                       </button>
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
@@ -1100,7 +1347,7 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
                 </thead>
                 <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
               {jobs.map((job) => {
-                const daysRemaining = getDaysRemaining(job.dueDate);
+                const daysRemaining = getDaysRemaining(job.promisedDate, job.jobNumber);
                 
                 return (
                   <tr 
@@ -1120,7 +1367,7 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900 dark:text-white">
-                        {new Date(job.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        {new Date(job.promisedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                       </div>
                       <div className={`text-xs ${daysRemaining.className}`}>
                         {daysRemaining.text}
@@ -1132,14 +1379,26 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
                       </Badge>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className={`w-2 h-2 ${getPriorityColor(job.priority)} rounded-full mr-2`}></div>
-                        <span className="text-sm text-gray-900 dark:text-white">{job.priority}</span>
+                      <div className="flex items-center space-x-2">
+                        <div className="flex items-center">
+                          <div className={`w-2 h-2 ${getPriorityColor(job.priority)} rounded-full mr-2`}></div>
+                          <span className="text-sm text-gray-900 dark:text-white">{job.priority}</span>
+                        </div>
+                        {job.jobNumber.toUpperCase().startsWith('S') && (
+                          <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                            STOCK
+                          </Badge>
+                        )}
+                        {job.jobNumber.toUpperCase().startsWith('R') && (
+                          <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">
+                            REWORK
+                          </Badge>
+                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex items-center space-x-1">
-                        {job.status === 'Unscheduled' && (
+                        {job.scheduledStatus === 'Unscheduled' && (
                           <Button
                             variant="ghost"
                             size="sm"
@@ -1248,12 +1507,12 @@ export default function JobQueue({ onJobSelect }: JobQueueProps) {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="editDueDate">Due Date *</Label>
+                  <Label htmlFor="editPromisedDate">Promised Date *</Label>
                   <Input
-                    id="editDueDate"
+                    id="editPromisedDate"
                     type="date"
-                    value={new Date(editingJob.dueDate).toISOString().split('T')[0]}
-                    onChange={(e) => setEditingJob(prev => prev ? { ...prev, dueDate: new Date(e.target.value) } : null)}
+                    value={new Date(editingJob.promisedDate).toISOString().split('T')[0]}
+                    onChange={(e) => setEditingJob(prev => prev ? { ...prev, promisedDate: new Date(e.target.value) } : null)}
                   />
                 </div>
                 <div className="space-y-2">
